@@ -15,7 +15,7 @@ defmodule HybridsocialWeb.Plugs.RequireAdmin do
   def call(conn, _opts) do
     case conn.assigns[:current_identity] do
       %{id: identity_id} ->
-        if RBAC.is_staff?(identity_id) do
+        if RBAC.staff?(identity_id) do
           conn
         else
           conn

@@ -54,7 +54,7 @@ defmodule Hybridsocial.Federation.Publisher do
           # Public addressing: deliver to all followers' inboxes
           get_follower_inboxes(identity.id)
 
-        is_followers_collection?(target, identity) ->
+        followers_collection?(target, identity) ->
           # Followers collection: deliver to followers' inboxes
           get_follower_inboxes(identity.id)
 
@@ -227,7 +227,7 @@ defmodule Hybridsocial.Federation.Publisher do
     end
   end
 
-  defp is_followers_collection?(url, identity) do
+  defp followers_collection?(url, identity) do
     url == "#{HybridsocialWeb.Endpoint.url()}/actors/#{identity.id}/followers"
   end
 

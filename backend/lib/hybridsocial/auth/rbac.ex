@@ -70,7 +70,7 @@ defmodule Hybridsocial.Auth.RBAC do
   end
 
   @doc "Check if an identity has any active role (i.e. is staff)."
-  def is_staff?(identity_id) do
+  def staff?(identity_id) do
     now = DateTime.utc_now()
 
     from(ir in IdentityRole,
@@ -313,11 +313,11 @@ defmodule Hybridsocial.Auth.RBAC do
   # ── Private ────────────────────────────────────────────────────────
 
   defp sync_admin_flag(identity_id) do
-    is_staff = is_staff?(identity_id)
+    is_staff_member = staff?(identity_id)
 
     from(i in Hybridsocial.Accounts.Identity,
       where: i.id == ^identity_id
     )
-    |> Repo.update_all(set: [is_admin: is_staff])
+    |> Repo.update_all(set: [is_admin: is_staff_member])
   end
 end

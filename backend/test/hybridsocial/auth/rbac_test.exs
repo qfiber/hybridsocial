@@ -85,18 +85,18 @@ defmodule Hybridsocial.Auth.RBACTest do
     end
   end
 
-  describe "is_staff?/1" do
+  describe "staff?/1" do
     test "returns true when identity has any role" do
       user = create_user("staff1", "staff1@test.com")
       {:ok, _} = RBAC.assign_role(user.id, "moderator", user.id)
 
-      assert RBAC.is_staff?(user.id)
+      assert RBAC.staff?(user.id)
     end
 
     test "returns false when identity has no roles" do
       user = create_user("staff2", "staff2@test.com")
 
-      refute RBAC.is_staff?(user.id)
+      refute RBAC.staff?(user.id)
     end
   end
 

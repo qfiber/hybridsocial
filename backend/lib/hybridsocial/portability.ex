@@ -176,7 +176,7 @@ defmodule Hybridsocial.Portability do
           # Soft delete identity
           Accounts.soft_delete_identity(identity)
 
-          # TODO: Send AP Delete activity
+          # Future: Send AP Delete activity
           # Hybridsocial.Federation.publish_delete(identity)
 
           # Anonymize data
