@@ -59,24 +59,24 @@ defmodule Hybridsocial.Instance do
         statuses: %{
           max_characters: max_chars,
           max_media_attachments: max_media,
-          characters_reserved_per_url: 23
+          characters_reserved_per_url: Config.get("characters_reserved_per_url", 23)
         },
         media_attachments: %{
           supported_mime_types: supported_mime_types(),
           image_size_limit: image_limit,
           video_size_limit: video_limit,
-          video_frame_rate_limit: 120,
-          video_matrix_limit: 8_294_400,
-          image_matrix_limit: 33_177_600
+          video_frame_rate_limit: Config.get("video_frame_rate_limit", 120),
+          video_matrix_limit: Config.get("video_matrix_limit", 8_294_400),
+          image_matrix_limit: Config.get("image_matrix_limit", 33_177_600)
         },
         polls: %{
           max_options: Config.get("max_poll_options", 4),
-          max_characters_per_option: 200,
-          min_expiration: 300,
-          max_expiration: 2_629_746
+          max_characters_per_option: Config.get("max_poll_option_chars", 200),
+          min_expiration: Config.get("min_poll_expiration", 300),
+          max_expiration: Config.get("max_poll_expiration", 2_629_746)
         },
         accounts: %{
-          max_featured_tags: 10
+          max_featured_tags: Config.get("max_featured_tags", 10)
         }
       },
       contact_account: contact_account(),
@@ -96,9 +96,9 @@ defmodule Hybridsocial.Instance do
       background_image: Config.get("instance_background_image", nil),
       poll_limits: %{
         max_options: Config.get("max_poll_options", 4),
-        max_option_chars: 200,
-        min_expiration: 300,
-        max_expiration: 2_629_746
+        max_option_chars: Config.get("max_poll_option_chars", 200),
+        min_expiration: Config.get("min_poll_expiration", 300),
+        max_expiration: Config.get("max_poll_expiration", 2_629_746)
       },
       pleroma: %{
         metadata: %{
@@ -113,10 +113,10 @@ defmodule Hybridsocial.Instance do
             mrf_simple: federation_policies()
           },
           fields_limits: %{
-            max_fields: 5,
+            max_fields: Config.get("max_profile_fields", 5),
             max_remote_fields: 20,
-            name_length: 512,
-            value_length: 2048
+            name_length: Config.get("max_field_name_length", 512),
+            value_length: Config.get("max_field_value_length", 2048)
           },
           markup: %{
             allow_headings: true,

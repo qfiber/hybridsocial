@@ -86,11 +86,97 @@ settings = [
     description: "Maximum banner/header upload size in bytes (default 4MB)"
   },
   %{
+    key: "max_background_size",
+    value: %{"value" => 4_000_000},
+    type: "integer",
+    category: "media",
+    description: "Maximum background image upload size in bytes (default 4MB)"
+  },
+  %{
+    key: "video_frame_rate_limit",
+    value: %{"value" => 120},
+    type: "integer",
+    category: "media",
+    description: "Maximum video frame rate"
+  },
+  %{
+    key: "video_matrix_limit",
+    value: %{"value" => 8_294_400},
+    type: "integer",
+    category: "media",
+    description: "Maximum video resolution (width * height)"
+  },
+  %{
+    key: "image_matrix_limit",
+    value: %{"value" => 33_177_600},
+    type: "integer",
+    category: "media",
+    description: "Maximum image resolution (width * height)"
+  },
+
+  # Limits
+  %{
     key: "max_poll_options",
     value: %{"value" => 4},
     type: "integer",
     category: "limits",
     description: "Maximum number of poll options"
+  },
+  %{
+    key: "max_poll_option_chars",
+    value: %{"value" => 200},
+    type: "integer",
+    category: "limits",
+    description: "Maximum characters per poll option"
+  },
+  %{
+    key: "min_poll_expiration",
+    value: %{"value" => 300},
+    type: "integer",
+    category: "limits",
+    description: "Minimum poll expiration in seconds (default 5 minutes)"
+  },
+  %{
+    key: "max_poll_expiration",
+    value: %{"value" => 2_629_746},
+    type: "integer",
+    category: "limits",
+    description: "Maximum poll expiration in seconds (default ~30 days)"
+  },
+  %{
+    key: "max_featured_tags",
+    value: %{"value" => 10},
+    type: "integer",
+    category: "limits",
+    description: "Maximum featured/pinned hashtags per profile"
+  },
+  %{
+    key: "characters_reserved_per_url",
+    value: %{"value" => 23},
+    type: "integer",
+    category: "limits",
+    description: "Characters reserved per URL in posts"
+  },
+  %{
+    key: "max_profile_fields",
+    value: %{"value" => 5},
+    type: "integer",
+    category: "limits",
+    description: "Maximum custom profile fields"
+  },
+  %{
+    key: "max_field_name_length",
+    value: %{"value" => 512},
+    type: "integer",
+    category: "limits",
+    description: "Maximum profile field name length"
+  },
+  %{
+    key: "max_field_value_length",
+    value: %{"value" => 2048},
+    type: "integer",
+    category: "limits",
+    description: "Maximum profile field value length"
   },
   %{
     key: "contact_email",
