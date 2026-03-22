@@ -37,11 +37,60 @@ settings = [
     description: "URL to the instance thumbnail/logo image"
   },
   %{
+    key: "instance_short_description",
+    value: %{"value" => ""},
+    type: "string",
+    category: "general",
+    description: "Short tagline for the instance"
+  },
+  %{
     key: "instance_rules",
     value: %{"value" => []},
     type: "json",
     category: "general",
     description: "List of instance rules (JSON array of strings)"
+  },
+  %{
+    key: "instance_languages",
+    value: %{"value" => "en"},
+    type: "string",
+    category: "general",
+    description: "Comma-separated language codes (e.g. en,ar,fr)"
+  },
+  %{
+    key: "instance_background_image",
+    value: %{"value" => ""},
+    type: "string",
+    category: "general",
+    description: "URL to the instance background image"
+  },
+  %{
+    key: "contact_account_handle",
+    value: %{"value" => ""},
+    type: "string",
+    category: "general",
+    description: "Handle of the contact account (e.g. admin)"
+  },
+  %{
+    key: "max_avatar_size",
+    value: %{"value" => 2_000_000},
+    type: "integer",
+    category: "media",
+    description: "Maximum avatar upload size in bytes (default 2MB)"
+  },
+  %{
+    key: "max_banner_size",
+    value: %{"value" => 4_000_000},
+    type: "integer",
+    category: "media",
+    description: "Maximum banner/header upload size in bytes (default 4MB)"
+  },
+  %{
+    key: "max_poll_options",
+    value: %{"value" => 4},
+    type: "integer",
+    category: "limits",
+    description: "Maximum number of poll options"
   },
   %{
     key: "contact_email",
