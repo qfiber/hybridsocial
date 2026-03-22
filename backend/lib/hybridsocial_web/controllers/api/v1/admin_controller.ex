@@ -4,6 +4,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   alias Hybridsocial.Moderation
   alias Hybridsocial.Accounts
   alias Hybridsocial.Auth.RBAC
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # ── Permission helper ──────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     with :ok <- require_permission(conn, "reports.view") do
       opts = [
         status: params["status"],
-        limit: parse_int(params["limit"], 20),
+        limit: clamp_limit(params["limit"]),
         offset: parse_int(params["offset"], 0)
       ]
 
@@ -103,7 +104,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       opts = [
         action: params["action"],
         actor_id: params["actor_id"],
-        limit: parse_int(params["limit"], 20),
+        limit: clamp_limit(params["limit"]),
         offset: parse_int(params["offset"], 0)
       ]
 

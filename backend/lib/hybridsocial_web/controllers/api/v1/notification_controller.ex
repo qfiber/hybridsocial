@@ -2,6 +2,7 @@ defmodule HybridsocialWeb.Api.V1.NotificationController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Notifications
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # GET /api/v1/notifications
   def index(conn, params) do
@@ -9,7 +10,7 @@ defmodule HybridsocialWeb.Api.V1.NotificationController do
 
     opts =
       []
-      |> maybe_put(:limit, parse_integer(params["limit"], 20))
+      |> maybe_put(:limit, clamp_limit(params["limit"]))
       |> maybe_put(:max_id, params["max_id"])
       |> maybe_put(:types, parse_list(params["types[]"] || params["types"]))
       |> maybe_put(:exclude_types, parse_list(params["exclude_types[]"] || params["exclude_types"]))
@@ -126,17 +127,6 @@ defmodule HybridsocialWeb.Api.V1.NotificationController do
       target_id: notification.target_id
     }
   end
-
-  defp parse_integer(nil, default), do: default
-
-  defp parse_integer(val, default) when is_binary(val) do
-    case Integer.parse(val) do
-      {n, _} -> n
-      :error -> default
-    end
-  end
-
-  defp parse_integer(val, _default) when is_integer(val), do: val
 
   defp parse_list(nil), do: nil
   defp parse_list(list) when is_list(list), do: list

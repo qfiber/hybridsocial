@@ -2,12 +2,13 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Search
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # GET /api/v1/search?q=...&type=...&limit=...&offset=...
   def index(conn, params) do
     query = Map.get(params, "q", "")
     type = Map.get(params, "type")
-    limit = parse_int(Map.get(params, "limit"), 20)
+    limit = clamp_limit(Map.get(params, "limit"))
     offset = parse_int(Map.get(params, "offset"), 0)
     viewer_id = get_viewer_id(conn)
     account_id = Map.get(params, "account_id")

@@ -95,23 +95,42 @@ defmodule Hybridsocial.Federation.HTTPSignature do
   defp fetch_public_key(key_id) do
     actor_url = key_id |> String.split("#") |> List.first()
 
-    headers = [
-      {"Accept", "application/activity+json"}
-    ]
+    uri = URI.parse(actor_url)
+    host = uri.host || ""
 
-    case HTTPoison.get(actor_url, headers) do
-      {:ok, %{status_code: 200, body: body}} ->
-        case Jason.decode(body) do
-          {:ok, %{"publicKey" => %{"publicKeyPem" => pem}}} ->
-            {:ok, pem}
+    # Reject requests to private/internal hosts to prevent SSRF
+    if private_host?(host) do
+      {:error, :private_host}
+    else
+      headers = [
+        {"Accept", "application/activity+json"}
+      ]
 
-          _ ->
-            {:error, :invalid_actor}
-        end
+      case HTTPoison.get(actor_url, headers,
+             timeout: 5_000,
+             recv_timeout: 5_000,
+             max_body_length: 100_000
+           ) do
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, %{"publicKey" => %{"publicKeyPem" => pem}}} ->
+              {:ok, pem}
 
-      _ ->
-        {:error, :fetch_failed}
+            _ ->
+              {:error, :invalid_actor}
+          end
+
+        _ ->
+          {:error, :fetch_failed}
+      end
     end
+  end
+
+  defp private_host?(host) do
+    host in ["localhost", "127.0.0.1", "::1", "0.0.0.0"] or
+      String.starts_with?(host, "10.") or
+      String.starts_with?(host, "192.168.") or
+      Regex.match?(~r/^172\.(1[6-9]|2[0-9]|3[01])\./, host)
   end
 
   defp verify_signature(conn, sig_params, public_key_pem) do

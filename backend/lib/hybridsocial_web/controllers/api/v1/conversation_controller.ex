@@ -2,13 +2,14 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Messaging
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # GET /api/v1/conversations
   def index(conn, params) do
     identity = conn.assigns.current_identity
 
     opts = [
-      limit: parse_int(params["limit"], 20),
+      limit: clamp_limit(params["limit"]),
       offset: parse_int(params["offset"], 0)
     ]
 
@@ -102,7 +103,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
     identity = conn.assigns.current_identity
 
     opts = [
-      limit: parse_int(params["limit"], 50),
+      limit: clamp_limit(params["limit"]),
       offset: parse_int(params["offset"], 0)
     ]
 

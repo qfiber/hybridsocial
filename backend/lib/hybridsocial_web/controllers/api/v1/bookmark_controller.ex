@@ -2,6 +2,7 @@ defmodule HybridsocialWeb.Api.V1.BookmarkController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Social.Bookmarks
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # POST /api/v1/statuses/:id/bookmark
   def create(conn, %{"id" => post_id}) do
@@ -40,7 +41,7 @@ defmodule HybridsocialWeb.Api.V1.BookmarkController do
   # GET /api/v1/bookmarks
   def index(conn, params) do
     identity = conn.assigns.current_identity
-    limit = Map.get(params, "limit", "20") |> String.to_integer()
+    limit = clamp_limit(Map.get(params, "limit"))
     cursor = Map.get(params, "cursor")
 
     opts = [limit: limit]

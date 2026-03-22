@@ -53,7 +53,7 @@ defmodule HybridsocialWeb.Federation.InboxController do
 
         conn
         |> put_status(422)
-        |> json(%{error: "Unprocessable activity", reason: to_string(reason)})
+        |> json(%{error: "Unprocessable activity"})
     end
   end
 

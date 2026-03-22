@@ -57,9 +57,11 @@ defmodule Hybridsocial.Accounts do
     |> Repo.transaction()
     |> case do
       {:ok, %{identity: identity, user: user}} ->
-        # Send confirmation email
+        # Send confirmation email with plaintext token for the link
+        email_user = %{user | confirmation_token: user.confirmation_token_plaintext}
+
         try do
-          user
+          email_user
           |> Hybridsocial.Emails.confirmation_email()
           |> Hybridsocial.Mailer.deliver()
         rescue
@@ -178,8 +180,10 @@ defmodule Hybridsocial.Accounts do
   # --- Email confirmation ---
 
   def confirm_user(token) do
+    hashed = User.hash_token(token)
+
     User
-    |> where([u], u.confirmation_token == ^token)
+    |> where([u], u.confirmation_token == ^hashed)
     |> Repo.one()
     |> case do
       nil ->
@@ -257,16 +261,20 @@ defmodule Hybridsocial.Accounts do
 
       user ->
         token = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+        hashed = User.hash_token(token)
 
         user
         |> Ecto.Changeset.change(
-          reset_token: token,
+          reset_token: hashed,
           reset_token_at: DateTime.utc_now() |> DateTime.truncate(:microsecond)
         )
         |> Repo.update()
 
+        # Pass the plaintext token for the email link
+        email_user = %{user | reset_token: token}
+
         try do
-          user
+          email_user
           |> Hybridsocial.Emails.password_reset_email()
           |> Hybridsocial.Mailer.deliver()
         rescue
@@ -278,7 +286,9 @@ defmodule Hybridsocial.Accounts do
   end
 
   def reset_password(token, password, password_confirmation) do
-    case Repo.one(from u in User, where: u.reset_token == ^token) do
+    hashed = User.hash_token(token)
+
+    case Repo.one(from u in User, where: u.reset_token == ^hashed) do
       nil ->
         {:error, :invalid_token}
 

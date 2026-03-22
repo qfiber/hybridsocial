@@ -2,6 +2,7 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Groups
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # POST /api/v1/groups
   def create(conn, params) do
@@ -425,5 +426,5 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
   defp maybe_add_opt(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp maybe_add_limit(opts, nil), do: opts
-  defp maybe_add_limit(opts, val), do: Keyword.put(opts, :limit, String.to_integer(val))
+  defp maybe_add_limit(opts, val), do: Keyword.put(opts, :limit, clamp_limit(val))
 end

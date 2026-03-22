@@ -3,6 +3,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
 
   alias Hybridsocial.Accounts
   alias Hybridsocial.Social
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   def show(conn, %{"id" => id}) do
     case Accounts.get_identity(id) do
@@ -71,7 +72,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
 
       _identity ->
         posts = Hybridsocial.Social.Posts.posts_by_identity(id, [
-          limit: to_integer(params["limit"], 20)
+          limit: clamp_limit(params["limit"])
         ])
         posts_list = if is_list(posts), do: posts, else: []
 
@@ -262,7 +263,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   end
 
   defp conn_pagination_opts(conn) do
-    limit = conn.params["limit"] |> to_integer(40)
+    limit = clamp_limit(conn.params["limit"])
     offset = conn.params["offset"] |> to_integer(0)
     [limit: limit, offset: offset]
   end

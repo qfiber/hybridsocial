@@ -2,6 +2,7 @@ defmodule HybridsocialWeb.Api.V1.PageController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Pages
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # ---------------------------------------------------------------------------
   # Page CRUD
@@ -27,7 +28,7 @@ defmodule HybridsocialWeb.Api.V1.PageController do
   @doc "GET /api/v1/pages"
   def index(conn, params) do
     opts = [
-      limit: to_integer(params["limit"], 20),
+      limit: clamp_limit(params["limit"]),
       offset: to_integer(params["offset"], 0)
     ]
 

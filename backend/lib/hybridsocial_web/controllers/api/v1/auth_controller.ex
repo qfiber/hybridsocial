@@ -71,15 +71,15 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
         Moderation.log(nil, "auth.login_failed", nil, nil, %{email: email, reason: "suspended"}, get_client_ip(conn))
 
         conn
-        |> put_status(:forbidden)
-        |> json(%{error: "auth.account_suspended"})
+        |> put_status(:unauthorized)
+        |> json(%{error: "auth.invalid_credentials"})
 
       {:error, :account_deleted} ->
         Moderation.log(nil, "auth.login_failed", nil, nil, %{email: email, reason: "deleted"}, get_client_ip(conn))
 
         conn
-        |> put_status(:gone)
-        |> json(%{error: "auth.account_deleted"})
+        |> put_status(:unauthorized)
+        |> json(%{error: "auth.invalid_credentials"})
     end
   end
 

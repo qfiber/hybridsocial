@@ -2,6 +2,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Feeds
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   @doc "GET /api/v1/timelines/home - Authenticated home timeline"
   def home(conn, params) do
@@ -148,7 +149,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
     opts =
       case params["limit"] do
         nil -> opts
-        val -> Keyword.put(opts, :limit, String.to_integer(val))
+        val -> Keyword.put(opts, :limit, clamp_limit(val))
       end
 
     opts =

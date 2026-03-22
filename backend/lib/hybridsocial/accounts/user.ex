@@ -23,6 +23,8 @@ defmodule Hybridsocial.Accounts.User do
     # Virtual fields
     field :password, :string, virtual: true
     field :password_confirmation, :string, virtual: true
+    field :confirmation_token_plaintext, :string, virtual: true
+    field :reset_token_plaintext, :string, virtual: true
 
     belongs_to :identity, Hybridsocial.Accounts.Identity,
       foreign_key: :identity_id,
@@ -102,12 +104,19 @@ defmodule Hybridsocial.Accounts.User do
   defp put_confirmation_token(changeset) do
     if changeset.valid? do
       token = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+      hashed = hash_token(token)
 
       changeset
-      |> put_change(:confirmation_token, token)
+      |> put_change(:confirmation_token, hashed)
+      |> put_change(:confirmation_token_plaintext, token)
       |> put_change(:confirmation_sent_at, DateTime.utc_now())
     else
       changeset
     end
+  end
+
+  @doc "Hashes a token using SHA-256 for secure storage."
+  def hash_token(token) do
+    :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)
   end
 end

@@ -97,7 +97,8 @@ defmodule Hybridsocial.AccountsTest do
   describe "confirm_user/1" do
     test "confirms with valid token" do
       {:ok, identity} = Accounts.register_user(@valid_user_attrs)
-      token = identity.user.confirmation_token
+      # The plaintext token is stored in the virtual field; the DB has the hash
+      token = identity.user.confirmation_token_plaintext
 
       assert {:ok, user} = Accounts.confirm_user(token)
       assert user.confirmed_at != nil
@@ -106,6 +107,17 @@ defmodule Hybridsocial.AccountsTest do
 
     test "fails with invalid token" do
       assert {:error, :invalid_token} = Accounts.confirm_user("bogus_token")
+    end
+
+    test "stored token is a hash, not plaintext" do
+      {:ok, identity} = Accounts.register_user(@valid_user_attrs)
+      plaintext = identity.user.confirmation_token_plaintext
+      stored = identity.user.confirmation_token
+
+      # The stored value should be a SHA-256 hex digest, not the plaintext
+      assert stored != plaintext
+      expected_hash = :crypto.hash(:sha256, plaintext) |> Base.encode16(case: :lower)
+      assert stored == expected_hash
     end
   end
 

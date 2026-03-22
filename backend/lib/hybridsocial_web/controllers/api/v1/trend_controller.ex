@@ -2,10 +2,11 @@ defmodule HybridsocialWeb.Api.V1.TrendController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Trending
+  import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # GET /api/v1/trends/tags
   def tags(conn, params) do
-    limit = parse_int(Map.get(params, "limit"), 20)
+    limit = clamp_limit(Map.get(params, "limit"))
     offset = parse_int(Map.get(params, "offset"), 0)
 
     trending = Trending.get_trending_hashtags(limit: limit, offset: offset)
@@ -17,7 +18,7 @@ defmodule HybridsocialWeb.Api.V1.TrendController do
 
   # GET /api/v1/trends/statuses
   def statuses(conn, params) do
-    limit = parse_int(Map.get(params, "limit"), 20)
+    limit = clamp_limit(Map.get(params, "limit"))
     offset = parse_int(Map.get(params, "offset"), 0)
 
     trending = Trending.get_trending_posts(limit: limit, offset: offset)
