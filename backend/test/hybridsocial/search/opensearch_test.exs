@@ -14,7 +14,6 @@ defmodule Hybridsocial.Search.OpenSearchTest do
         :ok
 
       _ ->
-        ExUnit.configure(exclude: [:opensearch])
         :ok
     end
   end
