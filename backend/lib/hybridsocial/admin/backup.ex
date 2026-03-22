@@ -34,17 +34,11 @@ defmodule Hybridsocial.Admin.Backup do
 
     case %BackupJob{} |> BackupJob.changeset(attrs) |> Repo.insert() do
       {:ok, backup_job} ->
-        caller = self()
-
-        Task.start(fn ->
-          try do
-            Ecto.Adapters.SQL.Sandbox.allow(Hybridsocial.Repo, caller, self())
-          rescue
-            _ -> :ok
-          end
-
+        if Application.get_env(:hybridsocial, :env) == :test do
           generate_backup(backup_job.id, passphrase)
-        end)
+        else
+          Task.start(fn -> generate_backup(backup_job.id, passphrase) end)
+        end
 
         {:ok, backup_job}
 

@@ -7,7 +7,7 @@ defmodule Hybridsocial.Federation.InboxTest do
   alias Hybridsocial.Social.{Post, Posts}
 
   # Helper to create a local identity
-  defp create_local_identity(handle \\ "localuser") do
+  defp create_local_identity(handle) do
     %Identity{}
     |> Identity.create_changeset(%{
       "type" => "user",
