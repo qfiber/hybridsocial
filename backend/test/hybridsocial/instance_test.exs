@@ -10,8 +10,8 @@ defmodule Hybridsocial.InstanceTest do
 
   test "info returns instance data" do
     info = Instance.info()
-    assert info.name == "HybridSocial"
-    assert info.version == "0.1.0"
+    assert info.title == "HybridSocial"
+    assert info.version =~ "HybridSocial 0.1.0"
     assert is_map(info.stats)
     assert is_integer(info.stats.user_count)
   end

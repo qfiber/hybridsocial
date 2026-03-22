@@ -36,6 +36,7 @@ defmodule Hybridsocial.Federation.Inbox do
       "Block" -> handle_block(activity)
       "Undo" -> handle_undo(activity)
       "Move" -> handle_move(activity)
+      "Flag" -> handle_flag(activity)
       _ -> {:error, :unsupported_activity_type}
     end
   end
@@ -306,6 +307,52 @@ defmodule Hybridsocial.Federation.Inbox do
   end
 
   defp undo_block(_, _), do: {:error, :invalid_undo_block}
+
+  # --- Flag (Report) ---
+
+  defp handle_flag(%{"actor" => actor_ap_id, "object" => objects} = activity)
+       when is_binary(actor_ap_id) do
+    content = activity["content"] || ""
+    reported_objects = if is_list(objects), do: objects, else: [objects]
+
+    # The first URI is typically the reported actor, remaining are specific posts
+    {reported_actor_uri, _post_uris} =
+      case reported_objects do
+        [actor_uri | rest] -> {actor_uri, rest}
+        [] -> {nil, []}
+      end
+
+    with {:ok, remote_reporter} <- resolve_or_create_remote_identity(actor_ap_id),
+         {:ok, reported_identity} <- resolve_reported_identity(reported_actor_uri) do
+      Hybridsocial.Moderation.create_report(remote_reporter.id, %{
+        "reported_id" => reported_identity.id,
+        "category" => "other",
+        "description" => content,
+        "federated" => true
+      })
+    end
+  end
+
+  defp handle_flag(_), do: {:error, :invalid_flag_activity}
+
+  defp resolve_reported_identity(nil), do: {:error, :no_reported_actor}
+
+  defp resolve_reported_identity(ap_id) do
+    # Try local first, then remote
+    case extract_local_identity_id(ap_id) do
+      nil ->
+        case Repo.one(from(i in Identity, where: i.ap_actor_url == ^ap_id)) do
+          nil -> {:error, :reported_identity_not_found}
+          identity -> {:ok, identity}
+        end
+
+      id ->
+        case Accounts.get_identity(id) do
+          nil -> {:error, :reported_identity_not_found}
+          identity -> {:ok, identity}
+        end
+    end
+  end
 
   # --- Helper functions ---
 

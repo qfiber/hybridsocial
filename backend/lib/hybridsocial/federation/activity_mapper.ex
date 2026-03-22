@@ -20,9 +20,29 @@ defmodule Hybridsocial.Federation.ActivityMapper do
   }
 
   @doc """
-  Converts a Note/Article AP object to internal post attributes.
+  Converts a Note/Article/Question AP object to internal post attributes.
   """
+  def to_post(%{"type" => "Question"} = ap_object) do
+    base = to_post_base(ap_object)
+    options = ap_object["oneOf"] || ap_object["anyOf"] || []
+    multiple = ap_object["anyOf"] != nil
+
+    base
+    |> Map.merge(%{
+      "post_type" => "poll",
+      "poll_options" => Enum.map(options, fn opt -> opt["name"] end),
+      "poll_multiple" => multiple,
+      "poll_expires_at" => ap_object["endTime"]
+    })
+    |> Map.reject(fn {_k, v} -> is_nil(v) end)
+  end
+
   def to_post(ap_object) when is_map(ap_object) do
+    to_post_base(ap_object)
+    |> Map.reject(fn {_k, v} -> is_nil(v) end)
+  end
+
+  defp to_post_base(ap_object) do
     visibility = determine_visibility(ap_object)
     post_type = determine_post_type(ap_object)
 
@@ -38,9 +58,7 @@ defmodule Hybridsocial.Federation.ActivityMapper do
       "published_at" => parse_datetime(ap_object["published"])
     }
 
-    attrs
-    |> maybe_put("parent_ap_id", ap_object["inReplyTo"])
-    |> Map.reject(fn {_k, v} -> is_nil(v) end)
+    maybe_put(attrs, "parent_ap_id", ap_object["inReplyTo"])
   end
 
   @doc """

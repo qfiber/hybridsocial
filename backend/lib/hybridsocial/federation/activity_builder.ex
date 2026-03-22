@@ -187,6 +187,21 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
     }
   end
 
+  # --- Flag (Report) ---
+
+  def build_flag(reporter_identity, reported_ap_id, post_ap_ids \\ [], content \\ "") do
+    objects = [reported_ap_id | post_ap_ids]
+
+    %{
+      "@context" => @context,
+      "id" => activity_id(reporter_identity.id, "flag", extract_uuid_from_url(reported_ap_id)),
+      "type" => "Flag",
+      "actor" => actor_url(reporter_identity),
+      "object" => objects,
+      "content" => content
+    }
+  end
+
   # --- Note builder ---
 
   defp build_note(post) do
@@ -205,11 +220,51 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
       "sensitive" => post.sensitive || false,
       "summary" => post.spoiler_text,
       "tag" => build_tags(post),
+      "attachment" => build_attachments(post),
       "url" => post_url(post.id)
     }
 
-    if post.edited_at do
-      Map.put(note, "updated", format_datetime(post.edited_at))
+    # Add contentMap for language-tagged content
+    note =
+      if post.language && post.language != "" do
+        Map.put(note, "contentMap", %{post.language => note["content"]})
+      else
+        note
+      end
+
+    note =
+      if post.edited_at do
+        Map.put(note, "updated", format_datetime(post.edited_at))
+      else
+        note
+      end
+
+    # Handle poll posts: change type to Question and add poll data
+    if post.post_type == "poll" do
+      post = Hybridsocial.Repo.preload(post, poll: :options)
+
+      case post.poll do
+        nil ->
+          note
+
+        poll ->
+          choice_key = if poll.multiple_choice, do: "anyOf", else: "oneOf"
+
+          options =
+            Enum.map(poll.options, fn opt ->
+              %{
+                "type" => "Note",
+                "name" => opt.text,
+                "replies" => %{"type" => "Collection", "totalItems" => opt.votes_count}
+              }
+            end)
+
+          note
+          |> Map.put("type", "Question")
+          |> Map.put(choice_key, options)
+          |> Map.put("endTime", format_datetime(poll.expires_at))
+          |> Map.put("votersCount", poll.voters_count)
+      end
     else
       note
     end
@@ -235,20 +290,100 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
   defp build_in_reply_to(_), do: nil
 
   defp build_tags(post) do
-    if post.content do
-      ~r/#([a-zA-Z0-9_]+)/
-      |> Regex.scan(post.content)
-      |> Enum.map(fn [_, tag] ->
+    hashtag_tags = extract_hashtags(post.content)
+    mention_tags = extract_mentions(post.content)
+    emoji_tags = build_emoji_tags(post.content)
+    hashtag_tags ++ mention_tags ++ emoji_tags
+  end
+
+  defp extract_hashtags(nil), do: []
+
+  defp extract_hashtags(content) do
+    ~r/#([a-zA-Z0-9_]+)/
+    |> Regex.scan(content)
+    |> Enum.map(fn [_, tag] ->
+      %{
+        "type" => "Hashtag",
+        "href" => "#{base_url()}/tags/#{String.downcase(tag)}",
+        "name" => "##{String.downcase(tag)}"
+      }
+    end)
+  end
+
+  defp extract_mentions(nil), do: []
+
+  defp extract_mentions(content) do
+    Regex.scan(~r/@([a-zA-Z0-9_]+)(?:@([a-zA-Z0-9._-]+))?/, content)
+    |> Enum.map(fn
+      [_, handle, domain] ->
         %{
-          "type" => "Hashtag",
-          "href" => "#{base_url()}/tags/#{String.downcase(tag)}",
-          "name" => "##{String.downcase(tag)}"
+          "type" => "Mention",
+          "href" => "https://#{domain}/@#{handle}",
+          "name" => "@#{handle}@#{domain}"
         }
-      end)
-    else
-      []
+
+      [_, handle] ->
+        %{
+          "type" => "Mention",
+          "href" => "#{base_url()}/@#{handle}",
+          "name" => "@#{handle}"
+        }
+    end)
+  end
+
+  defp build_emoji_tags(nil), do: []
+
+  defp build_emoji_tags(content) do
+    Regex.scan(~r/:([a-zA-Z0-9_]+):/, content)
+    |> Enum.map(fn [_, shortcode] ->
+      case Hybridsocial.Content.Emojis.get_emoji_by_shortcode(shortcode) do
+        nil ->
+          nil
+
+        emoji ->
+          %{
+            "type" => "Emoji",
+            "id" => emoji.image_url,
+            "name" => ":#{emoji.shortcode}:",
+            "icon" => %{
+              "type" => "Image",
+              "url" => emoji.image_url
+            }
+          }
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # --- Media attachments ---
+
+  defp build_attachments(post) do
+    # Post schema has no direct media association; query via identity's media
+    # linked to this post. Since there's no post_media join table yet,
+    # return an empty list. When a post_media join table is added, this
+    # can be wired up.
+    #
+    # For now, if post has a media association preloaded, use it.
+    case Map.get(post, :media) do
+      media when is_list(media) ->
+        Enum.map(media, fn m ->
+          %{
+            "type" => media_ap_type(m.content_type),
+            "mediaType" => m.content_type,
+            "url" => Hybridsocial.Media.media_url(m),
+            "name" => m.alt_text || ""
+          }
+        end)
+
+      _ ->
+        []
     end
   end
+
+  defp media_ap_type("image/" <> _), do: "Image"
+  defp media_ap_type("video/" <> _), do: "Video"
+  defp media_ap_type("audio/" <> _), do: "Audio"
+  defp media_ap_type(_), do: "Document"
 
   # --- URL helpers ---
 

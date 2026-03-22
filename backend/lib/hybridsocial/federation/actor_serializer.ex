@@ -22,6 +22,8 @@ defmodule Hybridsocial.Federation.ActorSerializer do
       "preferredUsername" => identity.handle,
       "name" => identity.display_name || identity.handle,
       "summary" => identity.bio || "",
+      "manuallyApprovesFollowers" => identity.is_locked || false,
+      "discoverable" => true,
       "inbox" => "#{actor_url}/inbox",
       "outbox" => "#{actor_url}/outbox",
       "followers" => "#{actor_url}/followers",
@@ -40,6 +42,8 @@ defmodule Hybridsocial.Federation.ActorSerializer do
     actor
     |> maybe_add_icon(identity)
     |> maybe_add_image(identity)
+    |> maybe_add_moved_to(identity)
+    |> maybe_add_also_known_as(identity)
   end
 
   defp actor_type("organization"), do: "Organization"
@@ -62,4 +66,19 @@ defmodule Hybridsocial.Federation.ActorSerializer do
       "url" => url
     })
   end
+
+  defp maybe_add_moved_to(actor, %{moved_to: nil}), do: actor
+  defp maybe_add_moved_to(actor, %{moved_to: ""}), do: actor
+
+  defp maybe_add_moved_to(actor, %{moved_to: moved_to}) do
+    Map.put(actor, "movedTo", moved_to)
+  end
+
+  defp maybe_add_moved_to(actor, _), do: actor
+
+  defp maybe_add_also_known_as(actor, %{also_known_as: aka}) when is_list(aka) and aka != [] do
+    Map.put(actor, "alsoKnownAs", aka)
+  end
+
+  defp maybe_add_also_known_as(actor, _), do: actor
 end
