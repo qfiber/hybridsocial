@@ -30,6 +30,20 @@ settings = [
     description: "A short description of this instance"
   },
   %{
+    key: "instance_thumbnail",
+    value: %{"value" => ""},
+    type: "string",
+    category: "general",
+    description: "URL to the instance thumbnail/logo image"
+  },
+  %{
+    key: "instance_rules",
+    value: %{"value" => []},
+    type: "json",
+    category: "general",
+    description: "List of instance rules (JSON array of strings)"
+  },
+  %{
     key: "contact_email",
     value: %{"value" => ""},
     type: "string",

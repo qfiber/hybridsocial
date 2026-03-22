@@ -7,14 +7,56 @@ defmodule Hybridsocial.Instance do
   @version "0.1.0"
 
   def info do
+    base_url = HybridsocialWeb.Endpoint.url()
+
     %{
-      name: Config.get("instance_name", "HybridSocial"),
+      uri: URI.parse(base_url).host || "localhost",
+      title: Config.get("instance_name", "HybridSocial"),
+      short_description: Config.get("instance_description", ""),
       description: Config.get("instance_description", ""),
-      version: @version,
+      email: Config.get("contact_email", ""),
+      version: "#{@version} (compatible; Mastodon 4.0)",
+      urls: %{
+        streaming_api: String.replace(base_url, "http", "ws") <> "/socket"
+      },
       stats: stats(),
+      thumbnail: Config.get("instance_thumbnail", nil),
+      languages: ["en"],
       registrations: Config.get("registration_mode", "open") != "closed",
-      registration_mode: Config.get("registration_mode", "open"),
-      contact_email: Config.get("contact_email", "")
+      approval_required: Config.get("registration_mode", "open") == "approval",
+      invites_enabled: Config.get("registration_mode", "open") != "closed",
+      configuration: %{
+        statuses: %{
+          max_characters: Config.get("max_post_length_free", 5000),
+          max_media_attachments: Config.get("max_media_per_post", 4),
+          characters_reserved_per_url: 23
+        },
+        media_attachments: %{
+          supported_mime_types: [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "video/mp4",
+            "video/webm"
+          ],
+          image_size_limit: Config.get("max_image_size_mb", 10) * 1_048_576,
+          video_size_limit: Config.get("max_video_size_mb", 100) * 1_048_576,
+          video_frame_rate_limit: 60,
+          video_matrix_limit: 8_294_400
+        },
+        polls: %{
+          max_options: 4,
+          max_characters_per_option: 100,
+          min_expiration: 300,
+          max_expiration: 2_629_746
+        },
+        accounts: %{
+          max_featured_tags: 10
+        }
+      },
+      contact_account: nil,
+      rules: rules()
     }
   end
 
@@ -34,9 +76,32 @@ defmodule Hybridsocial.Instance do
   def stats do
     %{
       user_count: user_count(),
-      post_count: post_count(),
+      status_count: post_count(),
       domain_count: domain_count()
     }
+  end
+
+  def rules do
+    try do
+      from(r in "instance_settings",
+        where: r.key == "instance_rules",
+        select: r.value
+      )
+      |> Repo.one()
+      |> case do
+        %{"value" => rules} when is_list(rules) ->
+          rules
+          |> Enum.with_index(1)
+          |> Enum.map(fn {text, id} ->
+            %{id: to_string(id), text: text, hint: ""}
+          end)
+
+        _ ->
+          []
+      end
+    rescue
+      _ -> []
+    end
   end
 
   defp user_count do
