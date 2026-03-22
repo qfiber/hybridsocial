@@ -225,6 +225,16 @@ defmodule HybridsocialWeb.Router do
     delete "/:id", NotificationController, :dismiss
   end
 
+  # Push notifications (authenticated)
+  scope "/api/v1/push", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :authenticated]
+
+    post "/subscription", PushController, :create
+    get "/subscription", PushController, :show
+    delete "/subscription", PushController, :delete
+    get "/vapid_key", PushController, :vapid_key
+  end
+
   # Notification preferences (authenticated)
   scope "/api/v1/notification_preferences", HybridsocialWeb.Api.V1 do
     pipe_through [:api, :authenticated]

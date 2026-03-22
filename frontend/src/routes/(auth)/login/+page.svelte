@@ -3,6 +3,7 @@
   import { api, ApiError } from '$lib/api/client.js';
   import { setTokens, setUser } from '$lib/stores/auth.js';
   import { getCurrentUser } from '$lib/api/auth.js';
+  import { subscribeToPush } from '$lib/utils/push.js';
 
   let email = $state('');
   let password = $state('');
@@ -65,6 +66,7 @@
             const user = await getCurrentUser();
             setUser(user);
           } catch {}
+          subscribeToPush(result.access_token);
           await goto('/home');
         }
       } else {
@@ -97,6 +99,7 @@
             const user = await getCurrentUser();
             setUser(user);
           } catch {}
+          subscribeToPush(result.access_token);
           await goto('/home');
         }
       }

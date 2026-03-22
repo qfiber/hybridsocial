@@ -24,9 +24,40 @@ defmodule Hybridsocial.Notifications do
         {:ok, :skipped}
 
       true ->
-        %Notification{}
-        |> Notification.changeset(stringify_keys(attrs))
-        |> Repo.insert()
+        result =
+          %Notification{}
+          |> Notification.changeset(stringify_keys(attrs))
+          |> Repo.insert()
+
+        case result do
+          {:ok, notification} ->
+            recipient_id = attrs[:recipient_id] || attrs["recipient_id"]
+            type = attrs[:type] || attrs["type"]
+
+            if should_notify?(recipient_id, type, :push) do
+              Task.start(fn ->
+                actor = Repo.get(Hybridsocial.Accounts.Identity, actor_id)
+                actor_name = if actor, do: actor.display_name || actor.handle, else: "Someone"
+
+                Hybridsocial.Push.Delivery.send_to_user(recipient_id, %{
+                  title: push_title(type, actor_name),
+                  body: push_body(type),
+                  tag: "notification-#{notification.id}",
+                  data: %{
+                    type: type,
+                    target_type: attrs[:target_type] || attrs["target_type"],
+                    target_id: attrs[:target_id] || attrs["target_id"],
+                    url: "/notifications"
+                  }
+                })
+              end)
+            end
+
+            {:ok, notification}
+
+          error ->
+            error
+        end
     end
   end
 
@@ -248,6 +279,42 @@ defmodule Hybridsocial.Notifications do
 
   defp filter_exclude_types(query, exclude_types) do
     where(query, [n], n.type not in ^exclude_types)
+  end
+
+  defp push_title(type, actor_name) do
+    case type do
+      "follow" -> "#{actor_name} followed you"
+      "follow_request" -> "#{actor_name} requested to follow you"
+      "reaction" -> "#{actor_name} reacted to your post"
+      "boost" -> "#{actor_name} boosted your post"
+      "quote" -> "#{actor_name} quoted your post"
+      "reply" -> "#{actor_name} replied to your post"
+      "mention" -> "#{actor_name} mentioned you"
+      "poll_ended" -> "A poll has ended"
+      "group_invite" -> "#{actor_name} invited you to a group"
+      "group_application" -> "New group membership application"
+      "report" -> "New report filed"
+      "admin" -> "Admin notification"
+      _ -> "New notification"
+    end
+  end
+
+  defp push_body(type) do
+    case type do
+      "follow" -> "You have a new follower"
+      "follow_request" -> "You have a new follow request"
+      "reaction" -> "Someone reacted to your post"
+      "boost" -> "Your post was boosted"
+      "quote" -> "Your post was quoted"
+      "reply" -> "You have a new reply"
+      "mention" -> "You were mentioned in a post"
+      "poll_ended" -> "A poll you participated in has ended"
+      "group_invite" -> "You have been invited to join a group"
+      "group_application" -> "Someone applied to join your group"
+      "report" -> "A new report requires attention"
+      "admin" -> "You have an admin notification"
+      _ -> "You have a new notification"
+    end
   end
 
   defp stringify_keys(map) when is_map(map) do

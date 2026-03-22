@@ -6,6 +6,7 @@
   import { authStore, isLoggedIn } from '$lib/stores/auth.js';
   import { connectNotificationStream, disconnectNotificationStream } from '$lib/stores/notifications.js';
   import { api } from '$lib/api/client.js';
+  import { subscribeToPush } from '$lib/utils/push.js';
   import { onMount } from 'svelte';
 
   let { children } = $props();
@@ -27,6 +28,9 @@
     if (token) {
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       connectNotificationStream(apiBase, token);
+
+      // Subscribe to web push notifications
+      subscribeToPush(token);
     }
 
     return () => {
