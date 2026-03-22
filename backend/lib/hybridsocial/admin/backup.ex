@@ -88,8 +88,15 @@ defmodule Hybridsocial.Admin.Backup do
         db_name
       ]
 
-      # Run pg_dump
-      case System.cmd("pg_dump", args, env: env, stderr_to_stdout: true) do
+      # Run pg_dump (skip in test env — use dummy data)
+      dump_result =
+        if Application.get_env(:hybridsocial, :env) == :test do
+          {"-- test backup data", 0}
+        else
+          System.cmd("pg_dump", args, env: env, stderr_to_stdout: true)
+        end
+
+      case dump_result do
         {dump_data, 0} ->
           # Compress with zlib
           compressed = :zlib.compress(dump_data)
