@@ -75,8 +75,19 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      valkey:
+        image: valkey/valkey:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       DATABASE_URL: ecto://hybridsocial:hybridsocial_dev@localhost/hybridsocial_test
+      VALKEY_URL: redis://localhost:6379/1
 
     steps:
       - name: Checkout code

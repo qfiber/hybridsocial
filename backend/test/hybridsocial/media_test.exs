@@ -12,7 +12,7 @@ defmodule Hybridsocial.MediaTest do
       %Hybridsocial.Accounts.Identity{}
       |> Hybridsocial.Accounts.Identity.create_changeset(%{
         "type" => "user",
-        "handle" => "mediauser"
+        "handle" => "mediauser_#{:erlang.unique_integer([:positive])}"
       })
       |> Repo.insert()
 
@@ -106,7 +106,7 @@ defmodule Hybridsocial.MediaTest do
         %Hybridsocial.Accounts.Identity{}
         |> Hybridsocial.Accounts.Identity.create_changeset(%{
           "type" => "user",
-          "handle" => "otheruser"
+          "handle" => "otheruser_#{:erlang.unique_integer([:positive])}"
         })
         |> Repo.insert()
 
