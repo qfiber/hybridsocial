@@ -202,6 +202,32 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
     }
   end
 
+  # --- Add (Pin) ---
+
+  def build_add(identity, post) do
+    %{
+      "@context" => @context,
+      "id" => activity_id(identity.id, "add", post.id),
+      "type" => "Add",
+      "actor" => actor_url(identity),
+      "object" => post_url(post.id),
+      "target" => "#{base_url()}/actors/#{identity.id}/collections/featured"
+    }
+  end
+
+  # --- Remove (Unpin) ---
+
+  def build_remove(identity, post) do
+    %{
+      "@context" => @context,
+      "id" => activity_id(identity.id, "remove", post.id),
+      "type" => "Remove",
+      "actor" => actor_url(identity),
+      "object" => post_url(post.id),
+      "target" => "#{base_url()}/actors/#{identity.id}/collections/featured"
+    }
+  end
+
   # --- Note builder ---
 
   defp build_note(post) do

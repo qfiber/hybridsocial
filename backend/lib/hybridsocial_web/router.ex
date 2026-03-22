@@ -491,6 +491,7 @@ defmodule HybridsocialWeb.Router do
     get "/:id", ActorController, :show
     get "/:id/followers", ActorController, :followers
     get "/:id/following", ActorController, :following
+    get "/:id/collections/featured", ActorController, :featured
     get "/:id/outbox", ActorController, :outbox
     post "/:id/inbox", InboxController, :actor_inbox
   end

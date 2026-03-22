@@ -28,12 +28,15 @@ defmodule Hybridsocial.Federation.ActorSerializer do
       "outbox" => "#{actor_url}/outbox",
       "followers" => "#{actor_url}/followers",
       "following" => "#{actor_url}/following",
+      "featured" => "#{base_url}/actors/#{identity.id}/collections/featured",
       "url" => actor_url,
       "publicKey" => %{
         "id" => "#{actor_url}#main-key",
         "owner" => actor_url,
         "publicKeyPem" => identity.public_key
       },
+      "attachment" => build_profile_fields(identity.metadata),
+      "tag" => build_actor_emoji_tags(identity),
       "endpoints" => %{
         "sharedInbox" => "#{base_url}/inbox"
       }
@@ -81,4 +84,44 @@ defmodule Hybridsocial.Federation.ActorSerializer do
   end
 
   defp maybe_add_also_known_as(actor, _), do: actor
+
+  defp build_profile_fields(nil), do: []
+
+  defp build_profile_fields(metadata) when is_map(metadata) do
+    metadata
+    |> Enum.map(fn {name, value} ->
+      %{
+        "type" => "PropertyValue",
+        "name" => to_string(name),
+        "value" => to_string(value)
+      }
+    end)
+    |> Enum.take(5)
+  end
+
+  defp build_profile_fields(_), do: []
+
+  defp build_actor_emoji_tags(identity) do
+    text = "#{identity.display_name || ""} #{identity.bio || ""}"
+
+    Regex.scan(~r/:([a-zA-Z0-9_]+):/, text)
+    |> Enum.map(fn [_, shortcode] ->
+      case Hybridsocial.Content.Emojis.get_emoji_by_shortcode(shortcode) do
+        nil ->
+          nil
+
+        emoji ->
+          %{
+            "type" => "Emoji",
+            "id" => emoji.image_url,
+            "name" => ":#{emoji.shortcode}:",
+            "icon" => %{
+              "type" => "Image",
+              "url" => emoji.image_url
+            }
+          }
+      end
+    end)
+    |> Enum.reject(&is_nil/1)
+  end
 end

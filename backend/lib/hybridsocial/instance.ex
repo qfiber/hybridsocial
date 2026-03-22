@@ -134,7 +134,7 @@ defmodule Hybridsocial.Instance do
         stats: %{
           mau: active_users_count(30)
         },
-        vapid_public_key: Config.get("vapid_public_key", nil)
+        vapid_public_key: Hybridsocial.Push.Vapid.public_key()
       }
     }
   end

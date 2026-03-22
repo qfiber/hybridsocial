@@ -386,6 +386,20 @@ settings = [
     type: "integer",
     category: "security",
     description: "Maximum federation inbox payload size in bytes (default 1MB)"
+  },
+  %{
+    key: "vapid_public_key",
+    value: %{"value" => ""},
+    type: "string",
+    category: "security",
+    description: "VAPID public key for web push notifications (auto-generated)"
+  },
+  %{
+    key: "vapid_private_key",
+    value: %{"value" => ""},
+    type: "string",
+    category: "security",
+    description: "VAPID private key for web push notifications (auto-generated, keep secret)"
   }
 ]
 

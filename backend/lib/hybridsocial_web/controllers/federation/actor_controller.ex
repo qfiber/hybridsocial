@@ -110,6 +110,31 @@ defmodule HybridsocialWeb.Federation.ActorController do
     end
   end
 
+  def featured(conn, %{"id" => id}) do
+    base_url = HybridsocialWeb.Endpoint.url()
+
+    # Get pinned posts for this actor
+    pinned =
+      from(p in "posts",
+        where: p.identity_id == ^id and p.is_pinned == true and is_nil(p.deleted_at),
+        select: p.id,
+        order_by: [desc: p.inserted_at]
+      )
+      |> Repo.all()
+
+    items = Enum.map(pinned, fn post_id -> "#{base_url}/posts/#{post_id}" end)
+
+    conn
+    |> put_resp_content_type(@ap_content_type)
+    |> json(%{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => "#{base_url}/actors/#{id}/collections/featured",
+      "type" => "OrderedCollection",
+      "totalItems" => length(items),
+      "orderedItems" => items
+    })
+  end
+
   def outbox(conn, %{"id" => id} = params) do
     case Accounts.get_identity(id) do
       nil ->

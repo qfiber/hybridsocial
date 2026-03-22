@@ -37,6 +37,8 @@ defmodule Hybridsocial.Federation.Inbox do
       "Undo" -> handle_undo(activity)
       "Move" -> handle_move(activity)
       "Flag" -> handle_flag(activity)
+      "Add" -> handle_add(activity)
+      "Remove" -> handle_remove(activity)
       _ -> {:error, :unsupported_activity_type}
     end
   end
@@ -353,6 +355,38 @@ defmodule Hybridsocial.Federation.Inbox do
         end
     end
   end
+
+  # --- Add (Pin) ---
+
+  defp handle_add(%{"actor" => _actor, "object" => object, "target" => target})
+       when is_binary(target) do
+    if String.contains?(to_string(target), "/collections/featured") do
+      case get_post_by_ap_id(to_string(object)) do
+        nil -> {:error, :not_found}
+        post -> post |> Ecto.Changeset.change(is_pinned: true) |> Repo.update()
+      end
+    else
+      {:ok, :ignored}
+    end
+  end
+
+  defp handle_add(_), do: {:error, :invalid_add_activity}
+
+  # --- Remove (Unpin) ---
+
+  defp handle_remove(%{"actor" => _actor, "object" => object, "target" => target})
+       when is_binary(target) do
+    if String.contains?(to_string(target), "/collections/featured") do
+      case get_post_by_ap_id(to_string(object)) do
+        nil -> {:error, :not_found}
+        post -> post |> Ecto.Changeset.change(is_pinned: false) |> Repo.update()
+      end
+    else
+      {:ok, :ignored}
+    end
+  end
+
+  defp handle_remove(_), do: {:error, :invalid_remove_activity}
 
   # --- Helper functions ---
 

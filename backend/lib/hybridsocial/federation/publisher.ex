@@ -193,12 +193,37 @@ defmodule Hybridsocial.Federation.Publisher do
   end
 
   defp get_follower_inboxes(identity_id) do
-    Follow
-    |> where([f], f.followee_id == ^identity_id and f.status == :accepted)
-    |> join(:inner, [f], i in assoc(f, :follower))
-    |> select([_f, i], i.inbox_url)
-    |> Repo.all()
+    # Get individual inbox URLs from follower identities
+    individual_inboxes =
+      Follow
+      |> where([f], f.followee_id == ^identity_id and f.status == :accepted)
+      |> join(:inner, [f], i in assoc(f, :follower))
+      |> select([_f, i], i.inbox_url)
+      |> Repo.all()
+      |> Enum.reject(&is_nil/1)
+
+    # Also check remote_actors for shared inboxes matching follower ap_actor_urls
+    follower_ap_ids =
+      Follow
+      |> where([f], f.followee_id == ^identity_id and f.status == :accepted)
+      |> join(:inner, [f], i in assoc(f, :follower))
+      |> where([_f, i], not is_nil(i.ap_actor_url))
+      |> select([_f, i], i.ap_actor_url)
+      |> Repo.all()
+
+    shared_inboxes =
+      if follower_ap_ids != [] do
+        Hybridsocial.Federation.RemoteActor
+        |> where([r], r.ap_id in ^follower_ap_ids and not is_nil(r.shared_inbox_url))
+        |> select([r], r.shared_inbox_url)
+        |> Repo.all()
+      else
+        []
+      end
+
+    (individual_inboxes ++ shared_inboxes)
     |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
   end
 
   defp get_actor_inbox(actor_url) do
@@ -239,15 +264,24 @@ defmodule Hybridsocial.Federation.Publisher do
   defp batch_by_shared_inbox(inbox_urls) do
     # Group inboxes by domain and prefer shared inboxes when available
     inbox_urls
+    |> Enum.uniq()
     |> Enum.group_by(fn url ->
       URI.parse(url).host
     end)
     |> Enum.flat_map(fn {_domain, urls} ->
-      # For now, return all unique inbox URLs per domain
-      # In the future, we could look up shared inboxes
-      Enum.uniq(urls)
+      # If any URL is a shared inbox (no /actors/ or /users/ path), use it for all
+      shared =
+        Enum.find(urls, fn url ->
+          not String.contains?(url, "/actors/") and not String.contains?(url, "/users/")
+        end)
+
+      if shared do
+        [shared]
+      else
+        # Use first inbox (they're all on the same domain)
+        [hd(urls)]
+      end
     end)
-    |> Enum.uniq()
   end
 
   defp eligible_for_retry?(%{last_attempt_at: nil}, _now), do: true
