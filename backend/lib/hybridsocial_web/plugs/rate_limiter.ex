@@ -58,18 +58,20 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
   end
 
   defp get_limit(conn) do
+    alias Hybridsocial.Config
+
     case conn.request_path do
-      "/api/v1/auth/password/reset" -> {5, 3600}
-      "/api/v1/auth/password/change" -> {5, 3600}
-      "/api/v1/auth/2fa/verify" -> {5, 900}
-      "/api/v1/auth/2fa/login" -> {5, 900}
-      "/api/v1/auth/login" -> {10, 900}
-      "/api/v1/auth/register" -> {5, 3600}
+      "/api/v1/auth/password/reset" -> {Config.get("rate_limit_password_reset", 5), 3600}
+      "/api/v1/auth/password/change" -> {Config.get("rate_limit_password_reset", 5), 3600}
+      "/api/v1/auth/2fa/verify" -> {Config.get("rate_limit_2fa", 5), 900}
+      "/api/v1/auth/2fa/login" -> {Config.get("rate_limit_2fa", 5), 900}
+      "/api/v1/auth/login" -> {Config.get("rate_limit_login", 10), 900}
+      "/api/v1/auth/register" -> {Config.get("rate_limit_register", 5), 3600}
       _ ->
         if authenticated?(conn) do
-          {Hybridsocial.Config.rate_limit_authenticated(), 60}
+          {Config.rate_limit_authenticated(), 60}
         else
-          {Hybridsocial.Config.rate_limit_anonymous(), 60}
+          {Config.rate_limit_anonymous(), 60}
         end
     end
   end

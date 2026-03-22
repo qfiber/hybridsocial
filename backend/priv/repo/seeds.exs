@@ -186,7 +186,56 @@ settings = [
     value: %{"value" => 60},
     type: "integer",
     category: "security",
-    description: "Rate limit per interval for anonymous users"
+    description: "Rate limit per minute for anonymous users"
+  },
+  %{
+    key: "rate_limit_login",
+    value: %{"value" => 10},
+    type: "integer",
+    category: "security",
+    description: "Login attempts per 15 minutes per IP"
+  },
+  %{
+    key: "rate_limit_register",
+    value: %{"value" => 5},
+    type: "integer",
+    category: "security",
+    description: "Registration attempts per hour per IP"
+  },
+  %{
+    key: "rate_limit_password_reset",
+    value: %{"value" => 5},
+    type: "integer",
+    category: "security",
+    description: "Password reset requests per hour per IP"
+  },
+  %{
+    key: "rate_limit_2fa",
+    value: %{"value" => 5},
+    type: "integer",
+    category: "security",
+    description: "2FA verification attempts per 15 minutes per user"
+  },
+  %{
+    key: "max_json_payload_bytes",
+    value: %{"value" => 1_000_000},
+    type: "integer",
+    category: "security",
+    description: "Maximum JSON request body size in bytes (default 1MB)"
+  },
+  %{
+    key: "max_upload_payload_bytes",
+    value: %{"value" => 100_000_000},
+    type: "integer",
+    category: "security",
+    description: "Maximum file upload size in bytes (default 100MB)"
+  },
+  %{
+    key: "max_federation_payload_bytes",
+    value: %{"value" => 1_000_000},
+    type: "integer",
+    category: "security",
+    description: "Maximum federation inbox payload size in bytes (default 1MB)"
   }
 ]
 

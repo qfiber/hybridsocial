@@ -11,16 +11,26 @@
   // Editable values indexed by setting key
   let editValues: Record<string, string> = $state({});
 
-  const categoryOrder = ['General', 'Limits', 'Registration', 'Federation', 'Media', 'Security', 'Premium'];
+  const categoryOrder = ['general', 'limits', 'registration', 'federation', 'media', 'security', 'search', 'premium'];
+
+  const categoryLabels: Record<string, string> = {
+    general: 'General',
+    limits: 'Limits',
+    registration: 'Registration',
+    federation: 'Federation',
+    media: 'Media',
+    security: 'Security & Rate Limiting',
+    search: 'Search',
+    premium: 'Premium'
+  };
 
   let groupedSettings = $derived(() => {
     const groups: Record<string, AdminSetting[]> = {};
     for (const s of settings) {
-      const cat = s.category || 'General';
+      const cat = (s.category || 'general').toLowerCase();
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(s);
     }
-    // Sort by defined order, putting unknown categories at end
     const sorted: [string, AdminSetting[]][] = [];
     for (const cat of categoryOrder) {
       if (groups[cat]) sorted.push([cat, groups[cat]]);
@@ -45,7 +55,7 @@
   });
 
   async function saveCategory(category: string) {
-    const categorySettings = settings.filter((s) => s.category === category);
+    const categorySettings = settings.filter((s) => (s.category || 'general').toLowerCase() === category);
     const changed = categorySettings.filter((s) => editValues[s.key] !== s.value);
     if (changed.length === 0) {
       addToast('No changes to save', 'info');
@@ -104,7 +114,7 @@
   {:else}
     {#each groupedSettings() as [category, categorySettings] (category)}
       <section class="settings-category card">
-        <h2 class="category-title">{category}</h2>
+        <h2 class="category-title">{categoryLabels[category] || category}</h2>
 
         <div class="settings-list">
           {#each categorySettings as setting (setting.key)}
