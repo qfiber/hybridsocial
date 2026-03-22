@@ -41,7 +41,7 @@ defmodule Hybridsocial.Federation.InboxTest do
 
   # Helper to create a local post
   defp create_local_post(identity) do
-    {:ok, _post} =
+    {:ok, post} =
       Posts.create_post(identity.id, %{
         "content" => "Hello from local!",
         "post_type" => "text",
