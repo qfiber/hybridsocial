@@ -157,7 +157,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp handle_account_action(conn, identity, "suspend", admin_id, _params) do
-    case identity |> Hybridsocial.Accounts.Identity.suspend_changeset() |> Hybridsocial.Repo.update() do
+    case identity
+         |> Hybridsocial.Accounts.Identity.suspend_changeset()
+         |> Hybridsocial.Repo.update() do
       {:ok, updated} ->
         Moderation.log(admin_id, "account.suspended", "identity", identity.id, %{})
         conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
@@ -168,7 +170,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp handle_account_action(conn, identity, "unsuspend", admin_id, _params) do
-    case identity |> Hybridsocial.Accounts.Identity.unsuspend_changeset() |> Hybridsocial.Repo.update() do
+    case identity
+         |> Hybridsocial.Accounts.Identity.unsuspend_changeset()
+         |> Hybridsocial.Repo.update() do
       {:ok, updated} ->
         Moderation.log(admin_id, "account.unsuspended", "identity", identity.id, %{})
         conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
@@ -183,7 +187,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       reason: params["reason"] || ""
     })
 
-    conn |> put_status(:ok) |> json(%{data: serialize_account(identity), message: "account.warned"})
+    conn
+    |> put_status(:ok)
+    |> json(%{data: serialize_account(identity), message: "account.warned"})
   end
 
   defp handle_account_action(conn, _identity, _action, _admin_id, _params) do
@@ -211,11 +217,18 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
       case Moderation.create_filter(attrs) do
         {:ok, filter} ->
-          Moderation.log(admin_id, "content_filter.created", "content_filter", filter.id, %{type: filter.type, pattern: filter.pattern, action: filter.action})
+          Moderation.log(admin_id, "content_filter.created", "content_filter", filter.id, %{
+            type: filter.type,
+            pattern: filter.pattern,
+            action: filter.action
+          })
+
           conn |> put_status(:created) |> json(%{data: serialize_filter(filter)})
 
         {:error, changeset} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -266,7 +279,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           conn |> put_status(:created) |> json(%{data: serialize_banned_domain(banned_domain)})
 
         {:error, changeset} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -318,7 +333,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           conn |> put_status(:created) |> json(%{data: serialize_relay(relay)})
 
         {:error, changeset} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -426,11 +443,13 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp parse_int(nil, default), do: default
+
   defp parse_int(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {int, _} -> int
       :error -> default
     end
   end
+
   defp parse_int(val, _default) when is_integer(val), do: val
 end

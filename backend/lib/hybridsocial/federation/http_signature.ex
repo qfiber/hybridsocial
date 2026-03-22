@@ -16,7 +16,8 @@ defmodule Hybridsocial.Federation.HTTPSignature do
     host = URI.parse(request[:url]).host
 
     request_data = %{
-      "(request-target)" => "#{String.downcase(request[:method])} #{URI.parse(request[:url]).path}",
+      "(request-target)" =>
+        "#{String.downcase(request[:method])} #{URI.parse(request[:url]).path}",
       "host" => host,
       "date" => date,
       "digest" => digest

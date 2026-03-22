@@ -5,7 +5,15 @@ defmodule Hybridsocial.Groups do
   import Ecto.Query
 
   alias Hybridsocial.Repo
-  alias Hybridsocial.Groups.{Group, GroupMember, GroupScreeningConfig, GroupApplication, GroupInvite}
+
+  alias Hybridsocial.Groups.{
+    Group,
+    GroupMember,
+    GroupScreeningConfig,
+    GroupApplication,
+    GroupInvite
+  }
+
   alias Hybridsocial.Accounts
 
   @default_page_size 20
@@ -207,13 +215,19 @@ defmodule Hybridsocial.Groups do
 
   def member?(group_id, identity_id) do
     GroupMember
-    |> where([m], m.group_id == ^group_id and m.identity_id == ^identity_id and m.status == :approved)
+    |> where(
+      [m],
+      m.group_id == ^group_id and m.identity_id == ^identity_id and m.status == :approved
+    )
     |> Repo.exists?()
   end
 
   def member_role(group_id, identity_id) do
     GroupMember
-    |> where([m], m.group_id == ^group_id and m.identity_id == ^identity_id and m.status == :approved)
+    |> where(
+      [m],
+      m.group_id == ^group_id and m.identity_id == ^identity_id and m.status == :approved
+    )
     |> select([m], m.role)
     |> Repo.one()
   end
@@ -489,7 +503,10 @@ defmodule Hybridsocial.Groups do
 
   defp get_pending_invite(group_id, identity_id) do
     GroupInvite
-    |> where([i], i.group_id == ^group_id and i.invited_id == ^identity_id and i.status == "pending")
+    |> where(
+      [i],
+      i.group_id == ^group_id and i.invited_id == ^identity_id and i.status == "pending"
+    )
     |> Repo.one()
   end
 

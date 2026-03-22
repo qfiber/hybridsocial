@@ -31,9 +31,7 @@ defmodule Hybridsocial.SearchTest do
       user = create_user("jdoe", "jdoe@test.com")
 
       # Update display_name to trigger tsvector update
-      Hybridsocial.Repo.update!(
-        Ecto.Changeset.change(user, display_name: "John Doe Developer")
-      )
+      Hybridsocial.Repo.update!(Ecto.Changeset.change(user, display_name: "John Doe Developer"))
 
       results = Search.search_accounts("john")
       assert length(results) >= 1
@@ -43,9 +41,7 @@ defmodule Hybridsocial.SearchTest do
     test "excludes suspended accounts" do
       user = create_user("suspended_user", "suspended@test.com")
 
-      Hybridsocial.Repo.update!(
-        Ecto.Changeset.change(user, is_suspended: true)
-      )
+      Hybridsocial.Repo.update!(Ecto.Changeset.change(user, is_suspended: true))
 
       results = Search.search_accounts("suspended_user")
       assert results == []
@@ -54,9 +50,7 @@ defmodule Hybridsocial.SearchTest do
     test "excludes soft-deleted accounts" do
       user = create_user("deleted_user", "deleted@test.com")
 
-      Hybridsocial.Repo.update!(
-        Ecto.Changeset.change(user, deleted_at: DateTime.utc_now())
-      )
+      Hybridsocial.Repo.update!(Ecto.Changeset.change(user, deleted_at: DateTime.utc_now()))
 
       results = Search.search_accounts("deleted_user")
       assert results == []

@@ -66,8 +66,7 @@ defmodule Hybridsocial.Repo.Migrations.CreatePosts do
     create table(:post_revisions, primary_key: false) do
       add :id, :binary_id, primary_key: true
 
-      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all),
-        null: false
+      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all), null: false
 
       add :content, :text
       add :content_html, :text
@@ -81,8 +80,7 @@ defmodule Hybridsocial.Repo.Migrations.CreatePosts do
     create table(:reactions, primary_key: false) do
       add :id, :binary_id, primary_key: true
 
-      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all),
-        null: false
+      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all), null: false
 
       add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
         null: false
@@ -98,8 +96,7 @@ defmodule Hybridsocial.Repo.Migrations.CreatePosts do
     create table(:boosts, primary_key: false) do
       add :id, :binary_id, primary_key: true
 
-      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all),
-        null: false
+      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all), null: false
 
       add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
         null: false
@@ -132,8 +129,7 @@ defmodule Hybridsocial.Repo.Migrations.CreatePosts do
 
     # Post-hashtag join table
     create table(:post_hashtags, primary_key: false) do
-      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all),
-        null: false
+      add :post_id, references(:posts, type: :binary_id, on_delete: :delete_all), null: false
 
       add :hashtag_id, references(:hashtags, type: :binary_id, on_delete: :delete_all),
         null: false

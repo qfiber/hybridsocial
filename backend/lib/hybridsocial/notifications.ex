@@ -115,7 +115,9 @@ defmodule Hybridsocial.Notifications do
     case Repo.get_by(Preference, identity_id: identity_id, type: type) do
       nil ->
         %Preference{}
-        |> Preference.changeset(Map.merge(stringify_keys(attrs), %{"identity_id" => identity_id, "type" => type}))
+        |> Preference.changeset(
+          Map.merge(stringify_keys(attrs), %{"identity_id" => identity_id, "type" => type})
+        )
         |> Repo.insert()
 
       preference ->

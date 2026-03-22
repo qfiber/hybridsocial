@@ -98,10 +98,11 @@ defmodule HybridsocialWeb.Api.V1.ListController do
         Lists.add_to_list(id, identity.id, target_id)
       end)
 
-    errors = Enum.filter(results, fn
-      {:error, _} -> true
-      _ -> false
-    end)
+    errors =
+      Enum.filter(results, fn
+        {:error, _} -> true
+        _ -> false
+      end)
 
     if Enum.any?(errors, fn {:error, reason} -> reason == :not_found end) do
       conn |> put_status(:not_found) |> json(%{error: "List not found"})

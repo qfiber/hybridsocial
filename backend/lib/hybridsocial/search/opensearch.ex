@@ -8,14 +8,20 @@ defmodule Hybridsocial.Search.OpenSearch do
   @doc "Creates an index with the given mapping."
   def create_index(index_name, mapping) do
     case request(:put, "/#{index_name}", mapping) do
-      {:ok, %{status_code: status}} when status in [200, 201] -> :ok
+      {:ok, %{status_code: status}} when status in [200, 201] ->
+        :ok
+
       {:ok, %{status_code: 400, body: body}} ->
         case Jason.decode(body) do
           {:ok, %{"error" => %{"type" => "resource_already_exists_exception"}}} -> :ok
           _ -> {:error, body}
         end
-      {:ok, %{body: body}} -> {:error, body}
-      {:error, reason} -> {:error, reason}
+
+      {:ok, %{body: body}} ->
+        {:error, body}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

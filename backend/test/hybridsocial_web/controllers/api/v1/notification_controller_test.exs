@@ -274,7 +274,8 @@ defmodule HybridsocialWeb.Api.V1.NotificationControllerTest do
     test "returns preferences map", %{conn: conn} do
       alice = create_user("nc_alice13", "nc_alice13@example.com")
 
-      {:ok, _} = Notifications.update_preference(alice.id, "follow", %{"email" => true, "push" => false})
+      {:ok, _} =
+        Notifications.update_preference(alice.id, "follow", %{"email" => true, "push" => false})
 
       conn =
         conn

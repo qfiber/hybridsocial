@@ -24,7 +24,16 @@ defmodule Hybridsocial.Admin.BackupJob do
 
   def changeset(backup_job, attrs) do
     backup_job
-    |> cast(attrs, [:type, :status, :file_path, :encryption_key_hash, :file_size, :started_at, :completed_at, :initiated_by])
+    |> cast(attrs, [
+      :type,
+      :status,
+      :file_path,
+      :encryption_key_hash,
+      :file_size,
+      :started_at,
+      :completed_at,
+      :initiated_by
+    ])
     |> validate_required([:type, :status])
     |> validate_inclusion(:type, @valid_types)
     |> validate_inclusion(:status, @valid_statuses)

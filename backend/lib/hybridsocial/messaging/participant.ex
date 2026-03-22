@@ -17,7 +17,14 @@ defmodule Hybridsocial.Messaging.Participant do
 
   def changeset(participant, attrs) do
     participant
-    |> cast(attrs, [:conversation_id, :identity_id, :joined_at, :last_read_message_id, :notifications_enabled, :left_at])
+    |> cast(attrs, [
+      :conversation_id,
+      :identity_id,
+      :joined_at,
+      :last_read_message_id,
+      :notifications_enabled,
+      :left_at
+    ])
     |> validate_required([:conversation_id, :identity_id])
     |> unique_constraint([:conversation_id, :identity_id])
     |> foreign_key_constraint(:conversation_id)

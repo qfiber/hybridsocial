@@ -60,8 +60,7 @@ config :logger, :default_formatter, format: "[$level] $message\n"
 config :phoenix, :stacktrace_depth, 20
 
 # Use local adapter for dev (emails viewable at /dev/mailbox)
-config :hybridsocial, Hybridsocial.Mailer,
-  adapter: Swoosh.Adapters.Local
+config :hybridsocial, Hybridsocial.Mailer, adapter: Swoosh.Adapters.Local
 
 # Skip HTTP signature verification in dev (no real remote servers)
 config :hybridsocial, federation_signature_check: false

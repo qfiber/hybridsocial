@@ -307,7 +307,9 @@ defmodule Hybridsocial.NotificationsTest do
 
     test "returns error if not found" do
       alice = create_user("notif_alice16", "notif_alice16@example.com")
-      assert {:error, :not_found} = Notifications.dismiss_notification(Ecto.UUID.generate(), alice.id)
+
+      assert {:error, :not_found} =
+               Notifications.dismiss_notification(Ecto.UUID.generate(), alice.id)
     end
   end
 
@@ -324,7 +326,8 @@ defmodule Hybridsocial.NotificationsTest do
     test "returns preferences as map" do
       alice = create_user("notif_alice18", "notif_alice18@example.com")
 
-      {:ok, _} = Notifications.update_preference(alice.id, "follow", %{"email" => true, "push" => false})
+      {:ok, _} =
+        Notifications.update_preference(alice.id, "follow", %{"email" => true, "push" => false})
 
       prefs = Notifications.get_preferences(alice.id)
       assert prefs["follow"].email == true
@@ -363,7 +366,8 @@ defmodule Hybridsocial.NotificationsTest do
     test "returns preference values when set" do
       alice = create_user("notif_alice22", "notif_alice22@example.com")
 
-      {:ok, _} = Notifications.update_preference(alice.id, "follow", %{"email" => true, "push" => false})
+      {:ok, _} =
+        Notifications.update_preference(alice.id, "follow", %{"email" => true, "push" => false})
 
       assert Notifications.should_notify?(alice.id, "follow", :email) == true
       assert Notifications.should_notify?(alice.id, "follow", :push) == false

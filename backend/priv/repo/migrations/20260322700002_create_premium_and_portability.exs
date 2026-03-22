@@ -4,7 +4,10 @@ defmodule Hybridsocial.Repo.Migrations.CreatePremiumAndPortability do
   def change do
     create table(:verifications, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :type, :string, null: false
       add :status, :string, null: false, default: "pending"
       add :verified_at, :utc_datetime_usec
@@ -18,7 +21,10 @@ defmodule Hybridsocial.Repo.Migrations.CreatePremiumAndPortability do
 
     create table(:subscriptions, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :plan, :string, null: false, default: "free"
       add :status, :string, null: false, default: "active"
       add :payment_provider, :string
@@ -59,7 +65,10 @@ defmodule Hybridsocial.Repo.Migrations.CreatePremiumAndPortability do
 
     create table(:data_exports, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :status, :string, default: "pending"
       add :file_path, :string
       add :file_size, :bigint
@@ -73,7 +82,10 @@ defmodule Hybridsocial.Repo.Migrations.CreatePremiumAndPortability do
 
     create table(:account_deletions, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :reason, :text
       add :scheduled_for, :utc_datetime_usec, null: false
       add :cancelled_at, :utc_datetime_usec

@@ -18,7 +18,10 @@ defmodule HybridsocialWeb.Plugs.RequirePermission do
         if RBAC.has_permission?(identity_id, permission) do
           conn
         else
-          Hybridsocial.Moderation.log(identity_id, "auth.permission_denied", nil, nil, %{required: permission, path: conn.request_path})
+          Hybridsocial.Moderation.log(identity_id, "auth.permission_denied", nil, nil, %{
+            required: permission,
+            path: conn.request_path
+          })
 
           conn
           |> put_status(:forbidden)

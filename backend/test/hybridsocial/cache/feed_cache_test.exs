@@ -4,7 +4,7 @@ defmodule Hybridsocial.Cache.FeedCacheTest do
   alias Hybridsocial.Cache.FeedCache
 
   setup do
-    Redix.command!(:"valkey_0", ["FLUSHDB"])
+    Redix.command!(:valkey_0, ["FLUSHDB"])
     :ok
   end
 

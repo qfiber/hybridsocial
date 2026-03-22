@@ -4,10 +4,14 @@ defmodule Hybridsocial.Repo.Migrations.CreateOauthAuthorizationCodes do
   def change do
     create table(:oauth_authorization_codes, primary_key: false) do
       add :code_hash, :string, primary_key: true
-      add :application_id, references(:oauth_applications, type: :binary_id, on_delete: :delete_all),
-        null: false
+
+      add :application_id,
+          references(:oauth_applications, type: :binary_id, on_delete: :delete_all),
+          null: false
+
       add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
         null: false
+
       add :redirect_uri, :string, null: false
       add :scopes, {:array, :string}, default: []
       add :code_challenge, :string, null: false

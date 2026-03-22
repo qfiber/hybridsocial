@@ -20,7 +20,14 @@ defmodule Hybridsocial.Auth.OAuthToken do
 
   def changeset(token, attrs) do
     token
-    |> cast(attrs, [:identity_id, :application_id, :token_hash, :refresh_token_hash, :scopes, :expires_at])
+    |> cast(attrs, [
+      :identity_id,
+      :application_id,
+      :token_hash,
+      :refresh_token_hash,
+      :scopes,
+      :expires_at
+    ])
     |> validate_required([:identity_id, :token_hash, :scopes, :expires_at])
     |> unique_constraint(:token_hash)
     |> unique_constraint(:refresh_token_hash)

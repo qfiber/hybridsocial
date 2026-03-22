@@ -27,7 +27,15 @@ defmodule Hybridsocial.Moderation.Report do
 
   def changeset(report, attrs) do
     report
-    |> cast(attrs, [:reporter_id, :reported_id, :target_type, :target_id, :category, :description, :federated])
+    |> cast(attrs, [
+      :reporter_id,
+      :reported_id,
+      :target_type,
+      :target_id,
+      :category,
+      :description,
+      :federated
+    ])
     |> validate_required([:reporter_id, :reported_id, :category])
     |> validate_inclusion(:category, @categories)
     |> foreign_key_constraint(:reporter_id)

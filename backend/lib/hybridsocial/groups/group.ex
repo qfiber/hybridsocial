@@ -9,7 +9,11 @@ defmodule Hybridsocial.Groups.Group do
     field :name, :string
     field :description, :string
     field :visibility, Ecto.Enum, values: [:public, :private, :local_only], default: :public
-    field :join_policy, Ecto.Enum, values: [:open, :screening, :approval, :invite_only], default: :open
+
+    field :join_policy, Ecto.Enum,
+      values: [:open, :screening, :approval, :invite_only],
+      default: :open
+
     field :ap_actor_url, :string
     field :public_key, :string
     field :private_key, :string
@@ -29,7 +33,15 @@ defmodule Hybridsocial.Groups.Group do
 
   def create_changeset(group, attrs) do
     group
-    |> cast(attrs, [:name, :description, :visibility, :join_policy, :avatar_url, :header_url, :created_by])
+    |> cast(attrs, [
+      :name,
+      :description,
+      :visibility,
+      :join_policy,
+      :avatar_url,
+      :header_url,
+      :created_by
+    ])
     |> validate_required([:name, :created_by])
     |> validate_length(:name, min: 1, max: 100)
     |> validate_length(:description, max: 5000)

@@ -62,7 +62,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
         conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.cannot_message_self"})
 
       {:error, :insufficient_participants} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.insufficient_participants"})
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "dm.insufficient_participants"})
 
       {:error, :invalid_recipients} ->
         conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.invalid_recipients"})
@@ -243,7 +245,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
   defp serialize_participant(participant) do
     identity =
       case participant do
-        %{identity: %Hybridsocial.Accounts.Identity{} = id} -> id
+        %{identity: %Hybridsocial.Accounts.Identity{} = id} ->
+          id
+
         _ ->
           Hybridsocial.Accounts.get_identity(participant.identity_id)
       end
@@ -297,12 +301,14 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
   end
 
   defp parse_int(nil, default), do: default
+
   defp parse_int(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {int, _} -> int
       :error -> default
     end
   end
+
   defp parse_int(val, _default) when is_integer(val), do: val
 
   defp format_errors(%Ecto.Changeset{} = changeset) do

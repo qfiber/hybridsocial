@@ -133,7 +133,8 @@ settings = [
     value: %{"value" => ""},
     type: "string",
     category: "media",
-    description: "Base URL for media serving (e.g. https://media.example.com). Leave empty to use relative URLs."
+    description:
+      "Base URL for media serving (e.g. https://media.example.com). Leave empty to use relative URLs."
   },
   %{
     key: "s3_bucket",

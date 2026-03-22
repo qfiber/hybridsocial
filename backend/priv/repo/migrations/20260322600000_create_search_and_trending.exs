@@ -66,7 +66,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateSearchAndTrending do
       timestamps(type: :utc_datetime_usec)
     end
 
-    create index(:trending_data, [:type, :score], comment: "type + score desc for trending queries")
+    create index(:trending_data, [:type, :score],
+             comment: "type + score desc for trending queries"
+           )
+
     create index(:trending_data, [:computed_at])
   end
 

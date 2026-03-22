@@ -153,6 +153,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       {:ok, _boost} ->
         # Return the original post with updated counts
         post = Posts.get_post(id)
+
         conn
         |> put_status(:ok)
         |> json(serialize_post(post))

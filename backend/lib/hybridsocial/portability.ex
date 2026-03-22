@@ -66,7 +66,12 @@ defmodule Hybridsocial.Portability do
           File.write!(json_path, Jason.encode!(data, pretty: true))
 
           tar_path = Path.join(export_dir, "#{export.id}.tar.gz")
-          :erl_tar.create(String.to_charlist(tar_path), [{String.to_charlist("export.json"), File.read!(json_path)}], [:compressed])
+
+          :erl_tar.create(
+            String.to_charlist(tar_path),
+            [{String.to_charlist("export.json"), File.read!(json_path)}],
+            [:compressed]
+          )
 
           file_size = File.stat!(tar_path).size
           File.rm!(json_path)
@@ -189,7 +194,10 @@ defmodule Hybridsocial.Portability do
 
   defp get_active_deletion(identity_id) do
     AccountDeletion
-    |> where([d], d.identity_id == ^identity_id and is_nil(d.cancelled_at) and is_nil(d.executed_at))
+    |> where(
+      [d],
+      d.identity_id == ^identity_id and is_nil(d.cancelled_at) and is_nil(d.executed_at)
+    )
     |> order_by([d], desc: d.inserted_at)
     |> limit(1)
     |> Repo.one()

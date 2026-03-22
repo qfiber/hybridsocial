@@ -17,7 +17,9 @@ defmodule Hybridsocial.MediaTest do
       |> Repo.insert()
 
     # Write a temp JPEG file
-    tmp_path = Path.join(System.tmp_dir!(), "test_upload_#{:erlang.unique_integer([:positive])}.jpg")
+    tmp_path =
+      Path.join(System.tmp_dir!(), "test_upload_#{:erlang.unique_integer([:positive])}.jpg")
+
     File.write!(tmp_path, @jpeg_bytes)
 
     on_exit(fn ->
@@ -49,7 +51,9 @@ defmodule Hybridsocial.MediaTest do
     end
 
     test "rejects a file with invalid magic bytes", %{identity: identity} do
-      tmp_path = Path.join(System.tmp_dir!(), "test_invalid_#{:erlang.unique_integer([:positive])}.bin")
+      tmp_path =
+        Path.join(System.tmp_dir!(), "test_invalid_#{:erlang.unique_integer([:positive])}.bin")
+
       File.write!(tmp_path, <<0x00, 0x00, 0x00, 0x00, 0::size(160)>>)
 
       upload = %Plug.Upload{

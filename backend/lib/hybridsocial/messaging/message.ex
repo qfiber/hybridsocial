@@ -22,7 +22,14 @@ defmodule Hybridsocial.Messaging.Message do
 
   def changeset(message, attrs) do
     message
-    |> cast(attrs, [:conversation_id, :sender_id, :content, :content_type, :media_id, :reply_to_id])
+    |> cast(attrs, [
+      :conversation_id,
+      :sender_id,
+      :content,
+      :content_type,
+      :media_id,
+      :reply_to_id
+    ])
     |> validate_required([:conversation_id, :sender_id, :content])
     |> validate_inclusion(:content_type, @valid_content_types)
     |> foreign_key_constraint(:conversation_id)

@@ -4,7 +4,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateLists do
   def change do
     create table(:lists, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :name, :string, null: false
 
       timestamps(type: :utc_datetime_usec)
@@ -14,7 +17,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateLists do
 
     create table(:list_members, primary_key: false) do
       add :list_id, references(:lists, type: :binary_id, on_delete: :delete_all), null: false
-      add :target_identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :target_identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :added_at, :utc_datetime_usec, default: fragment("NOW()")
     end
 

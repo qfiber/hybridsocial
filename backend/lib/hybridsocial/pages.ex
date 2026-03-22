@@ -176,7 +176,11 @@ defmodule Hybridsocial.Pages do
   @doc "Checks if the given identity has any of the specified roles."
   def has_role?(page_identity_id, identity_id, roles) do
     OrganizationRole
-    |> where([r], r.organization_id == ^page_identity_id and r.identity_id == ^identity_id and r.role in ^roles)
+    |> where(
+      [r],
+      r.organization_id == ^page_identity_id and r.identity_id == ^identity_id and
+        r.role in ^roles
+    )
     |> Repo.exists?()
   end
 

@@ -260,7 +260,9 @@ defmodule HybridsocialWeb.Api.V1.GroupControllerTest do
       other = create_user("member1", "member1@test.com")
       {:ok, member} = Groups.join_group(group.id, other.id)
 
-      conn = patch(conn, "/api/v1/groups/#{group.id}/members/#{member.id}", %{"role" => "moderator"})
+      conn =
+        patch(conn, "/api/v1/groups/#{group.id}/members/#{member.id}", %{"role" => "moderator"})
+
       response = json_response(conn, 200)
       assert response["role"] == "moderator"
     end

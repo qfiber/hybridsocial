@@ -155,7 +155,11 @@ defmodule Hybridsocial.Federation.Inbox do
 
   # --- EmojiReact ---
 
-  defp handle_emoji_react(%{"actor" => actor_ap_id, "object" => object_ap_id, "content" => content})
+  defp handle_emoji_react(%{
+         "actor" => actor_ap_id,
+         "object" => object_ap_id,
+         "content" => content
+       })
        when is_binary(actor_ap_id) and is_binary(object_ap_id) do
     reaction_type = ActivityMapper.to_reaction_type(content)
 
@@ -413,11 +417,14 @@ defmodule Hybridsocial.Federation.Inbox do
       nil ->
         # Try to extract local post ID from URL
         case extract_local_post_id(ap_id) do
-          nil -> {:error, :post_not_found}
-          id -> case Hybridsocial.Social.Posts.get_post(id) do
-            nil -> {:error, :post_not_found}
-            post -> {:ok, post}
-          end
+          nil ->
+            {:error, :post_not_found}
+
+          id ->
+            case Hybridsocial.Social.Posts.get_post(id) do
+              nil -> {:error, :post_not_found}
+              post -> {:ok, post}
+            end
         end
 
       post ->

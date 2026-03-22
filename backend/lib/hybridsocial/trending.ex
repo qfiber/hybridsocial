@@ -139,7 +139,8 @@ defmodule Hybridsocial.Trending do
             total_engagement: %{
               sum: %{
                 script: %{
-                  source: "doc['reaction_count'].value + doc['boost_count'].value + doc['reply_count'].value"
+                  source:
+                    "doc['reaction_count'].value + doc['boost_count'].value + doc['reply_count'].value"
                 }
               }
             },
@@ -261,7 +262,9 @@ defmodule Hybridsocial.Trending do
       |> where([p], p.visibility == "public")
       |> where([p], p.published_at >= ^cutoff)
       |> join(:left, [p], r in "reactions", on: r.post_id == p.id and r.inserted_at >= ^cutoff)
-      |> join(:left, [p, _r], b in "boosts", on: b.post_id == p.id and b.inserted_at >= ^cutoff and is_nil(b.deleted_at))
+      |> join(:left, [p, _r], b in "boosts",
+        on: b.post_id == p.id and b.inserted_at >= ^cutoff and is_nil(b.deleted_at)
+      )
       |> join(:left, [p, _r, _b], rep in "posts",
         on: rep.parent_id == p.id and rep.inserted_at >= ^cutoff and is_nil(rep.deleted_at)
       )
@@ -305,7 +308,12 @@ defmodule Hybridsocial.Trending do
       |> Enum.sort_by(& &1.score, :desc)
       |> Enum.take(100)
 
-    Enum.each(trending_entries, fn %{row: row, score: score, total_engagement: eng, approx_unique: uniq} ->
+    Enum.each(trending_entries, fn %{
+                                     row: row,
+                                     score: score,
+                                     total_engagement: eng,
+                                     approx_unique: uniq
+                                   } ->
       %TrendingData{}
       |> TrendingData.changeset(%{
         type: "post",
@@ -340,7 +348,10 @@ defmodule Hybridsocial.Trending do
         post_count: count(p.id, :distinct),
         unique_accounts: fragment("COUNT(DISTINCT ?)", p.identity_id)
       })
-      |> having([_h, _ph, p], fragment("COUNT(DISTINCT ?)", p.identity_id) >= ^@min_unique_accounts_hashtags)
+      |> having(
+        [_h, _ph, p],
+        fragment("COUNT(DISTINCT ?)", p.identity_id) >= ^@min_unique_accounts_hashtags
+      )
       |> Repo.all()
 
     # Clear old trending hashtags

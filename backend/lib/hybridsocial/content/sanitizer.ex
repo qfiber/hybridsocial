@@ -44,10 +44,11 @@ defmodule Hybridsocial.Content.Sanitizer do
   def sanitize_links(html) do
     Regex.replace(~r/<a\s[^>]*>/u, html, fn tag ->
       # Extract href
-      href = case Regex.run(~r/href="([^"]*)"/, tag) do
-        [_, url] -> url
-        _ -> "#"
-      end
+      href =
+        case Regex.run(~r/href="([^"]*)"/, tag) do
+          [_, url] -> url
+          _ -> "#"
+        end
 
       if String.starts_with?(href, ["http://", "https://"]) do
         attrs = Enum.map_join(@link_attrs, " ", fn {k, v} -> ~s(#{k}="#{v}") end)

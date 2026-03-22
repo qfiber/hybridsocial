@@ -8,7 +8,8 @@ defmodule Hybridsocial.Auth.OAuth do
   alias Hybridsocial.Repo
   alias Hybridsocial.Auth.{OAuthApplication, OAuthToken, AuthorizationCode, Token}
 
-  @authorization_code_ttl 600  # 10 minutes in seconds
+  # 10 minutes in seconds
+  @authorization_code_ttl 600
 
   # --- Application management ---
 

@@ -71,30 +71,34 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
         conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
 
       _identity ->
-        posts = Hybridsocial.Social.Posts.posts_by_identity(id, [
-          limit: clamp_limit(params["limit"])
-        ])
+        posts =
+          Hybridsocial.Social.Posts.posts_by_identity(id,
+            limit: clamp_limit(params["limit"])
+          )
+
         posts_list = if is_list(posts), do: posts, else: []
 
         conn
         |> put_status(:ok)
-        |> json(Enum.map(posts_list, fn post ->
-          %{
-            id: post.id,
-            content: post.content,
-            content_html: post.content_html,
-            visibility: post.visibility,
-            sensitive: post.sensitive,
-            spoiler_text: post.spoiler_text,
-            reply_count: post.reply_count,
-            boost_count: post.boost_count,
-            reaction_count: post.reaction_count,
-            is_pinned: post.is_pinned,
-            created_at: post.inserted_at,
-            edited_at: post.edited_at,
-            account: serialize_identity(Hybridsocial.Repo.preload(post, :identity).identity)
-          }
-        end))
+        |> json(
+          Enum.map(posts_list, fn post ->
+            %{
+              id: post.id,
+              content: post.content,
+              content_html: post.content_html,
+              visibility: post.visibility,
+              sensitive: post.sensitive,
+              spoiler_text: post.spoiler_text,
+              reply_count: post.reply_count,
+              boost_count: post.boost_count,
+              reaction_count: post.reaction_count,
+              is_pinned: post.is_pinned,
+              created_at: post.inserted_at,
+              edited_at: post.edited_at,
+              account: serialize_identity(Hybridsocial.Repo.preload(post, :identity).identity)
+            }
+          end)
+        )
     end
   end
 
@@ -117,7 +121,9 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
         conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
 
       {:error, changeset} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
     end
   end
 
@@ -135,7 +141,9 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
         conn |> put_status(:ok) |> json(%{id: target_id, blocking: true})
 
       {:error, changeset} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
     end
   end
 
@@ -177,7 +185,9 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
         conn |> put_status(:ok) |> json(%{id: target_id, muting: true})
 
       {:error, changeset} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
     end
   end
 
@@ -269,12 +279,14 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   end
 
   defp to_integer(nil, default), do: default
+
   defp to_integer(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {n, _} -> n
       :error -> default
     end
   end
+
   defp to_integer(val, _default) when is_integer(val), do: val
 
   defp serialize_relationship(identity_id, target_id, follow) do

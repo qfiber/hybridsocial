@@ -19,7 +19,10 @@ defmodule Hybridsocial.Auth.OAuthTest do
 
   defp create_app(identity_id) do
     {:ok, app, _secret} =
-      OAuth.create_application(%{"name" => "Test App", "redirect_uris" => ["https://example.com/callback"]}, identity_id)
+      OAuth.create_application(
+        %{"name" => "Test App", "redirect_uris" => ["https://example.com/callback"]},
+        identity_id
+      )
 
     app
   end
@@ -121,7 +124,8 @@ defmodule Hybridsocial.Auth.OAuthTest do
     end
 
     test "returns not_found for nonexistent app" do
-      assert {:error, :not_found} = OAuth.delete_application(Ecto.UUID.generate(), Ecto.UUID.generate())
+      assert {:error, :not_found} =
+               OAuth.delete_application(Ecto.UUID.generate(), Ecto.UUID.generate())
     end
   end
 
@@ -138,7 +142,8 @@ defmodule Hybridsocial.Auth.OAuthTest do
       identity = create_user()
       {:ok, app, _} = OAuth.create_application(%{"name" => "My App"}, identity.id)
 
-      assert {:error, :invalid_client} = OAuth.verify_client_credentials(app.client_id, "wrong_secret")
+      assert {:error, :invalid_client} =
+               OAuth.verify_client_credentials(app.client_id, "wrong_secret")
     end
 
     test "rejects invalid client_id" do
@@ -187,7 +192,12 @@ defmodule Hybridsocial.Auth.OAuthTest do
         )
 
       assert {:error, :invalid_code_verifier} =
-               OAuth.exchange_code(code, "wrong_verifier", app.client_id, "https://example.com/callback")
+               OAuth.exchange_code(
+                 code,
+                 "wrong_verifier",
+                 app.client_id,
+                 "https://example.com/callback"
+               )
     end
 
     test "rejects invalid code" do
@@ -195,7 +205,12 @@ defmodule Hybridsocial.Auth.OAuthTest do
       app = create_app(identity.id)
 
       assert {:error, :invalid_code} =
-               OAuth.exchange_code("invalid_code", "verifier", app.client_id, "https://example.com/callback")
+               OAuth.exchange_code(
+                 "invalid_code",
+                 "verifier",
+                 app.client_id,
+                 "https://example.com/callback"
+               )
     end
 
     test "rejects mismatched redirect_uri" do
@@ -213,7 +228,12 @@ defmodule Hybridsocial.Auth.OAuthTest do
         )
 
       assert {:error, :redirect_uri_mismatch} =
-               OAuth.exchange_code(code, code_verifier, app.client_id, "https://evil.com/callback")
+               OAuth.exchange_code(
+                 code,
+                 code_verifier,
+                 app.client_id,
+                 "https://evil.com/callback"
+               )
     end
 
     test "rejects mismatched client_id" do
@@ -231,7 +251,12 @@ defmodule Hybridsocial.Auth.OAuthTest do
         )
 
       assert {:error, :invalid_client} =
-               OAuth.exchange_code(code, code_verifier, "wrong_client_id", "https://example.com/callback")
+               OAuth.exchange_code(
+                 code,
+                 code_verifier,
+                 "wrong_client_id",
+                 "https://example.com/callback"
+               )
     end
 
     test "code can only be used once" do
@@ -249,10 +274,20 @@ defmodule Hybridsocial.Auth.OAuthTest do
         )
 
       assert {:ok, _tokens} =
-               OAuth.exchange_code(code, code_verifier, app.client_id, "https://example.com/callback")
+               OAuth.exchange_code(
+                 code,
+                 code_verifier,
+                 app.client_id,
+                 "https://example.com/callback"
+               )
 
       assert {:error, :invalid_code} =
-               OAuth.exchange_code(code, code_verifier, app.client_id, "https://example.com/callback")
+               OAuth.exchange_code(
+                 code,
+                 code_verifier,
+                 app.client_id,
+                 "https://example.com/callback"
+               )
     end
   end
 

@@ -145,7 +145,9 @@ defmodule Hybridsocial.Content.EmojisTest do
 
     test "returns error for nonexistent emoji" do
       assert {:error, :not_found} =
-               Emojis.update_emoji(Ecto.UUID.generate(), %{"image_url" => "https://example.com/x.png"})
+               Emojis.update_emoji(Ecto.UUID.generate(), %{
+                 "image_url" => "https://example.com/x.png"
+               })
     end
   end
 

@@ -15,9 +15,12 @@ defmodule Hybridsocial.Auth.RBAC do
     now = DateTime.utc_now()
 
     from(ir in IdentityRole,
-      join: r in Role, on: ir.role_id == r.id,
-      join: rp in RolePermission, on: rp.role_id == r.id,
-      join: p in Permission, on: rp.permission_id == p.id,
+      join: r in Role,
+      on: ir.role_id == r.id,
+      join: rp in RolePermission,
+      on: rp.role_id == r.id,
+      join: p in Permission,
+      on: rp.permission_id == p.id,
       where: ir.identity_id == ^identity_id,
       where: p.name == ^permission_name,
       where: is_nil(ir.expires_at) or ir.expires_at > ^now
@@ -30,9 +33,12 @@ defmodule Hybridsocial.Auth.RBAC do
     now = DateTime.utc_now()
 
     from(ir in IdentityRole,
-      join: r in Role, on: ir.role_id == r.id,
-      join: rp in RolePermission, on: rp.role_id == r.id,
-      join: p in Permission, on: rp.permission_id == p.id,
+      join: r in Role,
+      on: ir.role_id == r.id,
+      join: rp in RolePermission,
+      on: rp.role_id == r.id,
+      join: p in Permission,
+      on: rp.permission_id == p.id,
       where: ir.identity_id == ^identity_id,
       where: p.name in ^permission_names,
       where: is_nil(ir.expires_at) or ir.expires_at > ^now
@@ -47,9 +53,12 @@ defmodule Hybridsocial.Auth.RBAC do
 
     count =
       from(ir in IdentityRole,
-        join: r in Role, on: ir.role_id == r.id,
-        join: rp in RolePermission, on: rp.role_id == r.id,
-        join: p in Permission, on: rp.permission_id == p.id,
+        join: r in Role,
+        on: ir.role_id == r.id,
+        join: rp in RolePermission,
+        on: rp.role_id == r.id,
+        join: p in Permission,
+        on: rp.permission_id == p.id,
         where: ir.identity_id == ^identity_id,
         where: p.name in ^permission_names,
         where: is_nil(ir.expires_at) or ir.expires_at > ^now,
@@ -122,7 +131,8 @@ defmodule Hybridsocial.Auth.RBAC do
     now = DateTime.utc_now()
 
     from(ir in IdentityRole,
-      join: r in Role, on: ir.role_id == r.id,
+      join: r in Role,
+      on: ir.role_id == r.id,
       where: ir.identity_id == ^identity_id,
       where: is_nil(ir.expires_at) or ir.expires_at > ^now,
       select: r.name
@@ -135,9 +145,12 @@ defmodule Hybridsocial.Auth.RBAC do
     now = DateTime.utc_now()
 
     from(ir in IdentityRole,
-      join: r in Role, on: ir.role_id == r.id,
-      join: rp in RolePermission, on: rp.role_id == r.id,
-      join: p in Permission, on: rp.permission_id == p.id,
+      join: r in Role,
+      on: ir.role_id == r.id,
+      join: rp in RolePermission,
+      on: rp.role_id == r.id,
+      join: p in Permission,
+      on: rp.permission_id == p.id,
       where: ir.identity_id == ^identity_id,
       where: is_nil(ir.expires_at) or ir.expires_at > ^now,
       select: p.name,
@@ -204,7 +217,7 @@ defmodule Hybridsocial.Auth.RBAC do
   @doc "List all permissions."
   def list_permissions do
     Permission
-    |> order_by([p], [asc: p.category, asc: p.name])
+    |> order_by([p], asc: p.category, asc: p.name)
     |> Repo.all()
   end
 
@@ -237,7 +250,8 @@ defmodule Hybridsocial.Auth.RBAC do
   @doc "Get all permissions for a role."
   def get_role_permissions(role_id) do
     from(p in Permission,
-      join: rp in RolePermission, on: rp.permission_id == p.id,
+      join: rp in RolePermission,
+      on: rp.permission_id == p.id,
       where: rp.role_id == ^role_id,
       order_by: [asc: p.category, asc: p.name]
     )
@@ -251,7 +265,8 @@ defmodule Hybridsocial.Auth.RBAC do
     now = DateTime.utc_now()
 
     from(ir in IdentityRole,
-      join: r in Role, on: ir.role_id == r.id,
+      join: r in Role,
+      on: ir.role_id == r.id,
       where: ir.identity_id == ^identity_id,
       where: is_nil(ir.expires_at) or ir.expires_at > ^now,
       preload: [role: r]

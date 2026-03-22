@@ -202,12 +202,12 @@ defmodule Hybridsocial.Federation.Migration do
     Enum.each(local_followers, fn follower_id ->
       case Social.follow(follower_id, new_identity_id) do
         {:ok, _follow} ->
-          Logger.info("Migrated follower #{follower_id} from #{old_identity_id} to #{new_identity_id}")
+          Logger.info(
+            "Migrated follower #{follower_id} from #{old_identity_id} to #{new_identity_id}"
+          )
 
         {:error, reason} ->
-          Logger.warning(
-            "Failed to migrate follower #{follower_id}: #{inspect(reason)}"
-          )
+          Logger.warning("Failed to migrate follower #{follower_id}: #{inspect(reason)}")
       end
     end)
 

@@ -114,9 +114,14 @@ defmodule Hybridsocial.GroupsTest do
 
   describe "search_groups/1" do
     test "searches by name and description", %{alice: alice} do
-      {:ok, _} = Groups.create_group(alice.id, %{"name" => "Elixir Devs", "description" => "Coding"})
-      {:ok, _} = Groups.create_group(alice.id, %{"name" => "Cooking", "description" => "Elixir recipes"})
-      {:ok, _} = Groups.create_group(alice.id, %{"name" => "Sports", "description" => "Athletic stuff"})
+      {:ok, _} =
+        Groups.create_group(alice.id, %{"name" => "Elixir Devs", "description" => "Coding"})
+
+      {:ok, _} =
+        Groups.create_group(alice.id, %{"name" => "Cooking", "description" => "Elixir recipes"})
+
+      {:ok, _} =
+        Groups.create_group(alice.id, %{"name" => "Sports", "description" => "Athletic stuff"})
 
       results = Groups.search_groups("elixir")
       assert length(results) == 2
@@ -136,19 +141,25 @@ defmodule Hybridsocial.GroupsTest do
     end
 
     test "approval group: pending status", %{alice: alice, bob: bob} do
-      {:ok, group} = Groups.create_group(alice.id, %{"name" => "Approval", "join_policy" => "approval"})
+      {:ok, group} =
+        Groups.create_group(alice.id, %{"name" => "Approval", "join_policy" => "approval"})
+
       assert {:ok, member} = Groups.join_group(group.id, bob.id)
       assert member.status == :pending
       refute Groups.member?(group.id, bob.id)
     end
 
     test "invite_only group: requires invite", %{alice: alice, bob: bob} do
-      {:ok, group} = Groups.create_group(alice.id, %{"name" => "Invite Only", "join_policy" => "invite_only"})
+      {:ok, group} =
+        Groups.create_group(alice.id, %{"name" => "Invite Only", "join_policy" => "invite_only"})
+
       assert {:error, :invite_required} = Groups.join_group(group.id, bob.id)
     end
 
     test "invite_only group: succeeds with invite", %{alice: alice, bob: bob} do
-      {:ok, group} = Groups.create_group(alice.id, %{"name" => "Invite Only", "join_policy" => "invite_only"})
+      {:ok, group} =
+        Groups.create_group(alice.id, %{"name" => "Invite Only", "join_policy" => "invite_only"})
+
       {:ok, _invite} = Groups.invite_to_group(group.id, alice.id, bob.id)
       assert {:ok, member} = Groups.join_group(group.id, bob.id)
       assert member.status == :approved
@@ -244,7 +255,9 @@ defmodule Hybridsocial.GroupsTest do
 
     test "update existing config", %{alice: alice} do
       {:ok, group} = Groups.create_group(alice.id, %{"name" => "Group"})
-      {:ok, _} = Groups.update_screening_config(group.id, alice.id, %{"min_account_age_days" => 7})
+
+      {:ok, _} =
+        Groups.update_screening_config(group.id, alice.id, %{"min_account_age_days" => 7})
 
       assert {:ok, config} =
                Groups.update_screening_config(group.id, alice.id, %{"min_account_age_days" => 14})

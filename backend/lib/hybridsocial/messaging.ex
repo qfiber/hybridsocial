@@ -54,7 +54,10 @@ defmodule Hybridsocial.Messaging do
     now = DateTime.utc_now()
 
     Ecto.Multi.new()
-    |> Ecto.Multi.insert(:conversation, Conversation.changeset(%Conversation{}, %{type: "direct"}))
+    |> Ecto.Multi.insert(
+      :conversation,
+      Conversation.changeset(%Conversation{}, %{type: "direct"})
+    )
     |> Ecto.Multi.insert(:participant_sender, fn %{conversation: conv} ->
       Participant.changeset(%Participant{}, %{
         conversation_id: conv.id,
@@ -90,7 +93,10 @@ defmodule Hybridsocial.Messaging do
 
       multi =
         Ecto.Multi.new()
-        |> Ecto.Multi.insert(:conversation, Conversation.changeset(%Conversation{}, %{type: "group_dm"}))
+        |> Ecto.Multi.insert(
+          :conversation,
+          Conversation.changeset(%Conversation{}, %{type: "group_dm"})
+        )
 
       multi =
         all_ids
@@ -159,7 +165,11 @@ defmodule Hybridsocial.Messaging do
 
       %Conversation{type: "group_dm"} ->
         Participant
-        |> where([p], p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and is_nil(p.left_at))
+        |> where(
+          [p],
+          p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and
+            is_nil(p.left_at)
+        )
         |> Repo.one()
         |> case do
           nil ->
@@ -185,7 +195,11 @@ defmodule Hybridsocial.Messaging do
 
   defp update_notifications(conversation_id, identity_id, enabled) do
     Participant
-    |> where([p], p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and is_nil(p.left_at))
+    |> where(
+      [p],
+      p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and
+        is_nil(p.left_at)
+    )
     |> Repo.one()
     |> case do
       nil ->
@@ -226,7 +240,11 @@ defmodule Hybridsocial.Messaging do
       |> Ecto.Multi.run(:delivery_statuses, fn repo, %{message: msg} ->
         recipients =
           Participant
-          |> where([p], p.conversation_id == ^conversation_id and p.identity_id != ^sender_id and is_nil(p.left_at))
+          |> where(
+            [p],
+            p.conversation_id == ^conversation_id and p.identity_id != ^sender_id and
+              is_nil(p.left_at)
+          )
           |> select([p], p.identity_id)
           |> repo.all()
 
@@ -331,7 +349,11 @@ defmodule Hybridsocial.Messaging do
 
       message ->
         Participant
-        |> where([p], p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and is_nil(p.left_at))
+        |> where(
+          [p],
+          p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and
+            is_nil(p.left_at)
+        )
         |> Repo.one()
         |> case do
           nil ->
@@ -349,7 +371,11 @@ defmodule Hybridsocial.Messaging do
   def unread_count(conversation_id, identity_id) do
     participant =
       Participant
-      |> where([p], p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and is_nil(p.left_at))
+      |> where(
+        [p],
+        p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and
+          is_nil(p.left_at)
+      )
       |> Repo.one()
 
     case participant do
@@ -379,7 +405,8 @@ defmodule Hybridsocial.Messaging do
           %Message{created_at: last_read_at} ->
             count =
               Message
-              |> where([m],
+              |> where(
+                [m],
                 m.conversation_id == ^conversation_id and
                   is_nil(m.deleted_at) and
                   m.created_at > ^last_read_at
@@ -399,7 +426,12 @@ defmodule Hybridsocial.Messaging do
   def get_dm_preferences(identity_id) do
     case Repo.get(DmPreference, identity_id) do
       nil ->
-        {:ok, %DmPreference{identity_id: identity_id, allow_dms_from: "everyone", allow_group_dms: false}}
+        {:ok,
+         %DmPreference{
+           identity_id: identity_id,
+           allow_dms_from: "everyone",
+           allow_group_dms: false
+         }}
 
       pref ->
         {:ok, pref}
@@ -448,7 +480,8 @@ defmodule Hybridsocial.Messaging do
           Social.following?(recipient_id, sender_id)
 
         "mutual_followers" ->
-          Social.following?(recipient_id, sender_id) and Social.following?(sender_id, recipient_id)
+          Social.following?(recipient_id, sender_id) and
+            Social.following?(sender_id, recipient_id)
 
         "nobody" ->
           false
@@ -462,7 +495,11 @@ defmodule Hybridsocial.Messaging do
 
   defp participant?(conversation_id, identity_id) do
     Participant
-    |> where([p], p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and is_nil(p.left_at))
+    |> where(
+      [p],
+      p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and
+        is_nil(p.left_at)
+    )
     |> Repo.exists?()
   end
 end

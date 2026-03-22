@@ -120,7 +120,12 @@ defmodule Hybridsocial.Search.OpenSearchTest do
 
       docs = [
         %{id: "s1", title: "Elixir Programming", content: "Learn Elixir", category: "tech"},
-        %{id: "s2", title: "Phoenix Framework", content: "Build web apps with Phoenix", category: "tech"},
+        %{
+          id: "s2",
+          title: "Phoenix Framework",
+          content: "Build web apps with Phoenix",
+          category: "tech"
+        },
         %{id: "s3", title: "Cooking Guide", content: "How to cook pasta", category: "food"}
       ]
 
@@ -129,7 +134,9 @@ defmodule Hybridsocial.Search.OpenSearchTest do
       # Wait for indexing to complete
       :timer.sleep(1500)
       # Force refresh
-      HTTPoison.post("http://localhost:9200/#{@test_index}/_refresh", "", [{"Content-Type", "application/json"}])
+      HTTPoison.post("http://localhost:9200/#{@test_index}/_refresh", "", [
+        {"Content-Type", "application/json"}
+      ])
 
       :ok
     end

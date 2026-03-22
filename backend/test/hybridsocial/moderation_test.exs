@@ -78,7 +78,11 @@ defmodule Hybridsocial.ModerationTest do
       assert length(all_reports) == 3
     end
 
-    test "list_reports/1 filters by status", %{reporter: reporter, reported: reported, moderator: moderator} do
+    test "list_reports/1 filters by status", %{
+      reporter: reporter,
+      reported: reported,
+      moderator: moderator
+    } do
       {:ok, report} =
         Moderation.create_report(reporter.id, %{
           "reported_id" => reported.id,
@@ -94,7 +98,11 @@ defmodule Hybridsocial.ModerationTest do
       assert length(resolved) == 1
     end
 
-    test "assign_report/2 assigns a moderator", %{reporter: reporter, reported: reported, moderator: moderator} do
+    test "assign_report/2 assigns a moderator", %{
+      reporter: reporter,
+      reported: reported,
+      moderator: moderator
+    } do
       {:ok, report} =
         Moderation.create_report(reporter.id, %{
           "reported_id" => reported.id,
@@ -156,7 +164,14 @@ defmodule Hybridsocial.ModerationTest do
 
     test "log/6 creates an audit log entry", %{actor: actor} do
       assert {:ok, entry} =
-               Moderation.log(actor.id, "test.action", "identity", actor.id, %{foo: "bar"}, "127.0.0.1")
+               Moderation.log(
+                 actor.id,
+                 "test.action",
+                 "identity",
+                 actor.id,
+                 %{foo: "bar"},
+                 "127.0.0.1"
+               )
 
       assert entry.action == "test.action"
       assert entry.actor_id == actor.id
@@ -227,7 +242,12 @@ defmodule Hybridsocial.ModerationTest do
 
     test "list_filters/0 returns all filters" do
       Moderation.create_filter(%{"type" => "word", "pattern" => "bad", "action" => "reject"})
-      Moderation.create_filter(%{"type" => "phrase", "pattern" => "bad phrase", "action" => "flag"})
+
+      Moderation.create_filter(%{
+        "type" => "phrase",
+        "pattern" => "bad phrase",
+        "action" => "flag"
+      })
 
       filters = Moderation.list_filters()
       assert length(filters) == 2

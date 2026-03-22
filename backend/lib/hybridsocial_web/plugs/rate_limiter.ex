@@ -30,7 +30,10 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
           conn
           |> put_resp_header("retry-after", Integer.to_string(retry_after))
           |> put_status(:too_many_requests)
-          |> json(%{error: "rate_limit.exceeded", message: "Rate limit exceeded. Try again later."})
+          |> json(%{
+            error: "rate_limit.exceeded",
+            message: "Rate limit exceeded. Try again later."
+          })
           |> halt()
       end
     else
@@ -61,12 +64,24 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
     alias Hybridsocial.Config
 
     case conn.request_path do
-      "/api/v1/auth/password/reset" -> {Config.get("rate_limit_password_reset", 5), 3600}
-      "/api/v1/auth/password/change" -> {Config.get("rate_limit_password_reset", 5), 3600}
-      "/api/v1/auth/2fa/verify" -> {Config.get("rate_limit_2fa", 5), 900}
-      "/api/v1/auth/2fa/login" -> {Config.get("rate_limit_2fa", 5), 900}
-      "/api/v1/auth/login" -> {Config.get("rate_limit_login", 10), 900}
-      "/api/v1/auth/register" -> {Config.get("rate_limit_register", 5), 3600}
+      "/api/v1/auth/password/reset" ->
+        {Config.get("rate_limit_password_reset", 5), 3600}
+
+      "/api/v1/auth/password/change" ->
+        {Config.get("rate_limit_password_reset", 5), 3600}
+
+      "/api/v1/auth/2fa/verify" ->
+        {Config.get("rate_limit_2fa", 5), 900}
+
+      "/api/v1/auth/2fa/login" ->
+        {Config.get("rate_limit_2fa", 5), 900}
+
+      "/api/v1/auth/login" ->
+        {Config.get("rate_limit_login", 10), 900}
+
+      "/api/v1/auth/register" ->
+        {Config.get("rate_limit_register", 5), 3600}
+
       _ ->
         if authenticated?(conn) do
           {Config.rate_limit_authenticated(), 60}

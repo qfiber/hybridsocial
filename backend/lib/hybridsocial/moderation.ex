@@ -190,7 +190,10 @@ defmodule Hybridsocial.Moderation do
     end
   end
 
-  defp apply_filter(text, %ContentFilter{type: "phrase", pattern: pattern, action: action} = filter) do
+  defp apply_filter(
+         text,
+         %ContentFilter{type: "phrase", pattern: pattern, action: action} = filter
+       ) do
     regex = ~r/#{Regex.escape(pattern)}/i
 
     if Regex.match?(regex, text) do
@@ -200,7 +203,10 @@ defmodule Hybridsocial.Moderation do
     end
   end
 
-  defp apply_filter(text, %ContentFilter{type: "regex", pattern: pattern, action: action} = filter) do
+  defp apply_filter(
+         text,
+         %ContentFilter{type: "regex", pattern: pattern, action: action} = filter
+       ) do
     case Regex.compile(pattern, "i") do
       {:ok, regex} ->
         if Regex.match?(regex, text) do
@@ -233,7 +239,12 @@ defmodule Hybridsocial.Moderation do
     Ecto.Multi.new()
     |> Ecto.Multi.insert(:banned_domain, fn _ ->
       %BannedDomain{}
-      |> BannedDomain.changeset(%{domain: domain, type: type, reason: reason, created_by: admin_id})
+      |> BannedDomain.changeset(%{
+        domain: domain,
+        type: type,
+        reason: reason,
+        created_by: admin_id
+      })
     end)
     |> Ecto.Multi.run(:audit, fn _repo, _changes ->
       log(admin_id, "domain.banned", "domain", nil, %{domain: domain, type: type, reason: reason})
@@ -329,7 +340,9 @@ defmodule Hybridsocial.Moderation do
 
     headers =
       if webhook.secret do
-        signature = :crypto.mac(:hmac, :sha256, webhook.secret, body) |> Base.encode16(case: :lower)
+        signature =
+          :crypto.mac(:hmac, :sha256, webhook.secret, body) |> Base.encode16(case: :lower)
+
         [{"x-webhook-signature", signature} | headers]
       else
         headers

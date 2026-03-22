@@ -22,7 +22,15 @@ defmodule Hybridsocial.Social.StreamView do
 
   def changeset(stream_view, attrs) do
     stream_view
-    |> cast(attrs, [:post_id, :identity_id, :watch_duration, :total_duration, :completed, :replayed, :source])
+    |> cast(attrs, [
+      :post_id,
+      :identity_id,
+      :watch_duration,
+      :total_duration,
+      :completed,
+      :replayed,
+      :source
+    ])
     |> validate_required([:post_id, :watch_duration, :total_duration])
     |> validate_number(:watch_duration, greater_than_or_equal_to: 0)
     |> validate_number(:total_duration, greater_than: 0)

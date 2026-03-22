@@ -21,8 +21,7 @@ config :hybridsocial, HybridsocialWeb.Endpoint,
   server: false
 
 # Use test adapter for emails
-config :hybridsocial, Hybridsocial.Mailer,
-  adapter: Swoosh.Adapters.Test
+config :hybridsocial, Hybridsocial.Mailer, adapter: Swoosh.Adapters.Test
 
 # Disable rate limiting in tests (individual rate limiter tests enable it manually)
 config :hybridsocial, rate_limiting_enabled: false

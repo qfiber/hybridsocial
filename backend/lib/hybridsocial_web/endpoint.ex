@@ -51,8 +51,14 @@ defmodule HybridsocialWeb.Endpoint do
   plug Plug.Head
   plug Plug.Session, @session_options
   plug HybridsocialWeb.Plugs.SecurityHeaders
+
   plug CORSPlug,
-    origin: Application.compile_env(:hybridsocial, :cors_origins, ["http://localhost:5173", "http://localhost:4000"]),
+    origin:
+      Application.compile_env(:hybridsocial, :cors_origins, [
+        "http://localhost:5173",
+        "http://localhost:4000"
+      ]),
     expose: ["link"]
+
   plug HybridsocialWeb.Router
 end

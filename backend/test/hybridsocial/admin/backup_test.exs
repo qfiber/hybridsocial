@@ -129,7 +129,15 @@ defmodule Hybridsocial.Admin.BackupTest do
       <<dec_iv::binary-size(12), dec_tag::binary-size(16), dec_ciphertext::binary>> = encrypted
 
       decrypted =
-        :crypto.crypto_one_time_aead(:aes_256_gcm, key, dec_iv, dec_ciphertext, <<>>, dec_tag, false)
+        :crypto.crypto_one_time_aead(
+          :aes_256_gcm,
+          key,
+          dec_iv,
+          dec_ciphertext,
+          <<>>,
+          dec_tag,
+          false
+        )
 
       decompressed = :zlib.uncompress(decrypted)
       assert decompressed == data
@@ -154,7 +162,15 @@ defmodule Hybridsocial.Admin.BackupTest do
       <<dec_iv::binary-size(12), dec_tag::binary-size(16), dec_ciphertext::binary>> = encrypted
 
       result =
-        :crypto.crypto_one_time_aead(:aes_256_gcm, wrong_key, dec_iv, dec_ciphertext, <<>>, dec_tag, false)
+        :crypto.crypto_one_time_aead(
+          :aes_256_gcm,
+          wrong_key,
+          dec_iv,
+          dec_ciphertext,
+          <<>>,
+          dec_tag,
+          false
+        )
 
       assert result == :error
     end

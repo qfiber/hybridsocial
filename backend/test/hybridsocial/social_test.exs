@@ -238,7 +238,9 @@ defmodule Hybridsocial.SocialTest do
     test "creates mute with options", %{alice: alice, bob: bob} do
       expires = DateTime.add(DateTime.utc_now(), 3600, :second)
 
-      assert {:ok, mute} = Social.mute(alice.id, bob.id, mute_notifications: false, expires_at: expires)
+      assert {:ok, mute} =
+               Social.mute(alice.id, bob.id, mute_notifications: false, expires_at: expires)
+
       assert mute.mute_notifications == false
       assert mute.expires_at != nil
     end

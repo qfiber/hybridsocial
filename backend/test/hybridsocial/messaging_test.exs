@@ -431,7 +431,9 @@ defmodule Hybridsocial.MessagingTest do
       alice = create_user("cd_alice6", "cd_alice6@example.com")
       bob = create_user("cd_bob6", "cd_bob6@example.com")
 
-      {:ok, _} = Messaging.update_dm_preferences(bob.id, %{"allow_dms_from" => "mutual_followers"})
+      {:ok, _} =
+        Messaging.update_dm_preferences(bob.id, %{"allow_dms_from" => "mutual_followers"})
+
       {:ok, _} = Hybridsocial.Social.follow(bob.id, alice.id)
       {:ok, _} = Hybridsocial.Social.follow(alice.id, bob.id)
 
@@ -442,7 +444,9 @@ defmodule Hybridsocial.MessagingTest do
       alice = create_user("cd_alice7", "cd_alice7@example.com")
       bob = create_user("cd_bob7", "cd_bob7@example.com")
 
-      {:ok, _} = Messaging.update_dm_preferences(bob.id, %{"allow_dms_from" => "mutual_followers"})
+      {:ok, _} =
+        Messaging.update_dm_preferences(bob.id, %{"allow_dms_from" => "mutual_followers"})
+
       {:ok, _} = Hybridsocial.Social.follow(bob.id, alice.id)
 
       assert Messaging.can_dm?(alice.id, bob.id) == false

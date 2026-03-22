@@ -137,10 +137,16 @@ defmodule HybridsocialWeb.Api.V1.SocialControllerTest do
   # --- Relationships ---
 
   describe "GET /api/v1/accounts/relationships" do
-    test "returns relationship status for multiple targets", %{alice_conn: conn, alice: alice, bob: bob} do
+    test "returns relationship status for multiple targets", %{
+      alice_conn: conn,
+      alice: alice,
+      bob: bob
+    } do
       {:ok, _} = Social.follow(alice.id, bob.id)
 
-      resp = conn |> get("/api/v1/accounts/relationships", %{"ids" => [bob.id]}) |> json_response(200)
+      resp =
+        conn |> get("/api/v1/accounts/relationships", %{"ids" => [bob.id]}) |> json_response(200)
+
       assert length(resp) == 1
 
       bob_rel = hd(resp)

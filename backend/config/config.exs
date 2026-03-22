@@ -43,8 +43,7 @@ config :ex_aws,
   region: {:system, "S3_REGION"}
 
 # Swoosh mailer configuration
-config :hybridsocial, Hybridsocial.Mailer,
-  adapter: Swoosh.Adapters.Local
+config :hybridsocial, Hybridsocial.Mailer, adapter: Swoosh.Adapters.Local
 
 # Valkey (Redis-compatible) cache
 config :hybridsocial, :valkey_url, System.get_env("VALKEY_URL", "redis://localhost:6379")

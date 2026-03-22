@@ -26,7 +26,9 @@ defmodule HybridsocialWeb.Plugs.Auth do
 
   defp extract_token(conn) do
     case get_req_header(conn, "authorization") do
-      ["Bearer " <> token] -> {:ok, String.trim(token)}
+      ["Bearer " <> token] ->
+        {:ok, String.trim(token)}
+
       _ ->
         # Fallback to query param for SSE/EventSource
         case conn.params["access_token"] do

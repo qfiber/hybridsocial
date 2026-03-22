@@ -25,7 +25,15 @@ defmodule Hybridsocial.Premium.Subscription do
 
   def changeset(subscription, attrs) do
     subscription
-    |> cast(attrs, [:identity_id, :plan, :status, :payment_provider, :external_id, :started_at, :expires_at])
+    |> cast(attrs, [
+      :identity_id,
+      :plan,
+      :status,
+      :payment_provider,
+      :external_id,
+      :started_at,
+      :expires_at
+    ])
     |> validate_required([:identity_id, :plan])
     |> validate_inclusion(:plan, @valid_plans)
     |> validate_inclusion(:status, @valid_statuses)

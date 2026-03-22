@@ -23,9 +23,17 @@ defmodule Hybridsocial.Federation.RemoteActor do
   def changeset(remote_actor, attrs) do
     remote_actor
     |> cast(attrs, [
-      :ap_id, :handle, :domain, :display_name, :avatar_url,
-      :public_key, :inbox_url, :outbox_url, :followers_url,
-      :shared_inbox_url, :last_fetched_at
+      :ap_id,
+      :handle,
+      :domain,
+      :display_name,
+      :avatar_url,
+      :public_key,
+      :inbox_url,
+      :outbox_url,
+      :followers_url,
+      :shared_inbox_url,
+      :last_fetched_at
     ])
     |> validate_required([:ap_id])
     |> unique_constraint(:ap_id)

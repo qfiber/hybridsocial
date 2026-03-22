@@ -20,7 +20,9 @@ defmodule Hybridsocial.Media.StorageTest do
   describe "store_local/2" do
     test "stores a file and returns the relative path" do
       # Create a temp file to simulate an upload
-      tmp_path = Path.join(System.tmp_dir!(), "test_upload_#{System.unique_integer([:positive])}.txt")
+      tmp_path =
+        Path.join(System.tmp_dir!(), "test_upload_#{System.unique_integer([:positive])}.txt")
+
       File.write!(tmp_path, "test content")
 
       upload = %Plug.Upload{
@@ -42,7 +44,9 @@ defmodule Hybridsocial.Media.StorageTest do
     end
 
     test "creates correct directory structure" do
-      tmp_path = Path.join(System.tmp_dir!(), "test_upload_#{System.unique_integer([:positive])}.txt")
+      tmp_path =
+        Path.join(System.tmp_dir!(), "test_upload_#{System.unique_integer([:positive])}.txt")
+
       File.write!(tmp_path, "video content")
 
       upload = %Plug.Upload{
@@ -61,7 +65,9 @@ defmodule Hybridsocial.Media.StorageTest do
 
   describe "delete_local/1" do
     test "deletes a stored file" do
-      tmp_path = Path.join(System.tmp_dir!(), "test_upload_#{System.unique_integer([:positive])}.txt")
+      tmp_path =
+        Path.join(System.tmp_dir!(), "test_upload_#{System.unique_integer([:positive])}.txt")
+
       File.write!(tmp_path, "test content")
 
       upload = %Plug.Upload{

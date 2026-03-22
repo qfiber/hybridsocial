@@ -7,9 +7,11 @@ defmodule Hybridsocial.Groups.GroupApplication do
 
   schema "group_applications" do
     field :answers, :map, default: %{}
+
     field :status, Ecto.Enum,
       values: [:pending, :approved, :rejected, :auto_approved],
       default: :pending
+
     field :created_at, :utc_datetime_usec
     field :reviewed_at, :utc_datetime_usec
 

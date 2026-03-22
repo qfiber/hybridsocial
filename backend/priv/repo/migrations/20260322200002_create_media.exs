@@ -42,8 +42,7 @@ defmodule Hybridsocial.Repo.Migrations.CreateMedia do
     create table(:media_variants, primary_key: false) do
       add :id, :binary_id, primary_key: true
 
-      add :media_id, references(:media, type: :binary_id, on_delete: :delete_all),
-        null: false
+      add :media_id, references(:media, type: :binary_id, on_delete: :delete_all), null: false
 
       add :resolution, :string
       add :storage_path, :string

@@ -18,7 +18,16 @@ defmodule Hybridsocial.Content.LinkPreview do
 
   def changeset(preview, attrs) do
     preview
-    |> cast(attrs, [:url_hash, :url, :title, :description, :image_url, :site_name, :fetched_at, :ttl])
+    |> cast(attrs, [
+      :url_hash,
+      :url,
+      :title,
+      :description,
+      :image_url,
+      :site_name,
+      :fetched_at,
+      :ttl
+    ])
     |> validate_required([:url_hash, :url, :fetched_at])
   end
 end

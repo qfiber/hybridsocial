@@ -67,9 +67,12 @@ defmodule Hybridsocial.Admin.Backup do
       env = [{"PGPASSWORD", to_string(password)}]
 
       args = [
-        "-h", to_string(hostname),
-        "-p", to_string(port),
-        "-U", to_string(username),
+        "-h",
+        to_string(hostname),
+        "-p",
+        to_string(port),
+        "-U",
+        to_string(username),
         "-Fc",
         db_name
       ]

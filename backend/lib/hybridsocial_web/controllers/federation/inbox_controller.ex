@@ -61,7 +61,9 @@ defmodule HybridsocialWeb.Federation.InboxController do
   defp verify_http_signature(conn) do
     if Application.get_env(:hybridsocial, :federation_signature_check, true) do
       case Hybridsocial.Federation.HTTPSignature.verify(conn) do
-        {:ok, _key_id} -> :ok
+        {:ok, _key_id} ->
+          :ok
+
         {:error, reason} ->
           Logger.warning("HTTP signature verification failed: #{inspect(reason)}")
           {:error, :signature_invalid}

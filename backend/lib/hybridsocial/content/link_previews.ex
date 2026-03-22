@@ -160,7 +160,9 @@ defmodule Hybridsocial.Content.LinkPreviews do
         changeset = LinkPreview.changeset(%LinkPreview{}, attrs)
 
         case Repo.insert(changeset,
-               on_conflict: {:replace, [:title, :description, :image_url, :site_name, :fetched_at, :updated_at]},
+               on_conflict:
+                 {:replace,
+                  [:title, :description, :image_url, :site_name, :fetched_at, :updated_at]},
                conflict_target: [:url_hash]
              ) do
           {:ok, preview} -> {:ok, preview}

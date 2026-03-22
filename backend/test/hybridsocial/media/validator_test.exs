@@ -20,7 +20,9 @@ defmodule Hybridsocial.Media.ValidatorTest do
     end
 
     test "detects WebP" do
-      data = <<0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0::size(80)>>
+      data =
+        <<0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0::size(80)>>
+
       assert {:ok, "image/webp"} = Validator.validate_content_type(data)
     end
 
@@ -50,7 +52,8 @@ defmodule Hybridsocial.Media.ValidatorTest do
     end
 
     test "rejects files exceeding image limit" do
-      assert {:error, :file_too_large} = Validator.validate_file_size(15 * 1024 * 1024, "image/jpeg")
+      assert {:error, :file_too_large} =
+               Validator.validate_file_size(15 * 1024 * 1024, "image/jpeg")
     end
 
     test "accepts videos within limit" do
@@ -58,7 +61,8 @@ defmodule Hybridsocial.Media.ValidatorTest do
     end
 
     test "rejects videos exceeding limit" do
-      assert {:error, :file_too_large} = Validator.validate_file_size(150 * 1024 * 1024, "video/mp4")
+      assert {:error, :file_too_large} =
+               Validator.validate_file_size(150 * 1024 * 1024, "video/mp4")
     end
   end
 

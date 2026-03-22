@@ -105,7 +105,10 @@ defmodule Hybridsocial.PremiumTest do
       identity = create_user("subuser", "sub@test.com")
 
       assert {:ok, subscription} =
-               Premium.create_subscription(identity.id, %{plan: "premium", payment_provider: "stripe"})
+               Premium.create_subscription(identity.id, %{
+                 plan: "premium",
+                 payment_provider: "stripe"
+               })
 
       assert subscription.plan == "premium"
       assert subscription.status == "active"

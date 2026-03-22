@@ -60,7 +60,11 @@ defmodule Hybridsocial.Media.Validator do
   defp gif?(_), do: false
 
   # WebP: RIFF....WEBP
-  defp webp?(<<0x52, 0x49, 0x46, 0x46, _size::binary-size(4), 0x57, 0x45, 0x42, 0x50, _rest::binary>>), do: true
+  defp webp?(
+         <<0x52, 0x49, 0x46, 0x46, _size::binary-size(4), 0x57, 0x45, 0x42, 0x50, _rest::binary>>
+       ),
+       do: true
+
   defp webp?(_), do: false
 
   # MP4: ftyp at offset 4

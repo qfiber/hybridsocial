@@ -13,6 +13,7 @@ defmodule Hybridsocial.Repo.Migrations.CreateStreamViews do
       add :source, :string, default: "feed"
       timestamps(type: :utc_datetime_usec)
     end
+
     create index(:stream_views, [:post_id])
     create index(:stream_views, [:identity_id])
   end

@@ -298,8 +298,14 @@ defmodule Hybridsocial.Federation.InboxTest do
           "identity_id" => remote.id,
           "ap_id" => "https://remote.example/objects/delete-me"
         })
-        |> Ecto.Changeset.put_change(:published_at, DateTime.utc_now() |> DateTime.truncate(:microsecond))
-        |> Ecto.Changeset.put_change(:edit_expires_at, DateTime.add(DateTime.utc_now(), 86400, :second) |> DateTime.truncate(:microsecond))
+        |> Ecto.Changeset.put_change(
+          :published_at,
+          DateTime.utc_now() |> DateTime.truncate(:microsecond)
+        )
+        |> Ecto.Changeset.put_change(
+          :edit_expires_at,
+          DateTime.add(DateTime.utc_now(), 86400, :second) |> DateTime.truncate(:microsecond)
+        )
         |> Repo.insert()
 
       activity = %{

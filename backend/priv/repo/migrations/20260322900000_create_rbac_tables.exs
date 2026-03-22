@@ -28,7 +28,9 @@ defmodule Hybridsocial.Repo.Migrations.CreateRbacTables do
     create table(:role_permissions, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :role_id, references(:roles, type: :binary_id, on_delete: :delete_all), null: false
-      add :permission_id, references(:permissions, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :permission_id, references(:permissions, type: :binary_id, on_delete: :delete_all),
+        null: false
     end
 
     create unique_index(:role_permissions, [:role_id, :permission_id])
@@ -36,7 +38,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateRbacTables do
     # --- Identity-Role mapping ---
     create table(:identity_roles, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :role_id, references(:roles, type: :binary_id, on_delete: :delete_all), null: false
       add :granted_by, references(:identities, type: :binary_id, on_delete: :nilify_all)
       add :granted_at, :utc_datetime_usec, null: false
@@ -112,14 +117,22 @@ defmodule Hybridsocial.Repo.Migrations.CreateRbacTables do
     admin_perms = all_perm_names -- admin_excluded
 
     moderator_perms = [
-      "reports.view", "reports.manage", "reports.assign",
-      "content.delete", "content.filter_manage",
-      "users.view", "users.warn", "users.suspend",
-      "audit_log.view", "announcements.manage"
+      "reports.view",
+      "reports.manage",
+      "reports.assign",
+      "content.delete",
+      "content.filter_manage",
+      "users.view",
+      "users.warn",
+      "users.suspend",
+      "audit_log.view",
+      "announcements.manage"
     ]
 
     community_manager_perms = [
-      "announcements.manage", "custom_emoji.manage", "content.filter_manage"
+      "announcements.manage",
+      "custom_emoji.manage",
+      "content.filter_manage"
     ]
 
     roles = [

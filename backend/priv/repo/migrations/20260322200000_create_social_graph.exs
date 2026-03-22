@@ -6,8 +6,13 @@ defmodule Hybridsocial.Repo.Migrations.CreateSocialGraph do
 
     create table(:follows, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :follower_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
-      add :followee_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :follower_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
+      add :followee_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :status, :follow_status, null: false, default: "pending"
       add :notify, :boolean, default: true, null: false
 
@@ -19,8 +24,12 @@ defmodule Hybridsocial.Repo.Migrations.CreateSocialGraph do
 
     create table(:blocks, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :blocker_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
-      add :blocked_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :blocker_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
+      add :blocked_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
 
       timestamps(type: :utc_datetime_usec)
     end
@@ -30,8 +39,13 @@ defmodule Hybridsocial.Repo.Migrations.CreateSocialGraph do
 
     create table(:mutes, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :muter_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
-      add :muted_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :muter_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
+      add :muted_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :mute_notifications, :boolean, default: true, null: false
       add :expires_at, :utc_datetime_usec
 

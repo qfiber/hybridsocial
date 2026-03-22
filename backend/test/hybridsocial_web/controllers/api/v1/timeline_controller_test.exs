@@ -84,10 +84,11 @@ defmodule HybridsocialWeb.Api.V1.TimelineControllerTest do
 
       response = json_response(conn, 200)
       assert is_list(response)
+
       assert Enum.any?(response, fn entry ->
-        (entry["id"] == post.id) or
-        (entry["post"] && entry["post"]["id"] == post.id)
-      end)
+               entry["id"] == post.id or
+                 (entry["post"] && entry["post"]["id"] == post.id)
+             end)
     end
 
     test "supports limit param", %{conn: conn} do

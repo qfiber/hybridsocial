@@ -144,7 +144,14 @@ defmodule HybridsocialWeb.Api.V1.PageController do
   def branding(conn, %{"id" => id}) do
     case Pages.get_branding(id) do
       nil ->
-        json(conn, %{identity_id: id, theme_color: nil, cover_image_url: nil, custom_css: nil, logo_url: nil, layout_preference: %{}})
+        json(conn, %{
+          identity_id: id,
+          theme_color: nil,
+          cover_image_url: nil,
+          custom_css: nil,
+          logo_url: nil,
+          layout_preference: %{}
+        })
 
       branding ->
         json(conn, serialize_branding(branding))
@@ -154,7 +161,15 @@ defmodule HybridsocialWeb.Api.V1.PageController do
   @doc "PATCH /api/v1/pages/:id/branding"
   def update_branding(conn, %{"id" => id} = params) do
     identity = conn.assigns.current_identity
-    attrs = Map.take(params, ["theme_color", "cover_image_url", "custom_css", "logo_url", "layout_preference"])
+
+    attrs =
+      Map.take(params, [
+        "theme_color",
+        "cover_image_url",
+        "custom_css",
+        "logo_url",
+        "layout_preference"
+      ])
 
     case Pages.update_branding(id, identity.id, attrs) do
       {:ok, branding} ->
@@ -233,12 +248,14 @@ defmodule HybridsocialWeb.Api.V1.PageController do
   end
 
   defp to_integer(nil, default), do: default
+
   defp to_integer(val, default) when is_binary(val) do
     case Integer.parse(val) do
       {n, _} -> n
       :error -> default
     end
   end
+
   defp to_integer(val, _default) when is_integer(val), do: val
 
   defp format_errors(%Ecto.Changeset{} = changeset) do

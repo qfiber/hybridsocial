@@ -58,7 +58,8 @@ defmodule Hybridsocial.Social do
 
   def following?(follower_id, followee_id) do
     Follow
-    |> where([f],
+    |> where(
+      [f],
       f.follower_id == ^follower_id and
         f.followee_id == ^followee_id and
         f.status == :accepted
@@ -125,7 +126,10 @@ defmodule Hybridsocial.Social do
     |> Ecto.Multi.run(:block, fn repo, _changes ->
       changeset = Block.changeset(%Block{}, %{blocker_id: blocker_id, blocked_id: blocked_id})
 
-      case repo.insert(changeset, on_conflict: :nothing, conflict_target: [:blocker_id, :blocked_id]) do
+      case repo.insert(changeset,
+             on_conflict: :nothing,
+             conflict_target: [:blocker_id, :blocked_id]
+           ) do
         {:ok, block} ->
           # on_conflict: :nothing may return a struct with nil id; fetch existing if so
           if block.id do
@@ -222,21 +226,30 @@ defmodule Hybridsocial.Social do
   def relationships(identity_id, target_ids) when is_list(target_ids) do
     following_ids =
       Follow
-      |> where([f], f.follower_id == ^identity_id and f.followee_id in ^target_ids and f.status == :accepted)
+      |> where(
+        [f],
+        f.follower_id == ^identity_id and f.followee_id in ^target_ids and f.status == :accepted
+      )
       |> select([f], f.followee_id)
       |> Repo.all()
       |> MapSet.new()
 
     followed_by_ids =
       Follow
-      |> where([f], f.followee_id == ^identity_id and f.follower_id in ^target_ids and f.status == :accepted)
+      |> where(
+        [f],
+        f.followee_id == ^identity_id and f.follower_id in ^target_ids and f.status == :accepted
+      )
       |> select([f], f.follower_id)
       |> Repo.all()
       |> MapSet.new()
 
     requested_ids =
       Follow
-      |> where([f], f.follower_id == ^identity_id and f.followee_id in ^target_ids and f.status == :pending)
+      |> where(
+        [f],
+        f.follower_id == ^identity_id and f.followee_id in ^target_ids and f.status == :pending
+      )
       |> select([f], f.followee_id)
       |> Repo.all()
       |> MapSet.new()

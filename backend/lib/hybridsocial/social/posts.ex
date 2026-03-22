@@ -46,7 +46,7 @@ defmodule Hybridsocial.Social.Posts do
           Polls.create_poll(post.id, poll_attrs)
         end
 
-        {:ok, Repo.preload(post, [poll: :options])}
+        {:ok, Repo.preload(post, poll: :options)}
 
       {:error, changeset} ->
         {:error, changeset}
@@ -341,7 +341,10 @@ defmodule Hybridsocial.Social.Posts do
 
   defp get_existing_boost(post_id, identity_id) do
     Boost
-    |> where([b], b.post_id == ^post_id and b.identity_id == ^identity_id and is_nil(b.deleted_at))
+    |> where(
+      [b],
+      b.post_id == ^post_id and b.identity_id == ^identity_id and is_nil(b.deleted_at)
+    )
     |> Repo.one()
   end
 

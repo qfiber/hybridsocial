@@ -371,12 +371,15 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
       role: member.role,
       status: member.status,
       created_at: member.inserted_at,
-      account: if(identity, do: %{
-        id: identity.id,
-        handle: identity.handle,
-        display_name: identity.display_name,
-        avatar_url: identity.avatar_url
-      })
+      account:
+        if(identity,
+          do: %{
+            id: identity.id,
+            handle: identity.handle,
+            display_name: identity.display_name,
+            avatar_url: identity.avatar_url
+          }
+        )
     }
   end
 

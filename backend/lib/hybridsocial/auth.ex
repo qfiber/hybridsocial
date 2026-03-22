@@ -57,7 +57,8 @@ defmodule Hybridsocial.Auth do
         # Generate new pair
         with {:ok, access_token, _claims} <- Token.generate_access_token(oauth_token.identity_id),
              {new_refresh, new_refresh_hash} <- Token.generate_refresh_token(),
-             {:ok, _} <- create_token_record(oauth_token.identity_id, access_token, new_refresh_hash) do
+             {:ok, _} <-
+               create_token_record(oauth_token.identity_id, access_token, new_refresh_hash) do
           {:ok,
            %{
              access_token: access_token,

@@ -333,7 +333,8 @@ defmodule Hybridsocial.PagesTest do
 
       {:ok, branding} =
         Pages.update_branding(page.id, owner.id, %{
-          "custom_css" => "@import url('evil.css'); body { color: red; } div { background: url(evil.png); } expression(alert(1)) javascript: alert(1)"
+          "custom_css" =>
+            "@import url('evil.css'); body { color: red; } div { background: url(evil.png); } expression(alert(1)) javascript: alert(1)"
         })
 
       refute branding.custom_css =~ "@import"

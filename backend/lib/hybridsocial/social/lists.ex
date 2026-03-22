@@ -25,7 +25,9 @@ defmodule Hybridsocial.Social.Lists do
   """
   def update_list(list_id, identity_id, attrs) do
     case get_owned_list(list_id, identity_id) do
-      nil -> {:error, :not_found}
+      nil ->
+        {:error, :not_found}
+
       list ->
         list
         |> List.update_changeset(attrs)

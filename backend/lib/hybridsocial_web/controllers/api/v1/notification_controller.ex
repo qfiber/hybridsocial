@@ -13,7 +13,10 @@ defmodule HybridsocialWeb.Api.V1.NotificationController do
       |> maybe_put(:limit, clamp_limit(params["limit"]))
       |> maybe_put(:max_id, params["max_id"])
       |> maybe_put(:types, parse_list(params["types[]"] || params["types"]))
-      |> maybe_put(:exclude_types, parse_list(params["exclude_types[]"] || params["exclude_types"]))
+      |> maybe_put(
+        :exclude_types,
+        parse_list(params["exclude_types[]"] || params["exclude_types"])
+      )
 
     notifications = Notifications.list_notifications(identity.id, opts)
 
@@ -82,7 +85,9 @@ defmodule HybridsocialWeb.Api.V1.NotificationController do
     type = params["type"]
 
     if is_nil(type) do
-      conn |> put_status(:unprocessable_entity) |> json(%{error: "notification_preferences.type_required"})
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{error: "notification_preferences.type_required"})
     else
       attrs = Map.take(params, ["email", "push", "in_app"])
 

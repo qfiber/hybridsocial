@@ -46,7 +46,13 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
           "description" => "Test report"
         })
 
-      %{conn: auth_conn(conn, admin), admin: admin, user: user, reported: reported, report: report}
+      %{
+        conn: auth_conn(conn, admin),
+        admin: admin,
+        user: user,
+        reported: reported,
+        report: report
+      }
     end
 
     test "GET /api/v1/admin/reports lists reports", %{conn: conn} do
@@ -62,13 +68,19 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
     end
 
     test "POST /api/v1/admin/reports/:id/resolve resolves report", %{conn: conn, report: report} do
-      conn = post(conn, "/api/v1/admin/reports/#{report.id}/resolve", %{"action_taken" => "warned"})
+      conn =
+        post(conn, "/api/v1/admin/reports/#{report.id}/resolve", %{"action_taken" => "warned"})
+
       assert %{"data" => data} = json_response(conn, 200)
       assert data["status"] == "resolved"
       assert data["action_taken"] == "warned"
     end
 
-    test "POST /api/v1/admin/reports/:id/assign assigns report", %{conn: conn, report: report, admin: admin} do
+    test "POST /api/v1/admin/reports/:id/assign assigns report", %{
+      conn: conn,
+      report: report,
+      admin: admin
+    } do
       conn = post(conn, "/api/v1/admin/reports/#{report.id}/assign", %{})
       assert %{"data" => data} = json_response(conn, 200)
       assert data["status"] == "investigating"
@@ -222,7 +234,10 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert length(data) == 1
     end
 
-    test "DELETE /api/v1/admin/banned_domains/:domain unbans a domain", %{conn: conn, admin: admin} do
+    test "DELETE /api/v1/admin/banned_domains/:domain unbans a domain", %{
+      conn: conn,
+      admin: admin
+    } do
       Moderation.ban_domain("spam.com", "email", "reason", admin.id)
 
       conn = delete(conn, "/api/v1/admin/banned_domains/spam.com")

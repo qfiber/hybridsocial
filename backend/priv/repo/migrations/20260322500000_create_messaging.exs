@@ -6,7 +6,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateMessaging do
     execute("CREATE TYPE conversation_type AS ENUM ('direct', 'group_dm')")
     execute("CREATE TYPE message_content_type AS ENUM ('text', 'image', 'video', 'file')")
     execute("CREATE TYPE message_delivery AS ENUM ('sent', 'delivered', 'read')")
-    execute("CREATE TYPE dm_allow_from AS ENUM ('everyone', 'followers', 'mutual_followers', 'nobody')")
+
+    execute(
+      "CREATE TYPE dm_allow_from AS ENUM ('everyone', 'followers', 'mutual_followers', 'nobody')"
+    )
 
     # Conversations
     create table(:conversations, primary_key: false) do
@@ -19,8 +22,13 @@ defmodule Hybridsocial.Repo.Migrations.CreateMessaging do
     # Conversation participants
     create table(:conversation_participants, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :conversation_id, references(:conversations, type: :binary_id, on_delete: :delete_all), null: false
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :conversation_id, references(:conversations, type: :binary_id, on_delete: :delete_all),
+        null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :joined_at, :utc_datetime_usec, default: fragment("NOW()")
       add :last_read_message_id, :binary_id
       add :notifications_enabled, :boolean, default: true
@@ -33,8 +41,13 @@ defmodule Hybridsocial.Repo.Migrations.CreateMessaging do
     # Messages
     create table(:messages, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :conversation_id, references(:conversations, type: :binary_id, on_delete: :delete_all), null: false
-      add :sender_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :conversation_id, references(:conversations, type: :binary_id, on_delete: :delete_all),
+        null: false
+
+      add :sender_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :content, :text, null: false
       add :content_type, :message_content_type, default: "text"
       add :media_id, references(:media, type: :binary_id, on_delete: :nilify_all)
@@ -50,8 +63,13 @@ defmodule Hybridsocial.Repo.Migrations.CreateMessaging do
     # Message delivery status
     create table(:message_delivery_status, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :message_id, references(:messages, type: :binary_id, on_delete: :delete_all), null: false
-      add :recipient_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :message_id, references(:messages, type: :binary_id, on_delete: :delete_all),
+        null: false
+
+      add :recipient_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :status, :message_delivery, null: false
 
       add :updated_at, :utc_datetime_usec, default: fragment("NOW()")
@@ -61,7 +79,9 @@ defmodule Hybridsocial.Repo.Migrations.CreateMessaging do
 
     # DM preferences
     create table(:dm_preferences, primary_key: false) do
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), primary_key: true
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        primary_key: true
+
       add :allow_dms_from, :dm_allow_from, default: "everyone"
       add :allow_group_dms, :boolean, default: false
     end

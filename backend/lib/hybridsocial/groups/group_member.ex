@@ -7,7 +7,10 @@ defmodule Hybridsocial.Groups.GroupMember do
 
   schema "group_members" do
     field :role, Ecto.Enum, values: [:member, :moderator, :admin, :owner], default: :member
-    field :status, Ecto.Enum, values: [:pending, :approved, :rejected, :banned], default: :approved
+
+    field :status, Ecto.Enum,
+      values: [:pending, :approved, :rejected, :banned],
+      default: :approved
 
     belongs_to :group, Hybridsocial.Groups.Group
     belongs_to :identity, Hybridsocial.Accounts.Identity

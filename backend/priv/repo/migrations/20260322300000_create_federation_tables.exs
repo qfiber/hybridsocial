@@ -2,7 +2,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateFederationTables do
   use Ecto.Migration
 
   def up do
-    execute("CREATE TYPE instance_policy_type AS ENUM ('allow', 'silence', 'suspend', 'block_media', 'force_nsfw')")
+    execute(
+      "CREATE TYPE instance_policy_type AS ENUM ('allow', 'silence', 'suspend', 'block_media', 'force_nsfw')"
+    )
+
     execute("CREATE TYPE delivery_status AS ENUM ('pending', 'delivered', 'failed', 'retrying')")
     execute("CREATE TYPE relay_status AS ENUM ('pending', 'accepted', 'rejected')")
 

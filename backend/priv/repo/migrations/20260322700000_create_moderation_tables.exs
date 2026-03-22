@@ -4,7 +4,9 @@ defmodule Hybridsocial.Repo.Migrations.CreateModerationTables do
   def up do
     # Enums
     execute "CREATE TYPE report_category AS ENUM ('spam', 'harassment', 'hate_speech', 'illegal', 'misinformation', 'other')"
+
     execute "CREATE TYPE report_status AS ENUM ('pending', 'investigating', 'resolved', 'dismissed')"
+
     execute "CREATE TYPE filter_action AS ENUM ('flag', 'reject', 'replace')"
     execute "CREATE TYPE filter_context AS ENUM ('posts', 'usernames', 'bios', 'all')"
     execute "CREATE TYPE banned_domain_type AS ENUM ('email', 'federation', 'both')"
@@ -12,8 +14,13 @@ defmodule Hybridsocial.Repo.Migrations.CreateModerationTables do
     # Reports
     create table(:reports, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :reporter_id, references(:identities, type: :binary_id, on_delete: :nothing), null: false
-      add :reported_id, references(:identities, type: :binary_id, on_delete: :nothing), null: false
+
+      add :reporter_id, references(:identities, type: :binary_id, on_delete: :nothing),
+        null: false
+
+      add :reported_id, references(:identities, type: :binary_id, on_delete: :nothing),
+        null: false
+
       add :target_type, :string
       add :target_id, :binary_id
       add :category, :report_category, null: false

@@ -41,7 +41,9 @@ defmodule HybridsocialWeb.Api.V1.Admin.RolesController do
           conn |> put_status(:created) |> json(%{data: serialize_role(role)})
 
         {:error, changeset} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -59,7 +61,9 @@ defmodule HybridsocialWeb.Api.V1.Admin.RolesController do
           conn |> put_status(:not_found) |> json(%{error: "role.not_found"})
 
         {:error, changeset} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -104,7 +108,9 @@ defmodule HybridsocialWeb.Api.V1.Admin.RolesController do
           conn |> put_status(:created) |> json(%{message: "permission.added"})
 
         {:error, changeset} ->
-          conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -136,7 +142,9 @@ defmodule HybridsocialWeb.Api.V1.Admin.RolesController do
         {:ok, role} ->
           opts =
             case params["expires_at"] do
-              nil -> []
+              nil ->
+                []
+
               expires_at_str ->
                 case DateTime.from_iso8601(expires_at_str) do
                   {:ok, dt, _} -> [expires_at: dt]
@@ -146,10 +154,14 @@ defmodule HybridsocialWeb.Api.V1.Admin.RolesController do
 
           case RBAC.assign_role(user_id, role.name, granted_by, opts) do
             {:ok, identity_role} ->
-              conn |> put_status(:created) |> json(%{data: serialize_identity_role(identity_role)})
+              conn
+              |> put_status(:created)
+              |> json(%{data: serialize_identity_role(identity_role)})
 
             {:error, changeset} ->
-              conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "validation.failed", details: format_errors(changeset)})
           end
 
         {:error, :role_not_found} ->

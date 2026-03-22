@@ -179,9 +179,7 @@ defmodule Hybridsocial.Federation.Publisher do
         |> Repo.update()
 
       {:error, error} ->
-        Logger.warning(
-          "Delivery failed to #{delivery.target_inbox}: #{error}"
-        )
+        Logger.warning("Delivery failed to #{delivery.target_inbox}: #{error}")
 
         delivery
         |> Delivery.changeset(%{

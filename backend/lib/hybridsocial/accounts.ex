@@ -130,7 +130,9 @@ defmodule Hybridsocial.Accounts do
 
   defp check_handle_available(attrs) do
     case attrs["handle"] do
-      nil -> :ok
+      nil ->
+        :ok
+
       handle ->
         if handle_reserved?(handle) do
           {:error, :handle_reserved}
@@ -164,15 +166,16 @@ defmodule Hybridsocial.Accounts do
       user ->
         if user.identity.is_suspended do
           {:error, :account_suspended}
-        else if user.identity.deleted_at do
-          {:error, :account_deleted}
         else
-          if Bcrypt.verify_pass(password, user.password_hash) do
-            {:ok, user}
+          if user.identity.deleted_at do
+            {:error, :account_deleted}
           else
-            {:error, :invalid_credentials}
+            if Bcrypt.verify_pass(password, user.password_hash) do
+              {:ok, user}
+            else
+              {:error, :invalid_credentials}
+            end
           end
-        end
         end
     end
   end

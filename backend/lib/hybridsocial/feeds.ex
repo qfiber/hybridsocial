@@ -432,7 +432,8 @@ defmodule Hybridsocial.Feeds do
     # Check if viewer follows the account
     follows? =
       Follow
-      |> where([f],
+      |> where(
+        [f],
         f.follower_id == ^viewer_id and
           f.followee_id == ^identity_id and
           f.status == :accepted

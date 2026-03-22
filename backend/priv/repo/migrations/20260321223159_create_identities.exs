@@ -41,8 +41,10 @@ defmodule Hybridsocial.Repo.Migrations.CreateIdentities do
     # Handle history — prevent impersonation after handle changes
     create table(:handle_history, primary_key: false) do
       add :id, :binary_id, primary_key: true
+
       add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
         null: false
+
       add :old_handle, :string, null: false
       add :changed_at, :utc_datetime_usec, null: false
       add :reserved_until, :utc_datetime_usec, null: false
@@ -55,8 +57,8 @@ defmodule Hybridsocial.Repo.Migrations.CreateIdentities do
     # User-specific details
     create table(:users, primary_key: false) do
       add :identity_id,
-        references(:identities, type: :binary_id, on_delete: :delete_all),
-        primary_key: true
+          references(:identities, type: :binary_id, on_delete: :delete_all),
+          primary_key: true
 
       add :email, :string, null: false
       add :password_hash, :string, null: false
@@ -81,8 +83,8 @@ defmodule Hybridsocial.Repo.Migrations.CreateIdentities do
     # Organization/Page-specific details
     create table(:organizations, primary_key: false) do
       add :identity_id,
-        references(:identities, type: :binary_id, on_delete: :delete_all),
-        primary_key: true
+          references(:identities, type: :binary_id, on_delete: :delete_all),
+          primary_key: true
 
       add :owner_id, references(:identities, type: :binary_id, on_delete: :nilify_all)
       add :website, :string
@@ -103,8 +105,12 @@ defmodule Hybridsocial.Repo.Migrations.CreateIdentities do
       add :id, :binary_id, primary_key: true
 
       add :organization_id,
-        references(:organizations, column: :identity_id, type: :binary_id, on_delete: :delete_all),
-        null: false
+          references(:organizations,
+            column: :identity_id,
+            type: :binary_id,
+            on_delete: :delete_all
+          ),
+          null: false
 
       add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
         null: false
@@ -143,7 +149,7 @@ defmodule Hybridsocial.Repo.Migrations.CreateIdentities do
         null: false
 
       add :application_id,
-        references(:oauth_applications, type: :binary_id, on_delete: :delete_all)
+          references(:oauth_applications, type: :binary_id, on_delete: :delete_all)
 
       add :token_hash, :string, null: false
       add :refresh_token_hash, :string

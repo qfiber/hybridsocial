@@ -94,7 +94,7 @@ defmodule Hybridsocial.Social.Streams do
       |> where([p], p.visibility == "public")
       |> where([p], is_nil(p.deleted_at))
       |> apply_cursor_filters(opts)
-      |> order_by([p], [desc: p.reaction_count, desc: p.inserted_at])
+      |> order_by([p], desc: p.reaction_count, desc: p.inserted_at)
       |> limit(^limit)
       |> preload(:identity)
 

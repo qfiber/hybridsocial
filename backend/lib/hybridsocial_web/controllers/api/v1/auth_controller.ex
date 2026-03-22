@@ -8,7 +8,14 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
   def register(conn, params) do
     case Accounts.register_user(params) do
       {:ok, identity} ->
-        Moderation.log(identity.id, "auth.register", "identity", identity.id, %{handle: identity.handle}, get_client_ip(conn))
+        Moderation.log(
+          identity.id,
+          "auth.register",
+          "identity",
+          identity.id,
+          %{handle: identity.handle},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:created)
@@ -49,7 +56,14 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
   def login(conn, %{"email" => email, "password" => password}) do
     case Auth.login(email, password) do
       {:ok, tokens} ->
-        Moderation.log(tokens.identity_id, "auth.login", "identity", tokens.identity_id, %{method: "password"}, get_client_ip(conn))
+        Moderation.log(
+          tokens.identity_id,
+          "auth.login",
+          "identity",
+          tokens.identity_id,
+          %{method: "password"},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:ok)
@@ -68,14 +82,28 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
         |> json(%{error: "auth.invalid_credentials"})
 
       {:error, :account_suspended} ->
-        Moderation.log(nil, "auth.login_failed", nil, nil, %{email: email, reason: "suspended"}, get_client_ip(conn))
+        Moderation.log(
+          nil,
+          "auth.login_failed",
+          nil,
+          nil,
+          %{email: email, reason: "suspended"},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:unauthorized)
         |> json(%{error: "auth.invalid_credentials"})
 
       {:error, :account_deleted} ->
-        Moderation.log(nil, "auth.login_failed", nil, nil, %{email: email, reason: "deleted"}, get_client_ip(conn))
+        Moderation.log(
+          nil,
+          "auth.login_failed",
+          nil,
+          nil,
+          %{email: email, reason: "deleted"},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:unauthorized)
@@ -103,7 +131,14 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
     Auth.logout(token)
 
     if identity do
-      Moderation.log(identity.id, "auth.logout", "identity", identity.id, %{}, get_client_ip(conn))
+      Moderation.log(
+        identity.id,
+        "auth.logout",
+        "identity",
+        identity.id,
+        %{},
+        get_client_ip(conn)
+      )
     end
 
     conn
@@ -178,7 +213,14 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
 
     case Accounts.enable_2fa(identity_id, code) do
       {:ok, _user} ->
-        Moderation.log(identity_id, "auth.2fa_enabled", "identity", identity_id, %{}, get_client_ip(conn))
+        Moderation.log(
+          identity_id,
+          "auth.2fa_enabled",
+          "identity",
+          identity_id,
+          %{},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:ok)
@@ -201,7 +243,14 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
 
     case Accounts.disable_2fa(identity_id, code) do
       {:ok, _user} ->
-        Moderation.log(identity_id, "auth.2fa_disabled", "identity", identity_id, %{}, get_client_ip(conn))
+        Moderation.log(
+          identity_id,
+          "auth.2fa_disabled",
+          "identity",
+          identity_id,
+          %{},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:ok)
@@ -222,7 +271,14 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
   def login_with_otp(conn, %{"identity_id" => identity_id, "code" => code}) do
     case Auth.login_with_otp(identity_id, code) do
       {:ok, tokens} ->
-        Moderation.log(identity_id, "auth.login_2fa", "identity", identity_id, %{}, get_client_ip(conn))
+        Moderation.log(
+          identity_id,
+          "auth.login_2fa",
+          "identity",
+          identity_id,
+          %{},
+          get_client_ip(conn)
+        )
 
         conn
         |> put_status(:ok)
@@ -243,19 +299,47 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
   # --- Password Reset ---
 
   def password_reset(conn, %{"email" => email}) do
-    Moderation.log(nil, "auth.password_reset_requested", nil, nil, %{email: email}, get_client_ip(conn))
+    Moderation.log(
+      nil,
+      "auth.password_reset_requested",
+      nil,
+      nil,
+      %{email: email},
+      get_client_ip(conn)
+    )
+
     Accounts.request_password_reset(email)
     json(conn, %{message: "auth.reset_email_sent"})
   end
 
-  def password_change(conn, %{"token" => token, "password" => password, "password_confirmation" => confirmation}) do
+  def password_change(conn, %{
+        "token" => token,
+        "password" => password,
+        "password_confirmation" => confirmation
+      }) do
     case Accounts.reset_password(token, password, confirmation) do
       {:ok, user} ->
-        Moderation.log(user.identity_id, "auth.password_changed", "identity", user.identity_id, %{}, get_client_ip(conn))
+        Moderation.log(
+          user.identity_id,
+          "auth.password_changed",
+          "identity",
+          user.identity_id,
+          %{},
+          get_client_ip(conn)
+        )
+
         json(conn, %{message: "auth.password_changed"})
-      {:error, :invalid_token} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "auth.invalid_reset_token"})
-      {:error, :token_expired} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "auth.reset_token_expired"})
-      {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+
+      {:error, :invalid_token} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "auth.invalid_reset_token"})
+
+      {:error, :token_expired} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "auth.reset_token_expired"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
     end
   end
 

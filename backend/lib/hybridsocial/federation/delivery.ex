@@ -20,7 +20,15 @@ defmodule Hybridsocial.Federation.Delivery do
 
   def changeset(delivery, attrs) do
     delivery
-    |> cast(attrs, [:activity_id, :actor_id, :target_inbox, :status, :attempts, :last_attempt_at, :error])
+    |> cast(attrs, [
+      :activity_id,
+      :actor_id,
+      :target_inbox,
+      :status,
+      :attempts,
+      :last_attempt_at,
+      :error
+    ])
     |> validate_required([:activity_id, :target_inbox])
     |> validate_inclusion(:status, @valid_statuses)
   end

@@ -34,7 +34,8 @@ defmodule Hybridsocial.Feeds.Visibility do
     alias Hybridsocial.Repo
 
     Follow
-    |> where([f],
+    |> where(
+      [f],
       f.follower_id == ^viewer_id and
         f.followee_id == ^author_id and
         f.status == :accepted
@@ -76,7 +77,9 @@ defmodule Hybridsocial.Feeds.Visibility do
       |> where([f], f.follower_id == ^viewer_identity_id and f.status == :accepted)
       |> select([f], f.followee_id)
 
-    where(query, [p],
+    where(
+      query,
+      [p],
       p.visibility == "public" or
         p.identity_id == ^viewer_identity_id or
         (p.visibility == "followers" and p.identity_id in subquery(followed_ids_subquery)) or

@@ -18,7 +18,13 @@ defmodule Hybridsocial.Feeds.Signals do
 
   def changeset(signal, attrs) do
     signal
-    |> cast(attrs, [:identity_id, :target_identity_id, :interaction_count, :last_interaction, :content_tags])
+    |> cast(attrs, [
+      :identity_id,
+      :target_identity_id,
+      :interaction_count,
+      :last_interaction,
+      :content_tags
+    ])
     |> validate_required([:identity_id, :target_identity_id])
     |> unique_constraint([:identity_id, :target_identity_id])
     |> foreign_key_constraint(:identity_id)

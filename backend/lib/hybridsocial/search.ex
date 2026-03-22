@@ -40,7 +40,12 @@ defmodule Hybridsocial.Search do
         %{accounts: search_accounts(query_string, type_opts), posts: [], hashtags: [], groups: []}
 
       "posts" ->
-        %{accounts: [], posts: search_posts(query_string, viewer_id, type_opts), hashtags: [], groups: []}
+        %{
+          accounts: [],
+          posts: search_posts(query_string, viewer_id, type_opts),
+          hashtags: [],
+          groups: []
+        }
 
       "hashtags" ->
         %{accounts: [], posts: [], hashtags: search_hashtags(query_string, type_opts), groups: []}
@@ -186,7 +191,15 @@ defmodule Hybridsocial.Search do
 
     filters =
       if viewer_id do
-        [%{bool: %{should: [%{term: %{visibility: "public"}}, %{term: %{identity_id: viewer_id}}], minimum_should_match: 1}} | List.delete_at(filters, 0)]
+        [
+          %{
+            bool: %{
+              should: [%{term: %{visibility: "public"}}, %{term: %{identity_id: viewer_id}}],
+              minimum_should_match: 1
+            }
+          }
+          | List.delete_at(filters, 0)
+        ]
       else
         filters
       end
@@ -424,6 +437,7 @@ defmodule Hybridsocial.Search do
   end
 
   defp sanitize_query(nil), do: ""
+
   defp sanitize_query(query) when is_binary(query) do
     query
     |> String.trim()
@@ -434,7 +448,7 @@ defmodule Hybridsocial.Search do
   defp prefix_tsquery(sanitized) do
     sanitized
     |> String.split(~r/\s+/, trim: true)
-    |> Enum.map(&("#{&1}:*"))
+    |> Enum.map(&"#{&1}:*")
     |> Enum.join(" & ")
   end
 

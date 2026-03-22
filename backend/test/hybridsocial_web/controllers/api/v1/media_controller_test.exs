@@ -36,7 +36,9 @@ defmodule HybridsocialWeb.Api.V1.MediaControllerTest do
   end
 
   defp create_upload do
-    tmp_path = Path.join(System.tmp_dir!(), "test_ctrl_#{:erlang.unique_integer([:positive])}.jpg")
+    tmp_path =
+      Path.join(System.tmp_dir!(), "test_ctrl_#{:erlang.unique_integer([:positive])}.jpg")
+
     File.write!(tmp_path, @jpeg_bytes)
 
     upload = %Plug.Upload{

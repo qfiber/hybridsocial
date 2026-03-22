@@ -218,7 +218,8 @@ defmodule Hybridsocial.Federation.ActivityMapperTest do
 
   describe "extract_domain/1" do
     test "extracts domain from URL" do
-      assert ActivityMapper.extract_domain("https://mastodon.social/users/test") == "mastodon.social"
+      assert ActivityMapper.extract_domain("https://mastodon.social/users/test") ==
+               "mastodon.social"
     end
 
     test "returns nil for nil input" do
