@@ -135,6 +135,12 @@ defmodule Hybridsocial.Instance do
           mau: active_users_count(30)
         },
         vapid_public_key: Hybridsocial.Push.Vapid.public_key()
+      },
+      apps: %{
+        ios: Config.get("app_ios_url", ""),
+        android: Config.get("app_android_url", ""),
+        fdroid: Config.get("app_fdroid_url", ""),
+        banner_enabled: Config.get("app_banner_enabled", false)
       }
     }
   end

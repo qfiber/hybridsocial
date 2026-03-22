@@ -5,6 +5,7 @@
   import RightSidebar from './RightSidebar.svelte';
   import BottomTabs from './BottomTabs.svelte';
   import AnnouncementBanner from './AnnouncementBanner.svelte';
+  import AppBanner from './AppBanner.svelte';
   import Toast from '$lib/components/ui/Toast.svelte';
 
   let {
@@ -18,6 +19,7 @@
 <div class="app-layout">
   <Sidebar />
   <main class="feed-column">
+    <AppBanner />
     <AnnouncementBanner />
     {@render children()}
   </main>

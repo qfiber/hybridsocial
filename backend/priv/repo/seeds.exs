@@ -400,6 +400,36 @@ settings = [
     type: "string",
     category: "security",
     description: "VAPID private key for web push notifications (auto-generated, keep secret)"
+  },
+
+  # Mobile Apps
+  %{
+    key: "app_ios_url",
+    value: %{"value" => ""},
+    type: "string",
+    category: "apps",
+    description: "App Store URL for the iOS app"
+  },
+  %{
+    key: "app_android_url",
+    value: %{"value" => ""},
+    type: "string",
+    category: "apps",
+    description: "Google Play Store URL for the Android app"
+  },
+  %{
+    key: "app_fdroid_url",
+    value: %{"value" => ""},
+    type: "string",
+    category: "apps",
+    description: "F-Droid URL for the Android app"
+  },
+  %{
+    key: "app_banner_enabled",
+    value: %{"value" => false},
+    type: "boolean",
+    category: "apps",
+    description: "Show mobile app download banner to mobile users"
   }
 ]
 

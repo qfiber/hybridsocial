@@ -11,7 +11,7 @@
   // Editable values indexed by setting key
   let editValues: Record<string, string> = $state({});
 
-  const categoryOrder = ['general', 'limits', 'registration', 'federation', 'media', 'security', 'search', 'premium'];
+  const categoryOrder = ['general', 'limits', 'registration', 'federation', 'media', 'security', 'search', 'apps', 'premium'];
 
   const categoryLabels: Record<string, string> = {
     general: 'General',
@@ -21,6 +21,7 @@
     media: 'Media',
     security: 'Security & Rate Limiting',
     search: 'Search',
+    apps: 'Mobile Apps',
     premium: 'Premium'
   };
 
