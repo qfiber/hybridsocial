@@ -1,0 +1,69 @@
+# Elixir/Phoenix
+/_build/
+/deps/
+*.ez
+*.beam
+
+# Generated on crash or on exit
+erl_crash.dump
+
+# Phoenix
+/priv/static/assets/
+/priv/static/cache_manifest.json
+
+# Database
+*.sql
+*.dump
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.elixir_ls/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Uploads (local dev media storage)
+/uploads/
+
+# Node (for frontend assets if any)
+node_modules/
+
+# Test coverage
+/cover/
+
+# Dialyzer
+/priv/plts/
+
+# Frontend (SvelteKit) - will be in frontend/ directory
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
+# Mobile (Flutter) - will be in mobile/ directory
+mobile/.dart_tool/
+mobile/.packages
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+
+# Backups
+*.tar.gz
+*.bak
+
+# Secrets
+*.pem
+*.key
+!priv/cert/

@@ -1,0 +1,69 @@
+services:
+  postgresql:
+    image: postgres:17-alpine
+    container_name: hybridsocial_db
+    environment:
+      POSTGRES_USER: hybridsocial
+      POSTGRES_PASSWORD: hybridsocial_dev
+      POSTGRES_DB: hybridsocial_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hybridsocial"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: hybridsocial_valkey
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2-alpine
+    container_name: hybridsocial_nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"  # monitoring
+    command: ["--jetstream", "--store_dir=/data"]
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "nats-server", "--signal", "ldm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    container_name: hybridsocial_search
+    environment:
+      - discovery.type=single-node
+      - DISABLE_SECURITY_PLUGIN=true
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=HybridS0cial!Dev
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - searchdata:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200 | grep -q 'opensearch'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  valkeydata:
+  natsdata:
+  searchdata:
