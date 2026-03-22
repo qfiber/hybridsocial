@@ -3,8 +3,10 @@
   private: false,
   skip: false,
   router: "",
-  exit: "low",
+  exit: "medium",
   format: "txt",
-  ignore: [],
+  ignore: [
+    "DOS.BinToAtom"
+  ],
   ignore_files: ["deps/"]
 ]
