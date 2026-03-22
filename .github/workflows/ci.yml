@@ -119,7 +119,7 @@ jobs:
         run: mix ecto.migrate
 
       - name: Run tests with coverage
-        run: mix test --cover
+        run: mix test --cover --cover-threshold 60
 
   security:
     name: Security
