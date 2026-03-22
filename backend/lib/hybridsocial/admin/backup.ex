@@ -34,7 +34,18 @@ defmodule Hybridsocial.Admin.Backup do
 
     case %BackupJob{} |> BackupJob.changeset(attrs) |> Repo.insert() do
       {:ok, backup_job} ->
-        Task.start(fn -> generate_backup(backup_job.id, passphrase) end)
+        caller = self()
+
+        Task.start(fn ->
+          try do
+            Ecto.Adapters.SQL.Sandbox.allow(Hybridsocial.Repo, caller, self())
+          rescue
+            _ -> :ok
+          end
+
+          generate_backup(backup_job.id, passphrase)
+        end)
+
         {:ok, backup_job}
 
       {:error, changeset} ->
@@ -46,13 +57,19 @@ defmodule Hybridsocial.Admin.Backup do
   Generates the actual backup file: pg_dump -> compress -> encrypt -> store.
   """
   def generate_backup(backup_id, passphrase) do
-    backup_job = Repo.get!(BackupJob, backup_id)
+    backup_job =
+      case Repo.get(BackupJob, backup_id) do
+        nil -> raise "Backup job #{backup_id} not found"
+        job -> job
+      end
 
     # Update status to running
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
     {:ok, backup_job} =
       backup_job
-      |> BackupJob.changeset(%{status: "running", started_at: DateTime.utc_now()})
-      |> Repo.update()
+      |> BackupJob.changeset(%{status: "running", started_at: now})
+      |> Repo.update(stale_error_field: :id)
 
     try do
       # Get DB connection info from Repo config

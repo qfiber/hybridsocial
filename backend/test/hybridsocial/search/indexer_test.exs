@@ -27,9 +27,13 @@ defmodule Hybridsocial.Search.IndexerTest do
         :ok
 
       _ ->
-        {:skip, "OpenSearch not available"}
+        # OpenSearch not available, skip all tests in this module
+        ExUnit.configure(exclude: [:opensearch])
+        :ok
     end
   end
+
+  @moduletag :opensearch
 
   describe "setup_indexes/0" do
     test "creates all required indexes" do

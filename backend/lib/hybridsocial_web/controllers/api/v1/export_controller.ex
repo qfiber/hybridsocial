@@ -10,7 +10,18 @@ defmodule HybridsocialWeb.Api.V1.ExportController do
     case Portability.request_export(identity.id) do
       {:ok, export} ->
         # Generate the export asynchronously
-        Task.start(fn -> Portability.generate_export(export.id) end)
+        caller = self()
+
+        Task.start(fn ->
+          # Allow this task to use the caller's DB connection (needed for test sandbox)
+          try do
+            Ecto.Adapters.SQL.Sandbox.allow(Hybridsocial.Repo, caller, self())
+          rescue
+            _ -> :ok
+          end
+
+          Portability.generate_export(export.id)
+        end)
 
         conn |> put_status(:accepted) |> json(serialize_export(export))
 

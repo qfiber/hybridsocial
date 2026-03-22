@@ -3,7 +3,7 @@ defmodule HybridsocialWeb.Federation.InboxControllerTest do
 
   alias Hybridsocial.Repo
   alias Hybridsocial.Accounts.Identity
-  alias Hybridsocial.Social.{Post, Posts}
+  alias Hybridsocial.Social.Posts
 
   defp create_local_identity(handle) do
     %Identity{}

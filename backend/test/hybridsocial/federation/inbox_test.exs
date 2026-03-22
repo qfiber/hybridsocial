@@ -41,7 +41,7 @@ defmodule Hybridsocial.Federation.InboxTest do
 
   # Helper to create a local post
   defp create_local_post(identity) do
-    {:ok, post} =
+    {:ok, _post} =
       Posts.create_post(identity.id, %{
         "content" => "Hello from local!",
         "post_type" => "text",
@@ -104,7 +104,7 @@ defmodule Hybridsocial.Federation.InboxTest do
       remote = create_remote_identity("https://remote.example/users/charlie", "charlie_remote")
 
       # Create a pending follow (local follows remote)
-      {:ok, follow} =
+      {:ok, _follow} =
         %Social.Follow{}
         |> Social.Follow.changeset(%{
           follower_id: local.id,
@@ -291,7 +291,7 @@ defmodule Hybridsocial.Federation.InboxTest do
       remote = create_remote_identity("https://remote.example/users/kate", "kate_remote")
 
       # Create a post attributed to the remote identity
-      {:ok, post} =
+      {:ok, _post} =
         %Post{}
         |> Post.create_changeset(%{
           "content" => "To be deleted",

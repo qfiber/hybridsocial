@@ -14,9 +14,12 @@ defmodule Hybridsocial.Search.OpenSearchTest do
         :ok
 
       _ ->
-        {:skip, "OpenSearch not available"}
+        ExUnit.configure(exclude: [:opensearch])
+        :ok
     end
   end
+
+  @moduletag :opensearch
 
   describe "index management" do
     test "create_index/2 creates an index with mapping" do
