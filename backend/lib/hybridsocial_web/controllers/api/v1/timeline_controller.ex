@@ -270,6 +270,8 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   defp serialize_account(nil, _badges), do: nil
 
   defp serialize_account(identity, badges) do
+    domain = extract_domain(identity)
+
     %{
       id: identity.id,
       handle: identity.handle,
@@ -280,7 +282,26 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
       is_bot: identity.is_bot,
       is_locked: identity.is_locked,
       badges: badges,
+      domain: domain,
       created_at: identity.inserted_at
     }
+  end
+
+  defp extract_domain(identity) do
+    local_host = URI.parse(HybridsocialWeb.Endpoint.url()).host
+
+    cond do
+      # Check handle for @user@domain format
+      identity.handle && String.contains?(identity.handle, "@") ->
+        identity.handle |> String.split("@") |> List.last()
+
+      # Check ap_actor_url for remote actors
+      identity.ap_actor_url ->
+        host = URI.parse(identity.ap_actor_url).host
+        if host == local_host, do: nil, else: host
+
+      true ->
+        nil
+    end
   end
 end

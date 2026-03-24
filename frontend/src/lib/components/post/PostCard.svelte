@@ -27,7 +27,10 @@
 
   let avatarUrl = $derived(post.account.avatar_url || '');
   let displayName = $derived(post.account.display_name || post.account.handle);
-  let handle = $derived(`@${post.account.handle}`);
+  let domain = $derived((post.account as any).domain as string | null);
+  let isRemote = $derived(!!domain);
+  let handle = $derived(isRemote ? `@${post.account.handle}` : `@${post.account.handle}`);
+  let instanceFavicon = $derived(domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=16` : null);
 
   // Media grid class based on count
   let mediaAttachments = $derived(post.media_attachments || []);
@@ -177,13 +180,18 @@
                 <RoleBadge type={badge.type} label={badge.label} size="sm" />
               {/each}
             {/if}
+          </div>
+          <div class="post-meta-row">
+            <span class="post-handle">{handle}</span>
+            {#if instanceFavicon}
+              <img src={instanceFavicon} alt={domain} class="instance-favicon" loading="lazy" />
+            {/if}
             <span class="post-dot" aria-hidden="true">&middot;</span>
             <time class="post-time" datetime={post.created_at} title={fullDate}>{timeAgo}</time>
             {#if post.edited_at}
               <span class="post-edited" title="Edited {fullDateTime(post.edited_at)}">(edited)</span>
             {/if}
           </div>
-          <span class="post-handle">{handle}</span>
         </div>
         {#if $isStaffMember}
           <AdminPostActions {post} />
@@ -464,27 +472,39 @@
     text-decoration: underline;
   }
 
+  .post-meta-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 1px;
+  }
+
   .post-handle {
-    display: block;
     font-size: 0.8125rem;
     color: var(--color-text-secondary);
     max-width: 200px;
     overflow: hidden;
     white-space: nowrap;
-    mask-image: linear-gradient(to right, black 80%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    text-overflow: ellipsis;
+  }
+
+  .instance-favicon {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    flex-shrink: 0;
   }
 
   .post-dot {
     flex-shrink: 0;
-    color: var(--color-text-secondary);
-    font-size: 0.875rem;
+    color: var(--color-text-tertiary);
+    font-size: 0.8125rem;
   }
 
   .post-time {
     white-space: nowrap;
     color: var(--color-text-secondary);
-    font-size: 0.875rem;
+    font-size: 0.8125rem;
   }
 
   .post-time:hover {
