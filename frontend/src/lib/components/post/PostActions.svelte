@@ -356,7 +356,9 @@
     align-items: center;
     justify-content: space-between;
     max-width: 28rem;
-    padding-block-start: 8px;
+    margin-block-start: 12px;
+    padding-block-start: 12px;
+    border-top: 1px solid rgba(188, 201, 200, 0.15);
   }
 
   .action-btn {
