@@ -23,23 +23,27 @@
   let sentinelEl: HTMLDivElement | undefined = $state();
   let newPostsCount = $state(0);
   let showStagger = $state(true);
-  let knownIds = $state(new Set<string>());
   let newIds = $state(new Set<string>());
 
-  // Track which posts are newly prepended
+  // Non-reactive tracker — avoids $effect infinite loop
+  let _knownIds = new Set<string>();
+
   $effect(() => {
+    // Only depend on `posts` (reactive), not _knownIds
+    const currentPosts = posts;
     const fresh = new Set<string>();
-    for (const p of posts) {
-      if (!knownIds.has(p.id)) {
+    for (const p of currentPosts) {
+      if (!_knownIds.has(p.id)) {
         fresh.add(p.id);
       }
     }
+    // Update the non-reactive tracker
+    _knownIds = new Set(currentPosts.map(p => p.id));
+
     if (fresh.size > 0 && !showStagger) {
       newIds = fresh;
-      // Clear "new" status after animation completes
       setTimeout(() => { newIds = new Set(); }, 500);
     }
-    knownIds = new Set(posts.map(p => p.id));
   });
 
   // IntersectionObserver for infinite scroll
