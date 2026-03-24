@@ -195,36 +195,7 @@
 <svelte:window onclick={handleWindowClick} />
 
 <div class="post-actions" role="group" aria-label="Post actions">
-  <!-- Reply -->
-  <button
-    type="button"
-    class="action-btn action-reply"
-    onclick={handleReply}
-    onkeydown={(e) => handleActionKeydown(e, () => handleReply(new MouseEvent('click')))}
-    aria-label="Reply ({replyCount})"
-  >
-    <span class="material-symbols-outlined action-icon">chat_bubble</span>
-    {#if replyCount > 0}
-      <span class="action-count">{replyCount}</span>
-    {/if}
-  </button>
-
-  <!-- Boost -->
-  <button
-    type="button"
-    class="action-btn action-boost"
-    class:active-boost={isBoosted}
-    onclick={handleBoost}
-    aria-label="{isBoosted ? 'Undo boost' : 'Boost'} ({boostCount})"
-    aria-pressed={isBoosted}
-  >
-    <span class="material-symbols-outlined action-icon">cached</span>
-    {#if boostCount > 0}
-      <span class="action-count">{boostCount}</span>
-    {/if}
-  </button>
-
-  <!-- Reaction / Like -->
+  <!-- Like -->
   <div class="action-reaction-wrapper">
     <button
       type="button"
@@ -255,17 +226,46 @@
     {/if}
   </div>
 
-  <!-- Share -->
+  <!-- Reply -->
+  <button
+    type="button"
+    class="action-btn action-reply"
+    onclick={handleReply}
+    onkeydown={(e) => handleActionKeydown(e, () => handleReply(new MouseEvent('click')))}
+    aria-label="Reply ({replyCount})"
+  >
+    <span class="material-symbols-outlined action-icon">chat_bubble</span>
+    {#if replyCount > 0}
+      <span class="action-count">{replyCount}</span>
+    {/if}
+  </button>
+
+  <!-- Boost / Share -->
+  <button
+    type="button"
+    class="action-btn action-boost"
+    class:active-boost={isBoosted}
+    onclick={handleBoost}
+    aria-label="{isBoosted ? 'Undo boost' : 'Boost'} ({boostCount})"
+    aria-pressed={isBoosted}
+  >
+    <span class="material-symbols-outlined action-icon">cached</span>
+    {#if boostCount > 0}
+      <span class="action-count">{boostCount}</span>
+    {/if}
+  </button>
+
+  <!-- Options (3 dots) -->
   <div class="action-more-wrapper">
     <button
       type="button"
-      class="action-btn action-share"
+      class="action-btn action-options"
       onclick={toggleMoreMenu}
-      aria-label="More actions"
+      aria-label="More options"
       aria-expanded={showMoreMenu}
       aria-haspopup="menu"
     >
-      <span class="material-symbols-outlined action-icon">share</span>
+      <span class="material-symbols-outlined action-icon">more_horiz</span>
     </button>
 
     {#if showMoreMenu}
@@ -411,7 +411,7 @@
   }
 
   /* Share hover */
-  .action-share:hover {
+  .action-options:hover {
     color: var(--color-primary);
   }
 
