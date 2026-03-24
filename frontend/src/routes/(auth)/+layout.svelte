@@ -182,6 +182,7 @@
   .landing-outer {
     overflow-x: hidden;
     min-height: 100vh;
+    background: #f8fafb;
   }
 
   .landing {
@@ -222,14 +223,14 @@
   }
 
   .landing-form {
-    width: 420px;
-    min-width: 360px;
+    width: 440px;
+    min-width: 380px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--space-8);
+    padding: var(--space-10);
     position: relative;
-    background: #f1f2f4;
+    background: #f8fafb;
   }
 
   /* Extend form background to right edge of viewport */
@@ -257,12 +258,14 @@
   }
 
   .hero-logo-text {
+    font-family: 'Manrope', var(--font-sans);
     font-size: var(--text-lg);
     font-weight: 700;
-    color: var(--color-text);
+    color: var(--color-primary);
   }
 
   .hero-headline {
+    font-family: 'Manrope', var(--font-sans);
     font-size: 3.5rem;
     font-weight: 800;
     line-height: 1.08;
@@ -278,7 +281,7 @@
   .hero-description {
     font-size: var(--text-lg);
     line-height: 1.6;
-    color: var(--color-text-secondary);
+    color: #6b7280;
     margin-block-end: var(--space-10);
     max-width: 480px;
   }
@@ -308,7 +311,7 @@
 
   .hero-feature-desc {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: #6b7280;
     line-height: 1.4;
   }
 
@@ -322,9 +325,9 @@
   .hero-card {
     position: absolute;
     background: white;
-    border-radius: var(--radius-xl);
+    border-radius: 14px;
     padding: var(--space-4);
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
   }
 
   /* Reactions card */
@@ -362,7 +365,7 @@
   .mock-avatar {
     width: 36px;
     height: 36px;
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     background: linear-gradient(135deg, #d1d5db, #9ca3af);
     flex-shrink: 0;
   }
@@ -375,7 +378,7 @@
 
   .mock-handle {
     font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
+    color: #9ca3af;
   }
 
   .mock-text {
@@ -388,7 +391,7 @@
   .mock-image {
     width: 100%;
     height: 120px;
-    border-radius: var(--radius-lg);
+    border-radius: 10px;
     background: linear-gradient(135deg, #3b7a6e, #2d5a4f);
     margin-block-end: var(--space-3);
   }
@@ -397,7 +400,7 @@
     display: flex;
     gap: var(--space-4);
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: #6b7280;
   }
 
   /* Visibility card */
@@ -420,7 +423,7 @@
     align-items: flex-start;
     gap: var(--space-2);
     padding: var(--space-2) 0;
-    color: var(--color-text-secondary);
+    color: #6b7280;
   }
 
   .vis-option svg {
@@ -444,7 +447,7 @@
 
   .vis-desc {
     font-size: 0.65rem;
-    color: var(--color-text-tertiary);
+    color: #9ca3af;
   }
 
   /* Group card */
@@ -458,7 +461,7 @@
   .group-icon {
     width: 36px;
     height: 36px;
-    border-radius: var(--radius-md);
+    border-radius: 8px;
     background: var(--color-primary);
     color: white;
     display: flex;
@@ -477,13 +480,13 @@
 
   .group-handle {
     font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
+    color: #9ca3af;
     margin-block-end: var(--space-2);
   }
 
   .group-desc {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: #6b7280;
     line-height: 1.4;
     margin-block-end: var(--space-3);
   }
@@ -503,7 +506,7 @@
   .group-avatar-dot {
     width: 16px;
     height: 16px;
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     background: linear-gradient(135deg, #d1d5db, #9ca3af);
     margin-inline-start: -4px;
     border: 1.5px solid white;
@@ -515,7 +518,7 @@
 
   .group-count {
     font-size: 0.65rem;
-    color: var(--color-text-tertiary);
+    color: #9ca3af;
   }
 
   .group-join {
@@ -524,7 +527,7 @@
     padding: var(--space-1) var(--space-3);
     background: transparent;
     border: 1.5px solid var(--color-primary);
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
     color: var(--color-primary);
     font-size: var(--text-xs);
     font-weight: 600;
@@ -674,15 +677,16 @@
     display: flex;
     justify-content: center;
     gap: var(--space-4);
-    margin-block-start: var(--space-6);
+    margin-block-start: var(--space-8);
     padding-block-start: var(--space-4);
-    border-block-start: 1px solid var(--color-border);
+    border-block-start: 1px solid rgba(0, 0, 0, 0.06);
   }
 
   .landing-footer a {
     font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
+    color: #9ca3af;
     text-decoration: none;
+    transition: color 0.15s ease;
   }
 
   .landing-footer a:hover {

@@ -1,34 +1,37 @@
 <div class="skeleton-post" aria-hidden="true">
-  <div class="skeleton-header">
+  <div class="skeleton-layout">
     <div class="skeleton-avatar skeleton-pulse"></div>
-    <div class="skeleton-meta">
-      <div class="skeleton-name skeleton-pulse"></div>
-      <div class="skeleton-handle skeleton-pulse"></div>
+    <div class="skeleton-content">
+      <div class="skeleton-header">
+        <div class="skeleton-name skeleton-pulse"></div>
+        <div class="skeleton-handle skeleton-pulse"></div>
+      </div>
+      <div class="skeleton-body">
+        <div class="skeleton-line skeleton-line-full skeleton-pulse"></div>
+        <div class="skeleton-line skeleton-line-full skeleton-pulse"></div>
+        <div class="skeleton-line skeleton-line-short skeleton-pulse"></div>
+      </div>
+      <div class="skeleton-actions">
+        <div class="skeleton-action skeleton-pulse"></div>
+        <div class="skeleton-action skeleton-pulse"></div>
+        <div class="skeleton-action skeleton-pulse"></div>
+        <div class="skeleton-action skeleton-pulse"></div>
+      </div>
     </div>
-  </div>
-  <div class="skeleton-body">
-    <div class="skeleton-line skeleton-line-full skeleton-pulse"></div>
-    <div class="skeleton-line skeleton-line-full skeleton-pulse"></div>
-    <div class="skeleton-line skeleton-line-short skeleton-pulse"></div>
-  </div>
-  <div class="skeleton-actions">
-    <div class="skeleton-action skeleton-pulse"></div>
-    <div class="skeleton-action skeleton-pulse"></div>
-    <div class="skeleton-action skeleton-pulse"></div>
   </div>
 </div>
 
 <style>
   .skeleton-post {
-    background: var(--color-surface);
+    background: var(--color-surface-container-lowest);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
+    border-radius: 14px;
+    padding: 24px;
   }
 
   .skeleton-pulse {
-    background: var(--color-bg-tertiary);
-    border-radius: var(--radius-sm);
+    background: var(--color-surface-container);
+    border-radius: 6px;
     animation: pulse 1.5s ease-in-out infinite;
   }
 
@@ -37,47 +40,49 @@
     50% { opacity: 0.7; }
   }
 
-  .skeleton-header {
+  .skeleton-layout {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    margin-block-end: var(--space-3);
+    gap: 16px;
   }
 
   .skeleton-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-full);
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
     flex-shrink: 0;
   }
 
-  .skeleton-meta {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
+  .skeleton-content {
     flex: 1;
+    min-width: 0;
+  }
+
+  .skeleton-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-block-end: 12px;
   }
 
   .skeleton-name {
     width: 120px;
-    height: 14px;
+    height: 16px;
   }
 
   .skeleton-handle {
     width: 80px;
-    height: 12px;
+    height: 14px;
   }
 
   .skeleton-body {
-    padding-inline-start: calc(40px + var(--space-3));
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    margin-block-end: var(--space-3);
+    gap: 8px;
+    margin-block-end: 16px;
   }
 
   .skeleton-line {
-    height: 12px;
+    height: 14px;
   }
 
   .skeleton-line-full {
@@ -90,8 +95,8 @@
 
   .skeleton-actions {
     display: flex;
-    gap: var(--space-6);
-    padding-inline-start: calc(40px + var(--space-3));
+    gap: 32px;
+    max-width: 28rem;
   }
 
   .skeleton-action {

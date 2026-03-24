@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getNotificationPreferences, updateNotificationPreferences } from '$lib/api/notifications.js';
-  import Toggle from '$lib/components/ui/Toggle.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
   let follows = $state(true);
@@ -56,161 +55,293 @@
 
 </script>
 
-<div class="settings-section">
-  <h2 class="section-title">Notification Preferences</h2>
+<div class="stitch-settings">
+  <!-- Page header -->
+  <div class="stitch-settings-header">
+    <h1 class="stitch-settings-title">Account Settings</h1>
+    <p class="stitch-settings-subtitle">Manage your profile, preferences, and account details</p>
+  </div>
 
-  {#if loading}
-    <div class="settings-loading">
-      <Spinner />
+  <!-- Notifications Section -->
+  <section class="stitch-section">
+    <div class="stitch-section-heading">
+      <span class="stitch-section-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+      </span>
+      <h2 class="stitch-section-title">Notifications</h2>
     </div>
-  {:else}
-    <form class="settings-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-      <p class="form-description">Choose which notifications you want to receive.</p>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Follows</span>
-          <span class="setting-description">Someone follows you or sends a follow request</span>
+    <div class="stitch-section-content">
+      {#if loading}
+        <div class="stitch-loading">
+          <Spinner />
         </div>
-        <Toggle bind:checked={follows} name="follows" />
-      </div>
+      {:else}
+        <form class="stitch-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+          <p class="stitch-description">Choose which notifications you want to receive.</p>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Mentions</span>
-          <span class="setting-description">Someone mentions you in a post</span>
-        </div>
-        <Toggle bind:checked={mentions} name="mentions" />
-      </div>
+          <div class="stitch-check-row">
+            <label class="stitch-checkbox-label">
+              <input type="checkbox" bind:checked={follows} class="stitch-checkbox" />
+              <div class="stitch-check-info">
+                <span class="stitch-check-name">Follows</span>
+                <span class="stitch-check-desc">Someone follows you or sends a follow request</span>
+              </div>
+            </label>
+          </div>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Reactions</span>
-          <span class="setting-description">Someone reacts to or favourites your post</span>
-        </div>
-        <Toggle bind:checked={reactions} name="reactions" />
-      </div>
+          <div class="stitch-check-row">
+            <label class="stitch-checkbox-label">
+              <input type="checkbox" bind:checked={mentions} class="stitch-checkbox" />
+              <div class="stitch-check-info">
+                <span class="stitch-check-name">Mentions</span>
+                <span class="stitch-check-desc">Someone mentions you in a post</span>
+              </div>
+            </label>
+          </div>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Boosts</span>
-          <span class="setting-description">Someone boosts your post</span>
-        </div>
-        <Toggle bind:checked={boosts} name="boosts" />
-      </div>
+          <div class="stitch-check-row">
+            <label class="stitch-checkbox-label">
+              <input type="checkbox" bind:checked={reactions} class="stitch-checkbox" />
+              <div class="stitch-check-info">
+                <span class="stitch-check-name">Reactions</span>
+                <span class="stitch-check-desc">Someone reacts to or favourites your post</span>
+              </div>
+            </label>
+          </div>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Polls</span>
-          <span class="setting-description">A poll you voted in has ended</span>
-        </div>
-        <Toggle bind:checked={polls} name="polls" />
-      </div>
+          <div class="stitch-check-row">
+            <label class="stitch-checkbox-label">
+              <input type="checkbox" bind:checked={boosts} class="stitch-checkbox" />
+              <div class="stitch-check-info">
+                <span class="stitch-check-name">Boosts</span>
+                <span class="stitch-check-desc">Someone boosts your post</span>
+              </div>
+            </label>
+          </div>
 
-      <div class="setting-row">
-        <div class="setting-info">
-          <span class="setting-label">Group invites</span>
-          <span class="setting-description">Someone invites you to a group</span>
-        </div>
-        <Toggle bind:checked={groupInvites} name="groupInvites" />
-      </div>
+          <div class="stitch-check-row">
+            <label class="stitch-checkbox-label">
+              <input type="checkbox" bind:checked={polls} class="stitch-checkbox" />
+              <div class="stitch-check-info">
+                <span class="stitch-check-name">Polls</span>
+                <span class="stitch-check-desc">A poll you voted in has ended</span>
+              </div>
+            </label>
+          </div>
 
-      {#if error}
-        <div class="form-error">{error}</div>
-      {/if}
+          <div class="stitch-check-row">
+            <label class="stitch-checkbox-label">
+              <input type="checkbox" bind:checked={groupInvites} class="stitch-checkbox" />
+              <div class="stitch-check-info">
+                <span class="stitch-check-name">Group invites</span>
+                <span class="stitch-check-desc">Someone invites you to a group</span>
+              </div>
+            </label>
+          </div>
 
-      {#if saved}
-        <div class="form-success">Notification preferences saved</div>
-      {/if}
-
-      <div class="form-actions">
-        <button class="btn btn-primary" type="submit" disabled={saving}>
-          {#if saving}
-            <Spinner size={16} color="var(--color-text-on-primary)" />
+          {#if error}
+            <div class="stitch-error">{error}</div>
           {/if}
-          Save changes
-        </button>
-      </div>
-    </form>
-  {/if}
+
+          {#if saved}
+            <div class="stitch-success">Notification preferences saved</div>
+          {/if}
+
+          <div class="stitch-actions">
+            <button class="stitch-btn-primary" type="submit" disabled={saving}>
+              {#if saving}
+                <Spinner size={16} color="#fff" />
+              {/if}
+              Save Settings
+            </button>
+          </div>
+        </form>
+      {/if}
+    </div>
+  </section>
 </div>
 
 <style>
-  .settings-section {
-    background: var(--color-surface-raised);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
+  .stitch-settings {
+    max-width: 720px;
+  }
+
+  .stitch-settings-header {
+    margin-block-end: 32px;
+  }
+
+  .stitch-settings-title {
+    font-family: 'Manrope', var(--font-sans);
+    font-size: 1.875rem;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .stitch-settings-subtitle {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-block-start: 4px;
+  }
+
+  .stitch-section {
+    margin-block-end: 24px;
+  }
+
+  .stitch-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-block-end: 16px;
+  }
+
+  .stitch-section-icon {
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+  }
+
+  .stitch-section-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .stitch-section-content {
+    background: #f2f4f5;
+    border-radius: 16px;
     overflow: hidden;
   }
 
-  .section-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--color-text);
-    padding: var(--space-4) var(--space-6);
-    border-block-end: 1px solid var(--color-border);
-  }
-
-  .settings-form {
-    padding: var(--space-6);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-  }
-
-  .settings-loading {
+  .stitch-loading {
     display: flex;
     justify-content: center;
-    padding: var(--space-8);
+    padding: 48px;
   }
 
-  .form-description {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .setting-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .setting-info {
+  .stitch-form {
+    padding: 24px 32px 32px;
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
+    gap: 4px;
   }
 
-  .setting-label {
-    font-size: var(--text-sm);
+  .stitch-description {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-block-end: 12px;
+  }
+
+  /* ---- Checkbox rows ---- */
+  .stitch-check-row {
+    padding: 12px 0;
+    border-block-end: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  .stitch-check-row:last-of-type {
+    border-block-end: none;
+  }
+
+  .stitch-checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+  }
+
+  .stitch-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+    margin-block-start: 2px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .stitch-check-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stitch-check-name {
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-text);
   }
 
-  .setting-description {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
+  .stitch-check-desc {
+    font-size: 0.75rem;
+    color: #9ca3af;
   }
 
-  .form-error {
-    padding: var(--space-3);
-    background: var(--color-danger-soft);
-    color: var(--color-danger);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+  .stitch-error {
+    padding: 12px 16px;
+    background: #fef2f2;
+    color: #dc2626;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    margin-block-start: 12px;
   }
 
-  .form-success {
-    padding: var(--space-3);
-    background: var(--color-success-soft);
-    color: var(--color-success);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+  .stitch-success {
+    padding: 12px 16px;
+    background: #f0fdf4;
+    color: #16a34a;
+    border-radius: 10px;
+    font-size: 0.875rem;
+    margin-block-start: 12px;
   }
 
-  .form-actions {
+  .stitch-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 12px;
+    padding-block-start: 16px;
+  }
+
+  .stitch-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 28px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb, 59, 130, 246), 0.2);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+  }
+
+  .stitch-btn-primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb, 59, 130, 246), 0.3);
+  }
+
+  .stitch-btn-primary:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  .stitch-btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 640px) {
+    .stitch-settings-title {
+      font-size: 1.5rem;
+    }
+
+    .stitch-form {
+      padding: 20px;
+    }
   }
 </style>

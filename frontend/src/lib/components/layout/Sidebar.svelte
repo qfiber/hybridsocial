@@ -49,7 +49,7 @@
             class:active={isActive(item.href)}
             aria-current={isActive(item.href) ? 'page' : undefined}
           >
-            <svg class="nav-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <svg class="nav-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d={item.icon} />
             </svg>
             <span class="nav-label">{item.label}</span>
@@ -81,12 +81,11 @@
 <style>
   .sidebar {
     position: sticky;
-    top: var(--header-height);
-    height: calc(100vh - var(--header-height));
+    top: calc(var(--header-height) + var(--space-8));
+    height: calc(100vh - var(--header-height) - var(--space-8));
     display: flex;
     flex-direction: column;
-    padding: var(--space-4) var(--space-2);
-    border-inline-end: 1px solid var(--color-border);
+    padding: var(--space-2) 0;
     overflow-y: auto;
   }
 
@@ -104,22 +103,25 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
+    padding: var(--space-3) var(--space-4);
     border-radius: var(--radius-full);
-    color: var(--color-text);
+    color: var(--color-on-surface-variant);
     text-decoration: none;
+    font-family: var(--font-body);
     font-size: var(--text-base);
+    font-weight: 500;
     transition: background var(--transition-fast), color var(--transition-fast);
     white-space: nowrap;
   }
 
   .nav-item:hover {
-    background: var(--color-surface);
+    background: var(--color-surface-container-low);
+    color: var(--color-on-surface);
     text-decoration: none;
   }
 
   .nav-item.active {
-    background: var(--color-primary-soft);
+    background: var(--color-secondary-container);
     color: var(--color-primary);
     font-weight: 600;
   }
@@ -130,23 +132,22 @@
 
   .sidebar-user {
     padding-block-start: var(--space-4);
-    border-block-start: 1px solid var(--color-border);
     margin-block-start: var(--space-4);
   }
 
   .user-link {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-lg);
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-full);
     text-decoration: none;
-    color: var(--color-text);
+    color: var(--color-on-surface);
     transition: background var(--transition-fast);
   }
 
   .user-link:hover {
-    background: var(--color-surface);
+    background: var(--color-surface-container-low);
     text-decoration: none;
   }
 
@@ -157,8 +158,10 @@
   }
 
   .user-name {
+    font-family: var(--font-headline);
     font-size: var(--text-sm);
     font-weight: 600;
+    color: var(--color-on-surface);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -166,17 +169,17 @@
 
   .user-handle {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: var(--color-on-surface-variant);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   /* Tablet: icon-only */
-  @media (max-width: 1200px) {
+  @media (max-width: 1280px) {
     .sidebar {
       align-items: center;
-      padding: var(--space-4) var(--space-1);
+      padding: var(--space-2) 0;
     }
 
     .nav-label,
@@ -188,6 +191,11 @@
       justify-content: center;
       padding: var(--space-3);
       border-radius: var(--radius-full);
+    }
+
+    .user-link {
+      justify-content: center;
+      padding: var(--space-3);
     }
   }
 

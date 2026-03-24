@@ -258,10 +258,7 @@
     onclick={openComposer}
     aria-label="Compose new post"
   >
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <path d="M12 20h9"/>
-      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-    </svg>
+    <span class="material-symbols-outlined fab-icon">edit</span>
   </button>
 {/if}
 
@@ -276,34 +273,6 @@
     onkeydown={handleKeydown}
     onclick={handleEmojiClickOutside}
   >
-    <div class="composer-header">
-      <button
-        type="button"
-        class="composer-close"
-        onclick={closeComposer}
-        aria-label="Close composer"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-
-      <button
-        type="button"
-        class="composer-submit"
-        disabled={!canSubmit}
-        onclick={handleSubmit}
-      >
-        {#if loading}
-          <span class="spinner" aria-hidden="true"></span>
-          Publishing...
-        {:else}
-          Publish
-        {/if}
-      </button>
-    </div>
-
     {#if replyTo}
       <div class="composer-reply-context">
         Replying to <strong>@{replyTo.account.handle}</strong>
@@ -314,25 +283,41 @@
       <div class="composer-error" role="alert">{error}</div>
     {/if}
 
-    {#if showCW}
-      <input
-        type="text"
-        class="composer-cw-input"
-        placeholder="Content warning"
-        bind:value={spoilerText}
-        aria-label="Content warning text"
-      />
-    {/if}
+    <div class="composer-body">
+      <!-- Avatar -->
+      <div class="composer-avatar">
+        {#if $currentUser?.avatar_url}
+          <img src={$currentUser.avatar_url} alt="" class="composer-avatar-img" />
+        {:else}
+          <div class="composer-avatar-placeholder" aria-hidden="true">
+            {($currentUser?.display_name || $currentUser?.handle || 'U').charAt(0).toUpperCase()}
+          </div>
+        {/if}
+      </div>
 
-    <textarea
-      bind:this={textareaEl}
-      bind:value={content}
-      oninput={autoGrow}
-      class="composer-textarea"
-      placeholder="What's on your mind?"
-      aria-label="Post content"
-      rows={3}
-    ></textarea>
+      <!-- Text area -->
+      <div class="composer-input-area">
+        {#if showCW}
+          <input
+            type="text"
+            class="composer-cw-input"
+            placeholder="Content warning"
+            bind:value={spoilerText}
+            aria-label="Content warning text"
+          />
+        {/if}
+
+        <textarea
+          bind:this={textareaEl}
+          bind:value={content}
+          oninput={autoGrow}
+          class="composer-textarea"
+          placeholder="What's on your mind?"
+          aria-label="Post content"
+          rows={3}
+        ></textarea>
+      </div>
+    </div>
 
     <!-- Media previews -->
     {#if uploadedMedia.length > 0}
@@ -343,9 +328,7 @@
               <img src={media.preview_url || media.url} alt={media.description || ''} class="media-preview-img" />
             {:else if media.type === 'video'}
               <div class="media-preview-video">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <polygon points="5 3 19 12 5 21 5 3"/>
-                </svg>
+                <span class="material-symbols-outlined">play_arrow</span>
               </div>
             {/if}
             <button
@@ -354,9 +337,7 @@
               onclick={() => removeMedia(media.id)}
               aria-label="Remove attachment"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
+              <span class="material-symbols-outlined remove-icon">close</span>
             </button>
           </div>
         {/each}
@@ -389,9 +370,7 @@
                   onclick={() => removePollOption(i)}
                   aria-label="Remove option {i + 1}"
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
+                  <span class="material-symbols-outlined remove-icon">close</span>
                 </button>
               {/if}
             </div>
@@ -431,6 +410,7 @@
       onchange={handleFileSelected}
     />
 
+    <!-- Bottom toolbar -->
     <div class="composer-toolbar">
       <div class="composer-tools">
         <!-- Media button -->
@@ -442,9 +422,17 @@
           aria-label="Attach media"
           disabled={showPoll || mediaUploading}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-          </svg>
+          <span class="material-symbols-outlined tool-icon">image</span>
+        </button>
+
+        <!-- GIF button -->
+        <button
+          type="button"
+          class="tool-btn"
+          aria-label="Insert GIF"
+          disabled
+        >
+          <span class="material-symbols-outlined tool-icon">gif_box</span>
         </button>
 
         <!-- Poll toggle -->
@@ -457,21 +445,7 @@
           aria-pressed={showPoll}
           disabled={uploadedMedia.length > 0}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="5" rx="1"/><rect x="3" y="10" width="14" height="5" rx="1"/><rect x="3" y="17" width="10" height="5" rx="1"/>
-          </svg>
-        </button>
-
-        <!-- CW toggle -->
-        <button
-          type="button"
-          class="tool-btn"
-          class:tool-active={showCW}
-          onclick={() => { showCW = !showCW; }}
-          aria-label="Toggle content warning"
-          aria-pressed={showCW}
-        >
-          CW
+          <span class="material-symbols-outlined tool-icon">ballot</span>
         </button>
 
         <!-- Emoji picker -->
@@ -484,9 +458,7 @@
             aria-label="Insert emoji"
             aria-expanded={showEmojiPicker}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/>
-            </svg>
+            <span class="material-symbols-outlined tool-icon">mood</span>
           </button>
           {#if showEmojiPicker}
             <EmojiPicker onselect={insertEmoji} />
@@ -503,10 +475,35 @@
             <option value={opt.value}>{opt.icon} {opt.label}</option>
           {/each}
         </select>
+
+        <!-- CW toggle -->
+        <button
+          type="button"
+          class="tool-btn tool-btn-text"
+          class:tool-active={showCW}
+          onclick={() => { showCW = !showCW; }}
+          aria-label="Toggle content warning"
+          aria-pressed={showCW}
+        >
+          CW
+        </button>
       </div>
 
-      <div class="composer-char-count" class:over-limit={isOverLimit}>
-        {charsRemaining}
+      <div class="composer-right">
+        <span class="composer-char-count" class:over-limit={isOverLimit}>{charsRemaining}</span>
+        <button
+          type="button"
+          class="composer-submit"
+          disabled={!canSubmit}
+          onclick={handleSubmit}
+        >
+          {#if loading}
+            <span class="spinner" aria-hidden="true"></span>
+            Posting...
+          {:else}
+            Post
+          {/if}
+        </button>
       </div>
     </div>
   </div>
@@ -525,28 +522,29 @@
     border: 0;
   }
 
+  /* ---- FAB ---- */
   .fab {
     position: fixed;
-    inset-block-end: var(--space-6);
-    inset-inline-end: var(--space-6);
+    inset-block-end: 24px;
+    inset-inline-end: 24px;
     width: 56px;
     height: 56px;
-    border-radius: var(--radius-full);
-    background: linear-gradient(135deg, var(--color-primary), #0d9488);
-    color: var(--color-text-inverse);
+    border-radius: 9999px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--shadow-xl);
-    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: 0 4px 16px rgba(0, 106, 105, 0.3);
+    transition: transform 150ms ease, box-shadow 150ms ease;
     z-index: var(--z-sticky);
   }
 
   .fab:hover {
     transform: scale(1.05);
-    box-shadow: var(--shadow-xl), 0 0 20px rgba(13, 148, 136, 0.3);
+    box-shadow: 0 6px 24px rgba(0, 106, 105, 0.4);
   }
 
   .fab:focus-visible {
@@ -554,6 +552,11 @@
     outline-offset: 3px;
   }
 
+  .fab-icon {
+    font-size: 24px;
+  }
+
+  /* ---- Backdrop ---- */
   .composer-backdrop {
     position: fixed;
     inset: 0;
@@ -567,29 +570,26 @@
     to { opacity: 1; }
   }
 
+  /* ---- Composer Card ---- */
   .composer-panel {
     position: fixed;
     inset-block-end: 0;
     inset-inline-start: 0;
     inset-inline-end: 0;
     max-height: 80vh;
-    background: var(--color-surface);
-    border-start-start-radius: var(--radius-xl);
-    border-start-end-radius: var(--radius-xl);
-    padding: var(--space-4);
-    box-shadow: var(--shadow-xl);
+    background: var(--color-surface-container-lowest);
+    border-start-start-radius: 18px;
+    border-start-end-radius: 18px;
+    padding: 24px;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
     z-index: var(--z-modal);
     overflow-y: auto;
     animation: slide-up 0.25s ease;
   }
 
   @keyframes slide-up {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
   }
 
   @media (min-width: 640px) {
@@ -600,104 +600,90 @@
       inset-block-end: var(--space-8);
       max-width: 560px;
       width: 100%;
-      border-radius: var(--radius-xl);
+      border-radius: 14px;
+      border: 1px solid var(--color-border);
       animation: pop-in 0.2s ease;
     }
 
     @keyframes pop-in {
-      from {
-        opacity: 0;
-        transform: translateX(-50%) scale(0.95);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(-50%) scale(1);
-      }
+      from { opacity: 0; transform: translateX(-50%) scale(0.95); }
+      to { opacity: 1; transform: translateX(-50%) scale(1); }
     }
   }
 
-  .composer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-block-end: var(--space-3);
-  }
-
-  .composer-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-full);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: background-color var(--transition-fast);
-  }
-
-  .composer-close:hover {
-    background: var(--color-bg-tertiary);
-  }
-
-  .composer-submit {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
-    border: none;
-    border-radius: var(--radius-full);
-    font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
-    cursor: pointer;
-    transition: background-color var(--transition-fast);
-  }
-
-  .composer-submit:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-  }
-
-  .composer-submit:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
+  /* ---- Reply context ---- */
   .composer-reply-context {
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     color: var(--color-text-secondary);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-tertiary);
-    border-radius: var(--radius-md);
-    margin-block-end: var(--space-3);
+    padding: 8px 12px;
+    background: var(--color-surface);
+    border-radius: 10px;
+    margin-block-end: 16px;
   }
 
   .composer-error {
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     color: var(--color-danger);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-danger-light);
-    border-radius: var(--radius-md);
-    margin-block-end: var(--space-3);
+    padding: 8px 12px;
+    background: var(--color-danger-soft);
+    border-radius: 10px;
+    margin-block-end: 16px;
+  }
+
+  /* ---- Composer Body (avatar + textarea) ---- */
+  .composer-body {
+    display: flex;
+    gap: 16px;
+  }
+
+  .composer-avatar {
+    flex-shrink: 0;
+  }
+
+  .composer-avatar-img {
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    object-fit: cover;
+  }
+
+  .composer-avatar-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+
+  .composer-input-area {
+    flex: 1;
+    min-width: 0;
   }
 
   .composer-cw-input {
     display: block;
     width: 100%;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-warning);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+    padding: 8px 0;
+    border: none;
+    border-block-end: 1px solid var(--color-warning);
+    font-size: 0.875rem;
     color: var(--color-text);
-    background: var(--color-warning-light);
-    margin-block-end: var(--space-2);
+    background: transparent;
+    margin-block-end: 4px;
+  }
+
+  .composer-cw-input::placeholder {
+    color: var(--color-warning);
+    opacity: 0.7;
   }
 
   .composer-cw-input:focus {
     outline: none;
-    box-shadow: 0 0 0 2px var(--color-warning);
   }
 
   .composer-textarea {
@@ -705,38 +691,40 @@
     width: 100%;
     min-height: 100px;
     max-height: 40vh;
-    padding: var(--space-3);
+    padding: 4px 0;
     border: none;
-    font-size: var(--text-base);
+    font-size: 1.125rem;
     color: var(--color-text);
     background: transparent;
     resize: none;
-    line-height: var(--leading-relaxed);
+    line-height: 1.6;
   }
 
   .composer-textarea::placeholder {
     color: var(--color-text-tertiary);
+    opacity: 0.5;
   }
 
   .composer-textarea:focus {
     outline: none;
   }
 
-  /* Media previews */
+  /* ---- Media Previews ---- */
   .media-previews {
     display: flex;
-    gap: var(--space-2);
+    gap: 8px;
     flex-wrap: wrap;
-    padding: var(--space-2) var(--space-3);
+    padding: 8px 0;
+    margin-inline-start: 64px;
   }
 
   .media-preview-item {
     position: relative;
     width: 80px;
     height: 80px;
-    border-radius: var(--radius-md);
+    border-radius: 10px;
     overflow: hidden;
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
   }
 
   .media-preview-img {
@@ -762,11 +750,11 @@
 
   .media-preview-remove {
     position: absolute;
-    inset-block-start: 2px;
-    inset-inline-end: 2px;
+    inset-block-start: 4px;
+    inset-inline-end: 4px;
     width: 22px;
     height: 22px;
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
     background: rgba(0, 0, 0, 0.6);
     color: white;
     border: none;
@@ -781,37 +769,42 @@
     background: rgba(0, 0, 0, 0.8);
   }
 
-  /* Poll creator */
+  .remove-icon {
+    font-size: 14px;
+  }
+
+  /* ---- Poll Creator ---- */
   .poll-creator {
-    padding: var(--space-3);
-    margin: var(--space-2) var(--space-3);
+    padding: 12px;
+    margin: 8px 0;
+    margin-inline-start: 64px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .poll-options-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .poll-option-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .poll-option-input {
     flex: 1;
-    padding: var(--space-2);
+    padding: 8px 12px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+    border-radius: 10px;
+    font-size: 0.875rem;
     color: var(--color-text);
-    background: var(--color-bg);
+    background: var(--color-surface-container-lowest);
   }
 
   .poll-option-input:focus {
@@ -827,7 +820,7 @@
     background: transparent;
     color: var(--color-text-tertiary);
     cursor: pointer;
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -835,38 +828,39 @@
   }
 
   .poll-option-remove:hover {
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
     color: var(--color-danger);
   }
 
   .poll-add-option {
     align-self: flex-start;
-    padding: var(--space-1) var(--space-2);
+    padding: 4px 12px;
     border: 1px dashed var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: 9999px;
     background: transparent;
     color: var(--color-primary);
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
+    font-weight: 600;
     cursor: pointer;
   }
 
   .poll-add-option:hover {
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
   }
 
   .poll-settings {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: 16px;
     flex-wrap: wrap;
-    padding-block-start: var(--space-2);
+    padding-block-start: 8px;
     border-block-start: 1px solid var(--color-border);
   }
 
   .poll-setting-row {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .poll-setting-label {
@@ -875,18 +869,18 @@
   }
 
   .poll-setting-select {
-    padding: var(--space-1) var(--space-2);
+    padding: 4px 8px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: 8px;
     font-size: var(--text-xs);
     color: var(--color-text-secondary);
-    background: var(--color-bg);
+    background: var(--color-surface-container-lowest);
   }
 
   .poll-setting-toggle {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    gap: 4px;
     font-size: var(--text-xs);
     color: var(--color-text-secondary);
     cursor: pointer;
@@ -896,49 +890,58 @@
     accent-color: var(--color-primary);
   }
 
+  /* ---- Bottom Toolbar ---- */
   .composer-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-block-start: var(--space-3);
+    padding-block-start: 16px;
+    margin-block-start: 8px;
     border-block-start: 1px solid var(--color-border);
   }
 
   .composer-tools {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 4px;
   }
 
   .tool-btn {
-    padding: var(--space-1) var(--space-2);
+    width: 36px;
+    height: 36px;
     background: transparent;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: var(--text-xs);
-    font-weight: var(--font-semibold);
-    color: var(--color-text-secondary);
+    border: none;
+    border-radius: 9999px;
+    color: var(--color-primary);
     cursor: pointer;
-    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    transition: background-color 150ms ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-1);
   }
 
   .tool-btn:hover:not(:disabled) {
-    background: var(--color-bg-tertiary);
+    background: rgba(191, 235, 233, 0.3);
   }
 
   .tool-btn:disabled {
-    opacity: 0.4;
+    opacity: 0.35;
     cursor: not-allowed;
   }
 
   .tool-active {
-    background: var(--color-warning-light);
-    border-color: var(--color-warning);
-    color: var(--color-warning);
+    background: rgba(191, 235, 233, 0.3);
+  }
+
+  .tool-icon {
+    font-size: 22px;
+  }
+
+  .tool-btn-text {
+    width: auto;
+    padding: 0 10px;
+    font-size: var(--text-xs);
+    font-weight: 700;
   }
 
   .emoji-picker-wrapper {
@@ -946,12 +949,12 @@
   }
 
   .visibility-select {
-    padding: var(--space-1) var(--space-2);
+    padding: 4px 8px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: 9999px;
     font-size: var(--text-xs);
     color: var(--color-text-secondary);
-    background: var(--color-bg);
+    background: var(--color-surface-container-lowest);
     cursor: pointer;
   }
 
@@ -960,15 +963,45 @@
     border-color: var(--color-primary);
   }
 
+  .composer-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
   .composer-char-count {
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     color: var(--color-text-tertiary);
     font-variant-numeric: tabular-nums;
   }
 
   .over-limit {
     color: var(--color-danger);
-    font-weight: var(--font-semibold);
+    font-weight: 700;
+  }
+
+  .composer-submit {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 32px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    border: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  .composer-submit:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .composer-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .spinner {
@@ -977,7 +1010,7 @@
     height: 14px;
     border: 2px solid currentColor;
     border-inline-end-color: transparent;
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
     animation: spin 0.6s linear infinite;
   }
 

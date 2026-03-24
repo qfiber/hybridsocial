@@ -48,9 +48,9 @@
   .feed-toggle {
     position: relative;
     display: flex;
-    background: var(--color-surface);
+    background: var(--color-surface-container-lowest);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
     padding: 3px;
     max-width: 420px;
     width: 100%;
@@ -59,31 +59,32 @@
 
   .toggle-tab {
     flex: 1;
-    padding: var(--space-2) var(--space-4);
+    padding: 8px 16px;
     white-space: nowrap;
     background: transparent;
     border: none;
-    border-radius: var(--radius-full);
-    font-size: var(--text-sm);
+    border-radius: 9999px;
+    font-family: 'Inter', var(--font-sans);
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-secondary);
     cursor: pointer;
-    transition: color 0.2s ease;
+    transition: color 200ms ease;
     position: relative;
     z-index: 1;
     text-align: center;
   }
 
   .toggle-tab:hover {
-    color: var(--color-text-secondary);
+    color: var(--color-text);
   }
 
   .toggle-active {
-    color: var(--color-text-on-primary);
+    color: var(--color-on-primary);
   }
 
   .toggle-active:hover {
-    color: var(--color-text-on-primary);
+    color: var(--color-on-primary);
   }
 
   .toggle-slider {
@@ -91,7 +92,7 @@
     top: 3px;
     bottom: 3px;
     background: var(--color-primary);
-    border-radius: var(--radius-full);
+    border-radius: 9999px;
     transition: left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
 </style>

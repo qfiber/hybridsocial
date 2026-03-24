@@ -135,16 +135,16 @@
   <title>Sign in - HybridSocial</title>
 </svelte:head>
 
-<div class="signin-card">
-  <div class="signin-logo">
-    <svg width="44" height="44" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+<div class="auth-card">
+  <div class="auth-logo">
+    <svg width="40" height="40" viewBox="0 0 28 28" fill="none" aria-hidden="true">
       <rect rx="6" width="28" height="28" fill="var(--color-primary)" />
       <text x="14" y="19.5" text-anchor="middle" fill="white" font-size="15" font-weight="700">H</text>
     </svg>
   </div>
 
-  <h1 class="signin-title">Sign in to your server</h1>
-  <p class="signin-subtitle">Enter your credentials to continue</p>
+  <h1 class="auth-title">Sign in to your server</h1>
+  <p class="auth-subtitle">Enter your credentials to continue</p>
 
   {#if error}
     <div class="auth-error" role="alert">
@@ -155,11 +155,12 @@
 
   <form onsubmit={handleSubmit} novalidate>
     {#if !otpRequired}
-      <div class="form-field">
+      <div class="auth-field">
+        <label class="auth-label" for="email">EMAIL</label>
         <input
           id="email"
           type="email"
-          class="form-input"
+          class="auth-input"
           placeholder="Email or username"
           bind:value={email}
           required
@@ -168,12 +169,13 @@
         />
       </div>
 
-      <div class="form-field">
-        <div class="input-with-icon">
+      <div class="auth-field">
+        <label class="auth-label" for="password">PASSWORD</label>
+        <div class="auth-input-wrap">
           <input
             id="password"
             type={showPassword ? 'text' : 'password'}
-            class="form-input"
+            class="auth-input auth-input-password"
             placeholder="Password"
             bind:value={password}
             required
@@ -183,7 +185,7 @@
           />
           <button
             type="button"
-            class="password-toggle"
+            class="auth-password-toggle"
             onclick={() => showPassword = !showPassword}
             tabindex={-1}
             aria-label={showPassword ? 'Hide password' : 'Show password'}
@@ -202,28 +204,31 @@
             {/if}
           </button>
         </div>
+        <div class="auth-field-footer">
+          <a href="/reset-password" class="auth-link">Forgot password?</a>
+        </div>
       </div>
     {:else}
       {#if otpExpired}
-        <div class="otp-expired">
-          <p class="otp-expired-text">Verification expired. Please try again.</p>
+        <div class="auth-otp-expired">
+          <p class="auth-otp-expired-text">Verification expired. Please try again.</p>
         </div>
       {:else}
-        <div class="form-field">
-          <div class="otp-header">
-            <label for="otp" class="form-label">Two-factor code</label>
-            <span class="otp-timer" class:otp-timer-warning={otpCountdown <= 10}>
+        <div class="auth-field">
+          <div class="auth-otp-header">
+            <label for="otp" class="auth-label">TWO-FACTOR CODE</label>
+            <span class="auth-otp-timer" class:auth-otp-timer-warning={otpCountdown <= 10}>
               {formatCountdown(otpCountdown)}
             </span>
           </div>
-          <p class="form-hint">Enter the code from your authenticator app</p>
+          <p class="auth-hint">Enter the code from your authenticator app</p>
           <input
             id="otp"
             type="text"
             inputmode="numeric"
             pattern="[0-9]*"
             maxlength={6}
-            class="form-input otp-input"
+            class="auth-input auth-otp-input"
             placeholder="000000"
             bind:value={otpCode}
             required
@@ -242,7 +247,7 @@
     {:else}
       <button type="submit" class="auth-submit" disabled={loading || (otpRequired && otpExpired)}>
         {#if loading}
-          <span class="spinner" aria-hidden="true"></span>
+          <span class="auth-spinner" aria-hidden="true"></span>
           Signing in...
         {:else if otpRequired}
           Verify
@@ -264,67 +269,67 @@
   {/if}
 
   {#if !otpRequired}
-    <div class="divider">
+    <div class="auth-divider">
       <span>or</span>
     </div>
 
-    <a href="/register" class="create-account-btn">Create account</a>
+    <a href="/register" class="auth-alt-btn">Create account</a>
   {/if}
 </div>
 
 {#if !otpRequired}
-  <div class="new-to-hs">
-    <h3 class="new-to-hs-title">New to HybridSocial?</h3>
-    <p class="new-to-hs-desc">
+  <div class="auth-info-card">
+    <h3 class="auth-info-title">New to HybridSocial?</h3>
+    <p class="auth-info-desc">
       Create your own server in minutes or join a community run by others.
     </p>
-    <a href="/register" class="new-to-hs-link">Create a server &rarr;</a>
-    <a href="/explore" class="new-to-hs-link">Explore servers &rarr;</a>
+    <a href="/register" class="auth-info-link">Create a server &rarr;</a>
+    <a href="/explore" class="auth-info-link">Explore servers &rarr;</a>
   </div>
 {/if}
 
 <style>
-  /* ---- Sign-in card ---- */
-  .signin-card {
+  /* ---- Card ---- */
+  .auth-card {
     background: white;
-    border-radius: var(--radius-xl);
-    padding: var(--space-8);
-    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 24px rgba(0, 0, 0, 0.06);
   }
 
-  .signin-logo {
+  .auth-logo {
     display: flex;
     justify-content: center;
-    margin-block-end: var(--space-6);
+    margin-block-end: 24px;
   }
 
-  .signin-title {
-    font-size: var(--text-xl);
+  .auth-title {
+    font-family: 'Manrope', var(--font-sans);
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--color-text);
     text-align: center;
-    margin-block-end: var(--space-1);
+    margin-block-end: 4px;
   }
 
-  .signin-subtitle {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+  .auth-subtitle {
+    font-size: 0.875rem;
+    color: #6b7280;
     text-align: center;
-    margin-block-end: var(--space-6);
+    margin-block-end: 24px;
   }
 
   /* ---- Error ---- */
   .auth-error {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    margin-block-end: var(--space-4);
-    background: var(--color-danger-soft);
-    border: 1px solid var(--color-danger);
-    border-radius: var(--radius-md);
-    color: var(--color-danger);
-    font-size: var(--text-sm);
+    gap: 8px;
+    padding: 12px 16px;
+    margin-block-end: 16px;
+    background: #fef2f2;
+    border-radius: 10px;
+    color: #dc2626;
+    font-size: 0.875rem;
   }
 
   .auth-error-icon {
@@ -333,155 +338,183 @@
     justify-content: center;
     width: 20px;
     height: 20px;
-    border-radius: var(--radius-full);
-    background: var(--color-danger);
+    border-radius: 50%;
+    background: #dc2626;
     color: white;
-    font-size: var(--text-xs);
+    font-size: 0.75rem;
     font-weight: 700;
     flex-shrink: 0;
   }
 
-  /* ---- Form ---- */
-  .form-field {
-    margin-block-end: var(--space-3);
+  /* ---- Fields ---- */
+  .auth-field {
+    margin-block-end: 16px;
   }
 
-  .form-label {
+  .auth-label {
     display: block;
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-block-end: 6px;
+    margin-inline-start: 4px;
   }
 
-  .form-hint {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-2);
+  .auth-hint {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-block-end: 8px;
+    margin-inline-start: 4px;
   }
 
-  .form-input {
+  .auth-input {
     display: block;
     width: 100%;
-    height: 44px;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
+    height: 46px;
+    padding: 0 16px;
+    background: #e6e8e9;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.875rem;
     color: var(--color-text);
-    background-color: var(--color-bg);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .form-input::placeholder {
-    color: var(--color-text-tertiary);
+  .auth-input::placeholder {
+    color: #9ca3af;
   }
 
-  .form-input:focus {
+  .auth-input:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-soft);
+    background: white;
+    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 59, 130, 246), 0.2);
   }
 
-  .form-input:disabled {
+  .auth-input:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .input-with-icon {
+  .auth-input-wrap {
     position: relative;
   }
 
-  .input-with-icon .form-input {
-    padding-inline-end: 44px;
+  .auth-input-password {
+    padding-inline-end: 46px;
   }
 
-  .password-toggle {
+  .auth-password-toggle {
     position: absolute;
     right: 0;
     top: 0;
-    height: 44px;
-    width: 44px;
+    height: 46px;
+    width: 46px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: none;
     border: none;
-    color: var(--color-text-tertiary);
+    color: #9ca3af;
     cursor: pointer;
+    transition: color 0.15s ease;
   }
 
-  .password-toggle:hover {
-    color: var(--color-text-secondary);
+  .auth-password-toggle:hover {
+    color: #6b7280;
+  }
+
+  .auth-field-footer {
+    display: flex;
+    justify-content: flex-end;
+    margin-block-start: 8px;
+  }
+
+  .auth-link {
+    font-size: 0.8125rem;
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.15s ease;
+  }
+
+  .auth-link:hover {
+    opacity: 0.8;
   }
 
   /* ---- OTP ---- */
-  .otp-header {
+  .auth-otp-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-block-end: var(--space-1);
+    margin-block-end: 4px;
   }
 
-  .otp-header .form-label {
+  .auth-otp-header .auth-label {
     margin-block-end: 0;
   }
 
-  .otp-timer {
+  .auth-otp-timer {
     font-family: var(--font-mono, monospace);
-    font-size: var(--text-sm);
+    font-size: 0.8125rem;
     font-weight: 600;
-    color: var(--color-text-secondary);
-    background: var(--color-surface);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
+    color: #6b7280;
+    background: #e6e8e9;
+    padding: 4px 10px;
+    border-radius: 8px;
   }
 
-  .otp-timer-warning {
-    color: var(--color-danger);
-    background: var(--color-danger-soft);
+  .auth-otp-timer-warning {
+    color: #dc2626;
+    background: #fef2f2;
   }
 
-  .otp-expired {
+  .auth-otp-expired {
     text-align: center;
-    padding: var(--space-8) var(--space-4);
+    padding: 32px 16px;
   }
 
-  .otp-expired-text {
-    color: var(--color-danger);
-    font-size: var(--text-sm);
+  .auth-otp-expired-text {
+    color: #dc2626;
+    font-size: 0.875rem;
     font-weight: 500;
   }
 
-  .otp-input {
+  .auth-otp-input {
     text-align: center;
     letter-spacing: 0.5em;
-    font-size: var(--text-lg);
+    font-size: 1.125rem;
     font-weight: 600;
   }
 
-  /* ---- Buttons ---- */
+  /* ---- Submit button ---- */
   .auth-submit {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
+    gap: 8px;
     width: 100%;
-    height: 44px;
-    margin-block-start: var(--space-4);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-primary);
-    color: var(--color-text-on-primary);
+    height: 46px;
+    margin-block-start: 20px;
+    padding: 0 20px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover, var(--color-primary)) 100%);
+    color: white;
     border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
+    border-radius: 9999px;
+    font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--transition-fast);
+    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb, 59, 130, 246), 0.25);
+    transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
   }
 
   .auth-submit:hover:not(:disabled) {
-    background: var(--color-primary-hover);
+    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb, 59, 130, 246), 0.35);
+  }
+
+  .auth-submit:active:not(:disabled) {
+    transform: scale(0.985);
   }
 
   .auth-submit:disabled {
@@ -492,13 +525,15 @@
   .auth-back-btn {
     display: block;
     width: 100%;
-    margin-block-start: var(--space-3);
-    padding: var(--space-2);
+    margin-block-start: 12px;
+    padding: 10px;
     background: transparent;
     border: none;
-    color: var(--color-text-secondary);
-    font-size: var(--text-sm);
+    border-radius: 9999px;
+    color: #6b7280;
+    font-size: 0.875rem;
     cursor: pointer;
+    transition: color 0.15s ease;
   }
 
   .auth-back-btn:hover {
@@ -506,81 +541,83 @@
   }
 
   /* ---- Divider ---- */
-  .divider {
+  .auth-divider {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    margin: var(--space-5) 0;
+    gap: 12px;
+    margin: 20px 0;
   }
 
-  .divider::before,
-  .divider::after {
+  .auth-divider::before,
+  .auth-divider::after {
     content: '';
     flex: 1;
     height: 1px;
-    background: var(--color-border);
+    background: rgba(0, 0, 0, 0.08);
   }
 
-  .divider span {
-    font-size: var(--text-sm);
-    color: var(--color-text-tertiary);
+  .auth-divider span {
+    font-size: 0.8125rem;
+    color: #9ca3af;
   }
 
   /* ---- Create account ---- */
-  .create-account-btn {
+  .auth-alt-btn {
     display: flex;
     align-items: center;
     justify-content: center;
     width: 100%;
-    height: 44px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
+    height: 46px;
+    border: 1.5px solid rgba(0, 0, 0, 0.1);
+    border-radius: 9999px;
+    font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-primary);
     text-decoration: none;
-    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    transition: background-color 0.15s ease, border-color 0.15s ease;
   }
 
-  .create-account-btn:hover {
-    background: var(--color-surface);
+  .auth-alt-btn:hover {
+    background: rgba(0, 0, 0, 0.02);
     border-color: var(--color-primary);
   }
 
-  /* ---- New to HS box ---- */
-  .new-to-hs {
-    margin-block-start: var(--space-4);
-    padding: var(--space-5);
+  /* ---- Info card ---- */
+  .auth-info-card {
+    margin-block-start: 16px;
+    padding: 20px 24px;
     background: white;
-    border-radius: var(--radius-xl);
-    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 24px rgba(0, 0, 0, 0.06);
   }
 
-  .new-to-hs-title {
-    font-size: var(--text-sm);
+  .auth-info-title {
+    font-family: 'Manrope', var(--font-sans);
+    font-size: 0.875rem;
     font-weight: 700;
     color: var(--color-text);
-    margin-block-end: var(--space-1);
+    margin-block-end: 4px;
   }
 
-  .new-to-hs-desc {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+  .auth-info-desc {
+    font-size: 0.75rem;
+    color: #6b7280;
     line-height: 1.5;
-    margin-block-end: var(--space-3);
+    margin-block-end: 12px;
   }
 
-  .new-to-hs-link {
+  .auth-info-link {
     display: block;
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     font-weight: 500;
     color: var(--color-primary);
     text-decoration: none;
-    margin-block-end: var(--space-1);
+    margin-block-end: 4px;
+    transition: opacity 0.15s ease;
   }
 
-  .new-to-hs-link:hover {
-    text-decoration: underline;
+  .auth-info-link:hover {
+    opacity: 0.8;
   }
 
   /* ---- Entrance animations ---- */
@@ -606,23 +643,23 @@
     }
   }
 
-  .signin-logo {
+  .auth-logo {
     animation: scaleIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
   }
 
-  .signin-title {
+  .auth-title {
     animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
   }
 
-  .signin-subtitle {
+  .auth-subtitle {
     animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
   }
 
-  .form-field:nth-child(1) {
+  .auth-field:nth-child(1) {
     animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
   }
 
-  .form-field:nth-child(2) {
+  .auth-field:nth-child(2) {
     animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
   }
 
@@ -630,78 +667,48 @@
     animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
   }
 
-  .divider {
+  .auth-divider {
     animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
   }
 
-  .create-account-btn {
+  .auth-alt-btn {
     animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
   }
 
-  .new-to-hs {
+  .auth-info-card {
     animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both;
   }
 
-  /* Interactive hover lift on cards */
-  .signin-card {
+  /* Interactive effects */
+  .auth-card {
     transition: box-shadow 0.3s ease;
   }
 
-  .signin-card:focus-within {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  }
-
-  .new-to-hs {
-    transition: box-shadow 0.3s ease;
-  }
-
-  .new-to-hs:hover {
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-  }
-
-  /* Smooth focus transitions on inputs */
-  .form-input {
-    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
-  }
-
-  .form-input:focus {
-    transform: translateY(-1px);
-  }
-
-  /* Button press effect */
-  .auth-submit:active:not(:disabled) {
-    transform: scale(0.985);
-  }
-
-  .create-account-btn:active {
-    transform: scale(0.985);
+  .auth-card:focus-within {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 8px 32px rgba(0, 0, 0, 0.08);
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .signin-logo,
-    .signin-title,
-    .signin-subtitle,
-    .form-field,
+    .auth-logo,
+    .auth-title,
+    .auth-subtitle,
+    .auth-field,
     .auth-submit,
-    .divider,
-    .create-account-btn,
-    .new-to-hs {
+    .auth-divider,
+    .auth-alt-btn,
+    .auth-info-card {
       animation: none !important;
-    }
-
-    .form-input:focus {
-      transform: none;
     }
   }
 
   /* ---- Spinner ---- */
-  .spinner {
+  .auth-spinner {
     display: inline-block;
     width: 16px;
     height: 16px;
     border: 2px solid currentColor;
     border-inline-end-color: transparent;
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
 

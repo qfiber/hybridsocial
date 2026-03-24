@@ -139,24 +139,31 @@
 </svelte:head>
 
 {#if success}
-  <div>
-    <div class="success-icon" aria-hidden="true">
+  <div class="auth-card">
+    <div class="auth-success-icon" aria-hidden="true">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
         <polyline points="22 4 12 14.01 9 11.01"/>
       </svg>
     </div>
-    <h1 class="auth-title success-title">Check your email</h1>
-    <p class="auth-subtitle">
+    <h1 class="auth-title" style="text-align: center;">Check your email</h1>
+    <p class="auth-subtitle" style="text-align: center;">
       We sent a confirmation link to <strong>{email}</strong>.
       Please check your inbox and click the link to activate your account.
     </p>
     <p class="auth-footer">
-      <a href="/login">Back to login</a>
+      <a href="/login" class="auth-footer-link">Back to login</a>
     </p>
   </div>
 {:else}
-  <div>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg width="40" height="40" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <rect rx="6" width="28" height="28" fill="var(--color-primary)" />
+        <text x="14" y="19.5" text-anchor="middle" fill="white" font-size="15" font-weight="700">H</text>
+      </svg>
+    </div>
+
     <h1 class="auth-title">Create your account</h1>
     <p class="auth-subtitle">Join the conversation</p>
 
@@ -168,15 +175,15 @@
     {/if}
 
     <form onsubmit={handleSubmit} novalidate>
-      <div class="form-field">
-        <label for="handle" class="form-label">Handle</label>
-        <div class="handle-wrapper">
-          <span class="handle-prefix" aria-hidden="true">@</span>
+      <div class="auth-field">
+        <label for="handle" class="auth-label">HANDLE</label>
+        <div class="auth-handle-wrap">
+          <span class="auth-handle-prefix" aria-hidden="true">@</span>
           <input
             id="handle"
             type="text"
-            class="form-input handle-input"
-            class:form-input-error={!!fieldErrors.handle}
+            class="auth-input auth-handle-input"
+            class:auth-input-error={!!fieldErrors.handle}
             placeholder="yourname"
             bind:value={handle}
             required
@@ -186,17 +193,17 @@
           />
         </div>
         {#if fieldErrors.handle}
-          <p class="field-error" role="alert">{fieldErrors.handle}</p>
+          <p class="auth-field-error" role="alert">{fieldErrors.handle}</p>
         {/if}
       </div>
 
-      <div class="form-field">
-        <label for="reg-email" class="form-label">Email</label>
+      <div class="auth-field">
+        <label for="reg-email" class="auth-label">EMAIL</label>
         <input
           id="reg-email"
           type="email"
-          class="form-input"
-          class:form-input-error={!!fieldErrors.email}
+          class="auth-input"
+          class:auth-input-error={!!fieldErrors.email}
           placeholder="you@example.com"
           bind:value={email}
           required
@@ -204,17 +211,17 @@
           autocomplete="email"
         />
         {#if fieldErrors.email}
-          <p class="field-error" role="alert">{fieldErrors.email}</p>
+          <p class="auth-field-error" role="alert">{fieldErrors.email}</p>
         {/if}
       </div>
 
-      <div class="form-field">
-        <label for="reg-password" class="form-label">Password</label>
+      <div class="auth-field">
+        <label for="reg-password" class="auth-label">PASSWORD</label>
         <input
           id="reg-password"
           type="password"
-          class="form-input"
-          class:form-input-error={!!fieldErrors.password}
+          class="auth-input"
+          class:auth-input-error={!!fieldErrors.password}
           placeholder="At least 16 characters"
           bind:value={password}
           required
@@ -223,17 +230,17 @@
           autocomplete="new-password"
         />
         {#if fieldErrors.password}
-          <p class="field-error" role="alert">{fieldErrors.password}</p>
+          <p class="auth-field-error" role="alert">{fieldErrors.password}</p>
         {/if}
       </div>
 
-      <div class="form-field">
-        <label for="reg-password-confirm" class="form-label">Confirm password</label>
+      <div class="auth-field">
+        <label for="reg-password-confirm" class="auth-label">CONFIRM PASSWORD</label>
         <input
           id="reg-password-confirm"
           type="password"
-          class="form-input"
-          class:form-input-error={passwordMismatch}
+          class="auth-input"
+          class:auth-input-error={passwordMismatch}
           placeholder="Repeat your password"
           bind:value={passwordConfirm}
           required
@@ -241,41 +248,41 @@
           autocomplete="new-password"
         />
         {#if passwordMismatch}
-          <p class="field-error" role="alert">Passwords do not match</p>
+          <p class="auth-field-error" role="alert">Passwords do not match</p>
         {/if}
       </div>
 
       {#if turnstileEnabled}
-        <div class="form-field">
+        <div class="auth-field">
           <div bind:this={turnstileContainer}></div>
         </div>
       {/if}
 
-      <div class="form-field checkbox-field">
-        <label class="checkbox-label">
+      <div class="auth-field auth-checkbox-field">
+        <label class="auth-checkbox-label">
           <input
             type="checkbox"
             bind:checked={agreedToTerms}
             disabled={loading}
-            class="checkbox-input"
+            class="auth-checkbox"
           />
-          <span class="checkbox-text">
-            I agree to the <a href="/terms" target="_blank" rel="noopener">Terms of Service</a>
-            and <a href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>
+          <span class="auth-checkbox-text">
+            I agree to the <a href="/terms" target="_blank" rel="noopener" class="auth-link">Terms of Service</a>
+            and <a href="/privacy" target="_blank" rel="noopener" class="auth-link">Privacy Policy</a>
           </span>
         </label>
       </div>
 
       {#if powSolving}
-        <p class="pow-status">
-          <span class="spinner-small" aria-hidden="true"></span>
+        <p class="auth-pow-status">
+          <span class="auth-spinner-small" aria-hidden="true"></span>
           Solving challenge...
         </p>
       {/if}
 
       <button type="submit" class="auth-submit" disabled={loading || !formValid}>
         {#if loading}
-          <span class="spinner" aria-hidden="true"></span>
+          <span class="auth-spinner" aria-hidden="true"></span>
           Creating account...
         {:else}
           Create account
@@ -284,48 +291,58 @@
     </form>
 
     <p class="auth-footer">
-      Already have an account? <a href="/login">Log in</a>
+      Already have an account? <a href="/login" class="auth-footer-link">Log in</a>
     </p>
   </div>
 {/if}
 
 <style>
-  .auth-title {
-    font-size: var(--text-xl);
-    font-weight: var(--font-bold);
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
+  /* ---- Card ---- */
+  .auth-card {
+    background: white;
+    border-radius: 14px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 24px rgba(0, 0, 0, 0.06);
   }
 
-  .success-title {
-    text-align: center;
+  .auth-logo {
+    display: flex;
+    justify-content: center;
+    margin-block-end: 24px;
+  }
+
+  .auth-title {
+    font-family: 'Manrope', var(--font-sans);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-block-end: 4px;
   }
 
   .auth-subtitle {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-6);
-    text-align: start;
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-block-end: 24px;
   }
 
-  .success-icon {
+  .auth-success-icon {
     display: flex;
     justify-content: center;
-    margin-block-end: var(--space-4);
-    color: var(--color-success);
+    margin-block-end: 16px;
+    color: #16a34a;
   }
 
+  /* ---- Error ---- */
   .auth-error {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    margin-block-end: var(--space-4);
-    background: var(--color-danger-light);
-    border: 1px solid var(--color-danger);
-    border-radius: var(--radius-md);
-    color: var(--color-danger);
-    font-size: var(--text-sm);
+    gap: 8px;
+    padding: 12px 16px;
+    margin-block-end: 16px;
+    background: #fef2f2;
+    border-radius: 10px;
+    color: #dc2626;
+    font-size: 0.875rem;
   }
 
   .auth-error-icon {
@@ -334,145 +351,171 @@
     justify-content: center;
     width: 20px;
     height: 20px;
-    border-radius: var(--radius-full);
-    background: var(--color-danger);
+    border-radius: 50%;
+    background: #dc2626;
     color: white;
-    font-size: var(--text-xs);
-    font-weight: var(--font-bold);
+    font-size: 0.75rem;
+    font-weight: 700;
     flex-shrink: 0;
   }
 
-  .form-field {
-    margin-block-end: var(--space-4);
+  /* ---- Fields ---- */
+  .auth-field {
+    margin-block-end: 16px;
   }
 
-  .form-label {
+  .auth-label {
     display: block;
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-block-end: 6px;
+    margin-inline-start: 4px;
   }
 
-  .form-input {
+  .auth-input {
     display: block;
     width: 100%;
-    height: 40px;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
+    height: 46px;
+    padding: 0 16px;
+    background: #e6e8e9;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.875rem;
     color: var(--color-text);
-    background-color: var(--color-bg);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .form-input::placeholder {
-    color: var(--color-text-tertiary);
+  .auth-input::placeholder {
+    color: #9ca3af;
   }
 
-  .form-input:focus {
+  .auth-input:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    background: white;
+    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 59, 130, 246), 0.2);
   }
 
-  .form-input:disabled {
+  .auth-input:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .form-input-error {
-    border-color: var(--color-danger);
+  .auth-input-error {
+    box-shadow: 0 0 0 2px #fca5a5;
   }
 
-  .handle-wrapper {
+  /* ---- Handle ---- */
+  .auth-handle-wrap {
     position: relative;
     display: flex;
     align-items: center;
   }
 
-  .handle-prefix {
+  .auth-handle-prefix {
     position: absolute;
-    inset-inline-start: var(--space-3);
-    color: var(--color-text-tertiary);
-    font-size: var(--text-sm);
+    inset-inline-start: 16px;
+    color: #9ca3af;
+    font-size: 0.875rem;
     pointer-events: none;
   }
 
-  .handle-input {
-    padding-inline-start: var(--space-6);
+  .auth-handle-input {
+    padding-inline-start: 32px;
   }
 
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-danger);
-    margin-block-start: var(--space-1);
+  .auth-field-error {
+    font-size: 0.75rem;
+    color: #dc2626;
+    margin-block-start: 4px;
+    margin-inline-start: 4px;
   }
 
-  .checkbox-field {
-    margin-block-start: var(--space-4);
+  /* ---- Checkbox ---- */
+  .auth-checkbox-field {
+    margin-block-start: 20px;
   }
 
-  .checkbox-label {
+  .auth-checkbox-label {
     display: flex;
     align-items: flex-start;
-    gap: var(--space-2);
+    gap: 10px;
     cursor: pointer;
   }
 
-  .checkbox-input {
+  .auth-checkbox {
     margin-block-start: 2px;
     accent-color: var(--color-primary);
     flex-shrink: 0;
+    width: 16px;
+    height: 16px;
   }
 
-  .checkbox-text {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    line-height: var(--leading-normal);
+  .auth-checkbox-text {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    line-height: 1.5;
   }
 
-  .pow-status {
+  .auth-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .auth-link:hover {
+    opacity: 0.8;
+  }
+
+  /* ---- PoW ---- */
+  .auth-pow-status {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-3);
+    gap: 8px;
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-block-end: 12px;
   }
 
-  .spinner-small {
+  .auth-spinner-small {
     display: inline-block;
     width: 12px;
     height: 12px;
-    border: 2px solid var(--color-text-tertiary);
+    border: 2px solid #9ca3af;
     border-inline-end-color: transparent;
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
 
+  /* ---- Submit button ---- */
   .auth-submit {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
+    gap: 8px;
     width: 100%;
-    height: 44px;
-    margin-block-start: var(--space-4);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
+    height: 46px;
+    margin-block-start: 20px;
+    padding: 0 20px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover, var(--color-primary)) 100%);
+    color: white;
     border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--transition-fast);
+    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb, 59, 130, 246), 0.25);
+    transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
   }
 
   .auth-submit:hover:not(:disabled) {
-    background: var(--color-primary-hover);
+    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb, 59, 130, 246), 0.35);
+  }
+
+  .auth-submit:active:not(:disabled) {
+    transform: scale(0.985);
   }
 
   .auth-submit:disabled {
@@ -480,24 +523,63 @@
     cursor: not-allowed;
   }
 
+  /* ---- Footer ---- */
   .auth-footer {
     text-align: center;
-    margin-block-start: var(--space-6);
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+    margin-block-start: 24px;
+    font-size: 0.875rem;
+    color: #6b7280;
   }
 
-  .spinner {
+  .auth-footer-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .auth-footer-link:hover {
+    opacity: 0.8;
+  }
+
+  /* ---- Spinner ---- */
+  .auth-spinner {
     display: inline-block;
     width: 16px;
     height: 16px;
     border: 2px solid currentColor;
     border-inline-end-color: transparent;
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  /* ---- Entrance animations ---- */
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .auth-card {
+    animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+    transition: box-shadow 0.3s ease;
+  }
+
+  .auth-card:focus-within {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-card {
+      animation: none !important;
+    }
   }
 </style>

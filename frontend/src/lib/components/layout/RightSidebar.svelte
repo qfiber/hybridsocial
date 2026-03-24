@@ -190,23 +190,25 @@
 <style>
   .right-sidebar {
     position: sticky;
-    top: var(--header-height);
-    height: calc(100vh - var(--header-height));
-    padding: var(--space-4);
+    top: calc(var(--header-height) + var(--space-8));
+    height: calc(100vh - var(--header-height) - var(--space-8));
+    padding: var(--space-2) 0;
     overflow-y: auto;
   }
 
   .sidebar-section {
-    margin-block-end: var(--space-6);
-    background: var(--color-surface);
+    margin-block-end: var(--space-4);
+    background: var(--color-surface-container-lowest);
     border-radius: var(--radius-xl);
-    padding: var(--space-4);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
   }
 
   .section-title {
+    font-family: var(--font-headline);
     font-size: var(--text-lg);
     font-weight: 700;
-    color: var(--color-text);
+    color: var(--color-on-surface);
     margin-block-end: var(--space-3);
   }
 
@@ -219,14 +221,17 @@
   .trending-item {
     display: flex;
     flex-direction: column;
-    padding: var(--space-2) 0;
+    padding: var(--space-2) var(--space-3);
+    margin-inline: calc(-1 * var(--space-3));
     text-decoration: none;
-    color: var(--color-text);
-    transition: color var(--transition-fast);
+    color: var(--color-on-surface);
+    border-radius: var(--radius-lg);
+    transition: background var(--transition-fast), color var(--transition-fast);
   }
 
   .trending-item:hover {
     text-decoration: none;
+    background: var(--color-surface-container-low);
     color: var(--color-primary);
   }
 
@@ -237,27 +242,31 @@
 
   .trending-count {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: var(--color-on-surface-variant);
   }
 
   .suggestion-item {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2) 0;
+    padding: var(--space-2) var(--space-3);
+    margin-inline: calc(-1 * var(--space-3));
     text-decoration: none;
-    color: var(--color-text);
+    color: var(--color-on-surface);
+    border-radius: var(--radius-lg);
+    transition: background var(--transition-fast);
   }
 
   .suggestion-item:hover {
     text-decoration: none;
+    background: var(--color-surface-container-low);
   }
 
   .suggestion-avatar {
     width: 36px;
     height: 36px;
     border-radius: var(--radius-full);
-    background: var(--color-primary-soft);
+    background: var(--color-secondary-container);
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -272,6 +281,7 @@
   }
 
   .suggestion-initial {
+    font-family: var(--font-headline);
     font-weight: 600;
     color: var(--color-primary);
     font-size: var(--text-sm);
@@ -300,7 +310,7 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--color-primary);
-    background: var(--color-primary-soft);
+    background: var(--color-secondary-container);
     padding: 1px 5px;
     border-radius: var(--radius-full);
     flex-shrink: 0;
@@ -308,7 +318,7 @@
 
   .suggestion-handle {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: var(--color-on-surface-variant);
   }
 
   .empty-text {
@@ -318,8 +328,7 @@
 
   /* ---- Promote CTA ---- */
   .promo-cta {
-    background: linear-gradient(180deg, #f0fdfa 0%, var(--color-surface) 100%);
-    border: 1px solid var(--color-primary-soft);
+    background: linear-gradient(180deg, var(--color-secondary-container) 0%, var(--color-surface-container-lowest) 100%);
     text-align: center;
   }
 
@@ -329,15 +338,16 @@
   }
 
   .promo-cta-title {
+    font-family: var(--font-headline);
     font-size: var(--text-sm);
     font-weight: 700;
-    color: var(--color-text);
+    color: var(--color-on-surface);
     margin-block-end: var(--space-1);
   }
 
   .promo-cta-text {
     font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    color: var(--color-on-surface-variant);
     line-height: 1.4;
     margin-block-end: var(--space-3);
   }
@@ -346,18 +356,18 @@
     display: block;
     width: 100%;
     padding: var(--space-2) var(--space-3);
-    background: var(--color-primary);
-    color: var(--color-text-on-primary);
+    background: var(--gradient-primary);
+    color: var(--color-on-primary);
     border: none;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-full);
     font-size: var(--text-sm);
     font-weight: 600;
     cursor: pointer;
-    transition: background var(--transition-fast), transform 0.15s ease;
+    transition: box-shadow var(--transition-fast), transform 0.15s ease;
   }
 
   .promo-cta-btn:hover {
-    background: var(--color-primary-hover);
+    box-shadow: var(--shadow-md);
   }
 
   .promo-cta-btn:active {
@@ -368,7 +378,7 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--color-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -378,12 +388,13 @@
   }
 
   .modal-card {
-    background: var(--color-surface-raised);
+    background: var(--color-surface-container-lowest);
     border-radius: var(--radius-xl);
     padding: var(--space-8);
     max-width: 420px;
     width: 100%;
     position: relative;
+    box-shadow: var(--shadow-xl);
     animation: scaleIn 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -406,12 +417,13 @@
     color: var(--color-text-tertiary);
     cursor: pointer;
     padding: var(--space-1);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast), color var(--transition-fast);
   }
 
   .modal-close:hover {
-    color: var(--color-text);
-    background: var(--color-surface);
+    color: var(--color-on-surface);
+    background: var(--color-surface-container-low);
   }
 
   .modal-icon {
@@ -421,16 +433,17 @@
   }
 
   .modal-title {
+    font-family: var(--font-headline);
     font-size: var(--text-xl);
     font-weight: 700;
-    color: var(--color-text);
+    color: var(--color-on-surface);
     text-align: center;
     margin-block-end: var(--space-2);
   }
 
   .modal-desc {
     font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+    color: var(--color-on-surface-variant);
     text-align: center;
     line-height: 1.5;
     margin-block-end: var(--space-5);
@@ -439,20 +452,21 @@
   .modal-pricing {
     text-align: center;
     padding: var(--space-4);
-    background: var(--color-surface);
-    border-radius: var(--radius-lg);
+    background: var(--color-surface-container-low);
+    border-radius: var(--radius-xl);
     margin-block-end: var(--space-5);
   }
 
   .modal-price {
+    font-family: var(--font-headline);
     font-size: var(--text-3xl);
     font-weight: 800;
-    color: var(--color-text);
+    color: var(--color-on-surface);
   }
 
   .modal-period {
     font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+    color: var(--color-on-surface-variant);
   }
 
   .modal-features {
@@ -469,7 +483,7 @@
     align-items: center;
     gap: var(--space-2);
     font-size: var(--text-sm);
-    color: var(--color-text);
+    color: var(--color-on-surface);
   }
 
   .modal-features li svg {
@@ -480,18 +494,18 @@
     display: block;
     width: 100%;
     padding: var(--space-3);
-    background: var(--color-primary);
-    color: var(--color-text-on-primary);
+    background: var(--gradient-primary);
+    color: var(--color-on-primary);
     border: none;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-full);
     font-size: var(--text-base);
     font-weight: 600;
     cursor: pointer;
-    transition: background var(--transition-fast), transform 0.15s ease;
+    transition: box-shadow var(--transition-fast), transform 0.15s ease;
   }
 
   .modal-buy-btn:hover {
-    background: var(--color-primary-hover);
+    box-shadow: var(--shadow-md);
   }
 
   .modal-buy-btn:active {
@@ -507,7 +521,7 @@
 
   /* ---- Footer ---- */
   .sidebar-footer {
-    padding: 0;
+    padding: var(--space-4) var(--space-2) 0;
   }
 
   .footer-links {
@@ -538,7 +552,7 @@
     color: var(--color-text-tertiary);
   }
 
-  @media (max-width: 1200px) {
+  @media (max-width: 1280px) {
     .right-sidebar {
       display: none;
     }

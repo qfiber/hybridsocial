@@ -81,22 +81,29 @@
   <title>Reset password - HybridSocial</title>
 </svelte:head>
 
-<div>
+<div class="auth-card">
   {#if step === 'done'}
-    <div class="success-icon" aria-hidden="true">
+    <div class="auth-success-icon" aria-hidden="true">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
         <polyline points="22 4 12 14.01 9 11.01"/>
       </svg>
     </div>
-    <h1 class="auth-title success-title">Password reset</h1>
-    <p class="auth-subtitle success-subtitle">
+    <h1 class="auth-title" style="text-align: center;">Password reset</h1>
+    <p class="auth-subtitle" style="text-align: center;">
       Your password has been reset successfully. You can now log in with your new password.
     </p>
     <a href="/login" class="auth-submit" style="text-decoration: none; text-align: center;">
       Back to login
     </a>
   {:else if step === 'request'}
+    <div class="auth-logo">
+      <svg width="40" height="40" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <rect rx="6" width="28" height="28" fill="var(--color-primary)" />
+        <text x="14" y="19.5" text-anchor="middle" fill="white" font-size="15" font-weight="700">H</text>
+      </svg>
+    </div>
+
     <h1 class="auth-title">Reset your password</h1>
     <p class="auth-subtitle">Enter your email and we'll send you a reset link</p>
 
@@ -114,12 +121,12 @@
     {/if}
 
     <form onsubmit={handleRequestReset} novalidate>
-      <div class="form-field">
-        <label for="reset-email" class="form-label">Email</label>
+      <div class="auth-field">
+        <label for="reset-email" class="auth-label">EMAIL</label>
         <input
           id="reset-email"
           type="email"
-          class="form-input"
+          class="auth-input"
           placeholder="you@example.com"
           bind:value={email}
           required
@@ -130,7 +137,7 @@
 
       <button type="submit" class="auth-submit" disabled={loading || !email}>
         {#if loading}
-          <span class="spinner" aria-hidden="true"></span>
+          <span class="auth-spinner" aria-hidden="true"></span>
           Sending...
         {:else}
           Send reset link
@@ -139,15 +146,22 @@
     </form>
 
     <p class="auth-footer">
-      Remember your password? <a href="/login">Log in</a>
+      Remember your password? <a href="/login" class="auth-footer-link">Log in</a>
     </p>
 
     {#if emailSent}
-      <p class="auth-footer" style="margin-block-start: var(--space-2);">
-        Have a token? <button type="button" class="inline-link" onclick={() => { step = 'reset'; }}>Enter it here</button>
+      <p class="auth-footer" style="margin-block-start: 8px;">
+        Have a token? <button type="button" class="auth-inline-link" onclick={() => { step = 'reset'; }}>Enter it here</button>
       </p>
     {/if}
   {:else}
+    <div class="auth-logo">
+      <svg width="40" height="40" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <rect rx="6" width="28" height="28" fill="var(--color-primary)" />
+        <text x="14" y="19.5" text-anchor="middle" fill="white" font-size="15" font-weight="700">H</text>
+      </svg>
+    </div>
+
     <h1 class="auth-title">Set new password</h1>
     <p class="auth-subtitle">Enter your reset token and a new password</p>
 
@@ -160,12 +174,12 @@
 
     <form onsubmit={handleResetPassword} novalidate>
       {#if !tokenFromUrl}
-        <div class="form-field">
-          <label for="reset-token" class="form-label">Reset token</label>
+        <div class="auth-field">
+          <label for="reset-token" class="auth-label">RESET TOKEN</label>
           <input
             id="reset-token"
             type="text"
-            class="form-input"
+            class="auth-input"
             placeholder="Paste the token from your email"
             bind:value={token}
             required
@@ -174,12 +188,12 @@
         </div>
       {/if}
 
-      <div class="form-field">
-        <label for="new-password" class="form-label">New password</label>
+      <div class="auth-field">
+        <label for="new-password" class="auth-label">NEW PASSWORD</label>
         <input
           id="new-password"
           type="password"
-          class="form-input"
+          class="auth-input"
           placeholder="At least 16 characters"
           bind:value={newPassword}
           required
@@ -189,13 +203,13 @@
         />
       </div>
 
-      <div class="form-field">
-        <label for="confirm-new-password" class="form-label">Confirm new password</label>
+      <div class="auth-field">
+        <label for="confirm-new-password" class="auth-label">CONFIRM NEW PASSWORD</label>
         <input
           id="confirm-new-password"
           type="password"
-          class="form-input"
-          class:form-input-error={passwordMismatch}
+          class="auth-input"
+          class:auth-input-error={passwordMismatch}
           placeholder="Repeat your new password"
           bind:value={confirmPassword}
           required
@@ -203,7 +217,7 @@
           autocomplete="new-password"
         />
         {#if passwordMismatch}
-          <p class="field-error" role="alert">Passwords do not match</p>
+          <p class="auth-field-error" role="alert">Passwords do not match</p>
         {/if}
       </div>
 
@@ -213,7 +227,7 @@
         disabled={loading || !token || !newPassword || passwordMismatch}
       >
         {#if loading}
-          <span class="spinner" aria-hidden="true"></span>
+          <span class="auth-spinner" aria-hidden="true"></span>
           Resetting...
         {:else}
           Reset password
@@ -222,51 +236,58 @@
     </form>
 
     <p class="auth-footer">
-      <a href="/login">Back to login</a>
+      <a href="/login" class="auth-footer-link">Back to login</a>
     </p>
   {/if}
 </div>
 
 <style>
-  .auth-title {
-    font-size: var(--text-xl);
-    font-weight: var(--font-bold);
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
+  /* ---- Card ---- */
+  .auth-card {
+    background: white;
+    border-radius: 14px;
+    padding: 32px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 24px rgba(0, 0, 0, 0.06);
   }
 
-  .success-title {
-    text-align: center;
+  .auth-logo {
+    display: flex;
+    justify-content: center;
+    margin-block-end: 24px;
+  }
+
+  .auth-title {
+    font-family: 'Manrope', var(--font-sans);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-block-end: 4px;
   }
 
   .auth-subtitle {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-6);
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-block-end: 24px;
   }
 
-  .success-subtitle {
-    text-align: center;
-  }
-
-  .success-icon {
+  .auth-success-icon {
     display: flex;
     justify-content: center;
-    margin-block-end: var(--space-4);
-    color: var(--color-success);
+    margin-block-end: 16px;
+    color: #16a34a;
   }
 
+  /* ---- Error / Success ---- */
   .auth-error {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    margin-block-end: var(--space-4);
-    background: var(--color-danger-light);
-    border: 1px solid var(--color-danger);
-    border-radius: var(--radius-md);
-    color: var(--color-danger);
-    font-size: var(--text-sm);
+    gap: 8px;
+    padding: 12px 16px;
+    margin-block-end: 16px;
+    background: #fef2f2;
+    border-radius: 10px;
+    color: #dc2626;
+    font-size: 0.875rem;
   }
 
   .auth-error-icon {
@@ -275,95 +296,105 @@
     justify-content: center;
     width: 20px;
     height: 20px;
-    border-radius: var(--radius-full);
-    background: var(--color-danger);
+    border-radius: 50%;
+    background: #dc2626;
     color: white;
-    font-size: var(--text-xs);
-    font-weight: var(--font-bold);
+    font-size: 0.75rem;
+    font-weight: 700;
     flex-shrink: 0;
   }
 
   .auth-success {
-    padding: var(--space-3);
-    margin-block-end: var(--space-4);
-    background: var(--color-success-light);
-    border: 1px solid var(--color-success);
-    border-radius: var(--radius-md);
-    color: var(--color-success);
-    font-size: var(--text-sm);
+    padding: 12px 16px;
+    margin-block-end: 16px;
+    background: #f0fdf4;
+    border-radius: 10px;
+    color: #16a34a;
+    font-size: 0.875rem;
   }
 
-  .form-field {
-    margin-block-end: var(--space-4);
+  /* ---- Fields ---- */
+  .auth-field {
+    margin-block-end: 16px;
   }
 
-  .form-label {
+  .auth-label {
     display: block;
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #6b7280;
+    margin-block-end: 6px;
+    margin-inline-start: 4px;
   }
 
-  .form-input {
+  .auth-input {
     display: block;
     width: 100%;
-    height: 40px;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
+    height: 46px;
+    padding: 0 16px;
+    background: #e6e8e9;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.875rem;
     color: var(--color-text);
-    background-color: var(--color-bg);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
   }
 
-  .form-input::placeholder {
-    color: var(--color-text-tertiary);
+  .auth-input::placeholder {
+    color: #9ca3af;
   }
 
-  .form-input:focus {
+  .auth-input:focus {
     outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
+    background: white;
+    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 59, 130, 246), 0.2);
   }
 
-  .form-input:disabled {
+  .auth-input:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
 
-  .form-input-error {
-    border-color: var(--color-danger);
+  .auth-input-error {
+    box-shadow: 0 0 0 2px #fca5a5;
   }
 
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-danger);
-    margin-block-start: var(--space-1);
+  .auth-field-error {
+    font-size: 0.75rem;
+    color: #dc2626;
+    margin-block-start: 4px;
+    margin-inline-start: 4px;
   }
 
+  /* ---- Submit button ---- */
   .auth-submit {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--space-2);
+    gap: 8px;
     width: 100%;
-    height: 44px;
-    margin-block-start: var(--space-4);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-primary);
-    color: var(--color-text-inverse);
+    height: 46px;
+    margin-block-start: 20px;
+    padding: 0 20px;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-hover, var(--color-primary)) 100%);
+    color: white;
     border: none;
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--transition-fast);
+    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb, 59, 130, 246), 0.25);
+    transition: box-shadow 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
   }
 
   .auth-submit:hover:not(:disabled) {
-    background: var(--color-primary-hover);
+    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb, 59, 130, 246), 0.35);
+  }
+
+  .auth-submit:active:not(:disabled) {
+    transform: scale(0.985);
   }
 
   .auth-submit:disabled {
@@ -371,34 +402,74 @@
     cursor: not-allowed;
   }
 
+  /* ---- Footer ---- */
   .auth-footer {
     text-align: center;
-    margin-block-start: var(--space-6);
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+    margin-block-start: 24px;
+    font-size: 0.875rem;
+    color: #6b7280;
   }
 
-  .inline-link {
+  .auth-footer-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .auth-footer-link:hover {
+    opacity: 0.8;
+  }
+
+  .auth-inline-link {
     background: none;
     border: none;
     color: var(--color-primary);
     font-size: inherit;
     cursor: pointer;
     padding: 0;
+    font-weight: 500;
     text-decoration: underline;
   }
 
-  .spinner {
+  /* ---- Spinner ---- */
+  .auth-spinner {
     display: inline-block;
     width: 16px;
     height: 16px;
     border: 2px solid currentColor;
     border-inline-end-color: transparent;
-    border-radius: var(--radius-full);
+    border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  /* ---- Entrance animations ---- */
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .auth-card {
+    animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+    transition: box-shadow 0.3s ease;
+  }
+
+  .auth-card:focus-within {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .auth-card {
+      animation: none !important;
+    }
   }
 </style>

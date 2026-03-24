@@ -198,14 +198,12 @@
   <!-- Reply -->
   <button
     type="button"
-    class="action-btn"
+    class="action-btn action-reply"
     onclick={handleReply}
     onkeydown={(e) => handleActionKeydown(e, () => handleReply(new MouseEvent('click')))}
     aria-label="Reply ({replyCount})"
   >
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
+    <span class="material-symbols-outlined action-icon">chat_bubble</span>
     {#if replyCount > 0}
       <span class="action-count">{replyCount}</span>
     {/if}
@@ -214,28 +212,23 @@
   <!-- Boost -->
   <button
     type="button"
-    class="action-btn"
+    class="action-btn action-boost"
     class:active-boost={isBoosted}
     onclick={handleBoost}
     aria-label="{isBoosted ? 'Undo boost' : 'Boost'} ({boostCount})"
     aria-pressed={isBoosted}
   >
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-      <polyline points="17 1 21 5 17 9"/>
-      <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-      <polyline points="7 23 3 19 7 15"/>
-      <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-    </svg>
+    <span class="material-symbols-outlined action-icon">cached</span>
     {#if boostCount > 0}
       <span class="action-count">{boostCount}</span>
     {/if}
   </button>
 
-  <!-- Reaction -->
+  <!-- Reaction / Like -->
   <div class="action-reaction-wrapper">
     <button
       type="button"
-      class="action-btn"
+      class="action-btn action-like"
       class:active-reaction={currentReaction !== null}
       class:bounce={bounceReaction}
       onclick={toggleReactionPicker}
@@ -245,12 +238,7 @@
       {#if currentReaction}
         <span class="current-reaction">{currentReaction}</span>
       {:else}
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/>
-          <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-          <line x1="9" y1="9" x2="9.01" y2="9"/>
-          <line x1="15" y1="9" x2="15.01" y2="9"/>
-        </svg>
+        <span class="material-symbols-outlined action-icon">favorite</span>
       {/if}
       {#if reactionCount > 0}
         <span class="action-count">{reactionCount}</span>
@@ -267,40 +255,41 @@
     {/if}
   </div>
 
-  <!-- More menu -->
+  <!-- Share -->
   <div class="action-more-wrapper">
     <button
       type="button"
-      class="action-btn"
+      class="action-btn action-share"
       onclick={toggleMoreMenu}
       aria-label="More actions"
       aria-expanded={showMoreMenu}
       aria-haspopup="menu"
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <circle cx="12" cy="12" r="1"/>
-        <circle cx="19" cy="12" r="1"/>
-        <circle cx="5" cy="12" r="1"/>
-      </svg>
+      <span class="material-symbols-outlined action-icon">share</span>
     </button>
 
     {#if showMoreMenu}
       <div class="more-menu" role="menu">
         <button type="button" class="more-menu-item" role="menuitem" onclick={handleCopyLink}>
+          <span class="material-symbols-outlined menu-icon">link</span>
           Copy link
         </button>
         <button type="button" class="more-menu-item" role="menuitem" onclick={handleBookmark}>
+          <span class="material-symbols-outlined menu-icon">{post.is_bookmarked ? 'bookmark_remove' : 'bookmark'}</span>
           {post.is_bookmarked ? 'Remove bookmark' : 'Bookmark'}
         </button>
         {#if isOwnPost()}
           <button type="button" class="more-menu-item" role="menuitem" onclick={handleEdit}>
+            <span class="material-symbols-outlined menu-icon">edit</span>
             Edit
           </button>
           <button type="button" class="more-menu-item more-menu-danger" role="menuitem" onclick={handleDelete}>
+            <span class="material-symbols-outlined menu-icon">delete</span>
             Delete
           </button>
         {:else}
           <button type="button" class="more-menu-item more-menu-danger" role="menuitem" onclick={handleReport}>
+            <span class="material-symbols-outlined menu-icon">flag</span>
             Report
           </button>
         {/if}
@@ -310,23 +299,23 @@
 </div>
 
 {#if showDeleteConfirm}
-  <div class="delete-overlay" onclick={cancelDelete} role="dialog" aria-modal="true" aria-label="Confirm delete">
-    <div class="delete-dialog" onclick={(e) => e.stopPropagation()}>
-      <h3 class="delete-title">Delete post?</h3>
-      <p class="delete-message">This action cannot be undone. The post will be permanently removed.</p>
-      <div class="delete-actions">
-        <button type="button" class="delete-cancel" onclick={cancelDelete}>Cancel</button>
-        <button type="button" class="delete-confirm" onclick={confirmDelete}>Delete</button>
+  <div class="dialog-overlay" onclick={cancelDelete} role="dialog" aria-modal="true" aria-label="Confirm delete">
+    <div class="dialog-panel" onclick={(e) => e.stopPropagation()}>
+      <h3 class="dialog-title">Delete post?</h3>
+      <p class="dialog-message">This action cannot be undone. The post will be permanently removed.</p>
+      <div class="dialog-actions">
+        <button type="button" class="dialog-cancel" onclick={cancelDelete}>Cancel</button>
+        <button type="button" class="dialog-confirm-danger" onclick={confirmDelete}>Delete</button>
       </div>
     </div>
   </div>
 {/if}
 
 {#if showReportModal}
-  <div class="delete-overlay" onclick={cancelReport} role="dialog" aria-modal="true" aria-label="Report post">
-    <div class="delete-dialog" onclick={(e) => e.stopPropagation()}>
-      <h3 class="delete-title">Report post</h3>
-      <p class="delete-message">Why are you reporting this post?</p>
+  <div class="dialog-overlay" onclick={cancelReport} role="dialog" aria-modal="true" aria-label="Report post">
+    <div class="dialog-panel" onclick={(e) => e.stopPropagation()}>
+      <h3 class="dialog-title">Report post</h3>
+      <p class="dialog-message">Why are you reporting this post?</p>
 
       <div class="report-form">
         <label class="report-label" for="report-category">Category</label>
@@ -350,9 +339,9 @@
         {/if}
       </div>
 
-      <div class="delete-actions">
-        <button type="button" class="delete-cancel" onclick={cancelReport}>Cancel</button>
-        <button type="button" class="delete-confirm" onclick={submitReport} disabled={reportSubmitting}>
+      <div class="dialog-actions">
+        <button type="button" class="dialog-cancel" onclick={cancelReport}>Cancel</button>
+        <button type="button" class="dialog-confirm-danger" onclick={submitReport} disabled={reportSubmitting}>
           {reportSubmitting ? 'Submitting...' : 'Submit report'}
         </button>
       </div>
@@ -361,150 +350,37 @@
 {/if}
 
 <style>
-  .delete-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 9999;
-    animation: overlay-in 0.15s ease;
-  }
-
-  @keyframes overlay-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
-  @keyframes dialog-in {
-    from { opacity: 0; transform: scale(0.95) translateY(4px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
-  }
-
-  .delete-dialog {
-    background: var(--color-surface-raised, #fff);
-    border-radius: var(--radius-xl, 1rem);
-    padding: var(--space-6, 1.5rem);
-    max-width: 400px;
-    width: 90%;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-    animation: dialog-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .delete-title {
-    font-size: var(--text-lg, 1.125rem);
-    font-weight: 600;
-    margin-block-end: var(--space-2, 0.5rem);
-  }
-
-  .delete-message {
-    font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text-secondary, #64748b);
-    margin-block-end: var(--space-4, 1rem);
-  }
-
-  .delete-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-3, 0.75rem);
-  }
-
-  .delete-cancel {
-    padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
-    border: 1px solid var(--color-border, #e2e8f0);
-    border-radius: var(--radius-md, 0.5rem);
-    background: transparent;
-    color: var(--color-text, #0f172a);
-    font-size: var(--text-sm, 0.875rem);
-    cursor: pointer;
-  }
-
-  .delete-confirm {
-    padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
-    border: none;
-    border-radius: var(--radius-md, 0.5rem);
-    background: var(--color-danger, #ef4444);
-    color: white;
-    font-size: var(--text-sm, 0.875rem);
-    font-weight: 600;
-    cursor: pointer;
-  }
-
-  .delete-confirm:hover {
-    opacity: 0.9;
-  }
-
-  .delete-confirm:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .report-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2, 0.5rem);
-    margin-block-end: var(--space-4, 1rem);
-  }
-
-  .report-label {
-    font-size: var(--text-sm, 0.875rem);
-    font-weight: 500;
-    color: var(--color-text, #0f172a);
-  }
-
-  .report-select {
-    padding: var(--space-2, 0.5rem);
-    border: 1px solid var(--color-border, #e2e8f0);
-    border-radius: var(--radius-md, 0.5rem);
-    font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text, #0f172a);
-    background: var(--color-bg, #fff);
-  }
-
-  .report-textarea {
-    padding: var(--space-2, 0.5rem);
-    border: 1px solid var(--color-border, #e2e8f0);
-    border-radius: var(--radius-md, 0.5rem);
-    font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text, #0f172a);
-    background: var(--color-bg, #fff);
-    resize: vertical;
-    font-family: inherit;
-  }
-
-  .report-error {
-    font-size: var(--text-sm, 0.875rem);
-    color: var(--color-danger, #ef4444);
-  }
-
+  /* ---- Action Bar ---- */
   .post-actions {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
-    padding-inline-start: calc(40px + var(--space-3));
-    margin-block-start: var(--space-3);
+    justify-content: space-between;
+    max-width: 28rem;
+    padding-block-start: 8px;
   }
 
   .action-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1) var(--space-2);
+    gap: 6px;
+    padding: 6px 8px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-md);
-    color: var(--color-text-tertiary);
-    font-size: var(--text-sm);
+    border-radius: 9999px;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
     cursor: pointer;
-    transition: color var(--transition-fast), background-color var(--transition-fast);
+    transition: color 150ms ease, transform 150ms ease;
     line-height: 1;
   }
 
-  .action-btn:hover {
-    background: var(--color-bg-tertiary);
-    color: var(--color-text-secondary);
+  .action-icon {
+    font-size: 20px;
+    transition: transform 150ms ease, color 150ms ease;
+  }
+
+  .action-btn:hover .action-icon {
+    transform: scale(1.1);
   }
 
   .action-btn:focus-visible {
@@ -512,25 +388,41 @@
     outline-offset: 1px;
   }
 
-  .active-boost {
-    color: #0d9488;
+  /* Reply hover */
+  .action-reply:hover {
+    color: var(--color-primary);
   }
 
-  .active-boost:hover {
-    color: #0d9488;
+  /* Boost hover + active */
+  .action-boost:hover {
+    color: var(--color-primary);
+  }
+
+  .active-boost {
+    color: var(--color-primary);
+  }
+
+  /* Like hover + active */
+  .action-like:hover {
+    color: #ef4444;
   }
 
   .active-reaction {
+    color: #ef4444;
+  }
+
+  /* Share hover */
+  .action-share:hover {
     color: var(--color-primary);
   }
 
   .action-count {
     font-size: var(--text-xs);
-    font-weight: var(--font-medium);
+    font-weight: 500;
   }
 
   .current-reaction {
-    font-size: var(--text-base);
+    font-size: 1.125rem;
     line-height: 1;
   }
 
@@ -555,52 +447,191 @@
     inset-block-end: 100%;
     inset-inline-start: 50%;
     transform: translateX(-50%);
-    margin-block-end: var(--space-2);
+    margin-block-end: 8px;
     z-index: var(--z-dropdown);
   }
 
   .action-more-wrapper {
     position: relative;
-    margin-inline-start: auto;
   }
 
+  /* ---- More Menu ---- */
   .more-menu {
     position: absolute;
     inset-block-start: 100%;
     inset-inline-end: 0;
-    margin-block-start: var(--space-1);
-    min-width: 180px;
-    background: var(--color-surface);
+    margin-block-start: 4px;
+    min-width: 200px;
+    background: var(--color-surface-container-lowest);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    padding: var(--space-1);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    padding: 6px;
     z-index: var(--z-dropdown);
   }
 
   .more-menu-item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    padding: var(--space-2) var(--space-3);
+    padding: 10px 14px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+    border-radius: 10px;
+    font-size: 0.875rem;
     color: var(--color-text);
     cursor: pointer;
     text-align: start;
-    transition: background-color var(--transition-fast);
+    transition: background-color 150ms ease;
+  }
+
+  .menu-icon {
+    font-size: 18px;
+    color: var(--color-text-secondary);
   }
 
   .more-menu-item:hover {
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
   }
 
   .more-menu-danger {
     color: var(--color-danger);
   }
 
+  .more-menu-danger .menu-icon {
+    color: var(--color-danger);
+  }
+
   .more-menu-danger:hover {
-    background: var(--color-danger-light);
+    background: var(--color-danger-soft);
+  }
+
+  /* ---- Dialog Overlay ---- */
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: overlay-in 0.15s ease;
+  }
+
+  @keyframes overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes dialog-in {
+    from { opacity: 0; transform: scale(0.95) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .dialog-panel {
+    background: var(--color-surface-container-lowest);
+    border-radius: 18px;
+    padding: 28px;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    animation: dialog-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .dialog-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    margin-block-end: 8px;
+  }
+
+  .dialog-message {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-block-end: 20px;
+    line-height: 1.5;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+  }
+
+  .dialog-cancel {
+    padding: 8px 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    background: transparent;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+
+  .dialog-cancel:hover {
+    background: var(--color-surface);
+  }
+
+  .dialog-confirm-danger {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 9999px;
+    background: var(--color-danger);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 150ms ease;
+  }
+
+  .dialog-confirm-danger:hover {
+    opacity: 0.9;
+  }
+
+  .dialog-confirm-danger:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ---- Report Form ---- */
+  .report-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-block-end: 20px;
+  }
+
+  .report-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .report-select {
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    background: var(--color-surface-container-lowest);
+  }
+
+  .report-textarea {
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    background: var(--color-surface-container-lowest);
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .report-error {
+    font-size: 0.875rem;
+    color: var(--color-danger);
   }
 </style>

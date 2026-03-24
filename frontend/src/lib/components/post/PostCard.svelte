@@ -144,7 +144,8 @@
   onkeydown={handleCardKeydown}
   aria-label="Post by {displayName}"
 >
-  <div class="post-header">
+  <div class="post-layout">
+    <!-- Avatar column -->
     <div class="post-avatar">
       {#if avatarUrl}
         <img src={avatarUrl} alt="" class="avatar-img" loading="lazy" />
@@ -155,211 +156,209 @@
       {/if}
     </div>
 
-    <div class="post-meta">
+    <!-- Content column -->
+    <div class="post-content-col">
       <div class="post-author-line">
-        <a href="/@{post.account.handle}" class="post-display-name">{displayName}</a>
-        {#if (post.account as any).verified}
-          <VerifiedBadge size="sm" />
-        {/if}
-        {#if (post.account as any).badges}
-          {#each (post.account as any).badges as badge (badge.type)}
-            <RoleBadge type={badge.type} label={badge.label} size="sm" />
-          {/each}
-        {/if}
-        <span class="post-handle">{handle}</span>
-        <span class="post-separator" aria-hidden="true">&middot;</span>
-        <time class="post-time" datetime={post.created_at} title={fullDate}>
-          {timeAgo}
-        </time>
-        {#if post.edited_at}
-          <span class="post-edited" title="Edited {fullDateTime(post.edited_at)}">
-            (edited)
+        <div class="post-author-info">
+          <a href="/@{post.account.handle}" class="post-display-name">{displayName}</a>
+          {#if (post.account as any).verified}
+            <VerifiedBadge size="sm" />
+          {/if}
+          {#if (post.account as any).badges}
+            {#each (post.account as any).badges as badge (badge.type)}
+              <RoleBadge type={badge.type} label={badge.label} size="sm" />
+            {/each}
+          {/if}
+          <span class="post-handle-time">
+            <span class="post-handle">{handle}</span>
+            <span class="post-dot" aria-hidden="true">&middot;</span>
+            <time class="post-time" datetime={post.created_at} title={fullDate}>{timeAgo}</time>
+            {#if post.edited_at}
+              <span class="post-edited" title="Edited {fullDateTime(post.edited_at)}">(edited)</span>
+            {/if}
           </span>
-        {/if}
+        </div>
       </div>
 
       {#if post.parent_id}
         <div class="post-reply-indicator">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <polyline points="9 14 4 9 9 4"/>
-            <path d="M20 20v-7a4 4 0 0 0-4-4H4"/>
-          </svg>
+          <span class="material-symbols-outlined reply-icon" aria-hidden="true">reply</span>
           <span>replying to a post</span>
         </div>
       {/if}
-    </div>
-  </div>
 
-  <div class="post-body">
-    {#if post.sensitive && post.spoiler_text}
-      <div class="post-cw">
-        <span class="cw-label">CW</span>
-        <span class="cw-text">{post.spoiler_text}</span>
-        <button
-          type="button"
-          class="cw-toggle"
-          onclick={(e) => { e.stopPropagation(); showSensitive = !showSensitive; }}
-          aria-expanded={showSensitive}
-        >
-          {showSensitive ? 'Show less' : 'Show more'}
-        </button>
-      </div>
-    {/if}
-
-    {#if !post.sensitive || showSensitive || !post.spoiler_text}
-      {#if editing}
-        <div class="edit-form">
-          <textarea
-            class="edit-textarea"
-            bind:value={editContent}
-            rows="4"
-            aria-label="Edit post content"
-          ></textarea>
-          {#if editError}
-            <p class="edit-error">{editError}</p>
-          {/if}
-          <div class="edit-actions">
-            <button type="button" class="edit-cancel" onclick={cancelEdit}>Cancel</button>
-            <button type="button" class="edit-save" onclick={saveEdit} disabled={editSaving || !editContent.trim()}>
-              {editSaving ? 'Saving...' : 'Save'}
-            </button>
-          </div>
-        </div>
-      {:else if post.content_html}
-        <div class="post-content">
-          {@html post.content_html}
-        </div>
-      {:else if post.content}
-        <div class="post-content">
-          <p>{post.content}</p>
-        </div>
-      {/if}
-
-      {#if mediaCount > 0 && !compact}
-        <div class="media-grid {mediaGridClass}">
-          {#each mediaAttachments as media (media.id)}
-            {#if media.type === 'image' || media.type === 'gifv'}
-              <div class="media-item">
-                <img
-                  src={media.preview_url || media.url}
-                  alt={media.description || ''}
-                  class="media-img"
-                  loading="lazy"
-                />
-              </div>
-            {:else if media.type === 'video'}
-              <div class="media-item">
-                <video
-                  src={media.url}
-                  controls
-                  preload="metadata"
-                  class="media-video"
-                  aria-label={media.description || 'Video attachment'}
-                >
-                  <track kind="captions" />
-                </video>
-              </div>
-            {:else if media.type === 'audio'}
-              <div class="media-item media-audio">
-                <audio
-                  src={media.url}
-                  controls
-                  preload="metadata"
-                  aria-label={media.description || 'Audio attachment'}
-                ></audio>
-              </div>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-
-      {#if post.poll && !compact}
-        <div class="post-poll">
-          {#each pollOptions as option, i (i)}
-            {#if showPollResults}
-              <div class="poll-option poll-result">
-                <div class="poll-bar" style="width: {pollVotesCount > 0 ? (option.votes_count / pollVotesCount * 100) : 0}%"></div>
-                <span class="poll-label">
-                  {#if pollOwnVotes.includes(i)}
-                    <span class="poll-voted-check" aria-label="Your vote">&#10003;</span>
-                  {/if}
-                  {option.title}
-                </span>
-                <span class="poll-pct">
-                  {pollVotesCount > 0 ? Math.round(option.votes_count / pollVotesCount * 100) : 0}%
-                </span>
-              </div>
-            {:else}
-              <button
-                type="button"
-                class="poll-option poll-votable"
-                class:poll-selected={selectedPollOptions.includes(i)}
-                onclick={(e) => { e.stopPropagation(); togglePollOption(i); }}
-              >
-                <span class="poll-check-indicator">
-                  {#if post.poll?.multiple}
-                    {#if selectedPollOptions.includes(i)}&#9632;{:else}&#9633;{/if}
-                  {:else}
-                    {#if selectedPollOptions.includes(i)}&#9679;{:else}&#9675;{/if}
-                  {/if}
-                </span>
-                <span class="poll-label">{option.title}</span>
-              </button>
-            {/if}
-          {/each}
-
-          {#if !showPollResults && selectedPollOptions.length > 0}
+      <!-- Post body -->
+      <div class="post-body">
+        {#if post.sensitive && post.spoiler_text}
+          <div class="post-cw">
+            <span class="cw-label">CW</span>
+            <span class="cw-text">{post.spoiler_text}</span>
             <button
               type="button"
-              class="poll-vote-btn"
-              onclick={(e) => { e.stopPropagation(); submitPollVote(); }}
-              disabled={pollVoting}
+              class="cw-toggle"
+              onclick={(e) => { e.stopPropagation(); showSensitive = !showSensitive; }}
+              aria-expanded={showSensitive}
             >
-              {pollVoting ? 'Voting...' : 'Vote'}
+              {showSensitive ? 'Show less' : 'Show more'}
             </button>
+          </div>
+        {/if}
+
+        {#if !post.sensitive || showSensitive || !post.spoiler_text}
+          {#if editing}
+            <div class="edit-form">
+              <textarea
+                class="edit-textarea"
+                bind:value={editContent}
+                rows="4"
+                aria-label="Edit post content"
+              ></textarea>
+              {#if editError}
+                <p class="edit-error">{editError}</p>
+              {/if}
+              <div class="edit-actions">
+                <button type="button" class="edit-cancel" onclick={cancelEdit}>Cancel</button>
+                <button type="button" class="edit-save" onclick={saveEdit} disabled={editSaving || !editContent.trim()}>
+                  {editSaving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          {:else if post.content_html}
+            <div class="post-content">
+              {@html post.content_html}
+            </div>
+          {:else if post.content}
+            <div class="post-content">
+              <p>{post.content}</p>
+            </div>
           {/if}
 
-          <div class="poll-info">
-            {pollVotersCount} {pollVotersCount === 1 ? 'voter' : 'voters'}
-            &middot; {pollVotesCount} {pollVotesCount === 1 ? 'vote' : 'votes'}
-            {#if post.poll.expires_at && !pollExpired}
-              &middot; ends {relativeTime(post.poll.expires_at)}
-            {:else if pollExpired}
-              &middot; closed
-            {/if}
-          </div>
+          {#if mediaCount > 0 && !compact}
+            <div class="media-grid {mediaGridClass}">
+              {#each mediaAttachments as media (media.id)}
+                {#if media.type === 'image' || media.type === 'gifv'}
+                  <div class="media-item">
+                    <img
+                      src={media.preview_url || media.url}
+                      alt={media.description || ''}
+                      class="media-img"
+                      loading="lazy"
+                    />
+                  </div>
+                {:else if media.type === 'video'}
+                  <div class="media-item">
+                    <video
+                      src={media.url}
+                      controls
+                      preload="metadata"
+                      class="media-video"
+                      aria-label={media.description || 'Video attachment'}
+                    >
+                      <track kind="captions" />
+                    </video>
+                  </div>
+                {:else if media.type === 'audio'}
+                  <div class="media-item media-audio">
+                    <audio
+                      src={media.url}
+                      controls
+                      preload="metadata"
+                      aria-label={media.description || 'Audio attachment'}
+                    ></audio>
+                  </div>
+                {/if}
+              {/each}
+            </div>
+          {/if}
+
+          {#if post.poll && !compact}
+            <div class="post-poll">
+              {#each pollOptions as option, i (i)}
+                {#if showPollResults}
+                  <div class="poll-option poll-result">
+                    <div class="poll-bar" style="width: {pollVotesCount > 0 ? (option.votes_count / pollVotesCount * 100) : 0}%"></div>
+                    <span class="poll-label">
+                      {#if pollOwnVotes.includes(i)}
+                        <span class="poll-voted-check" aria-label="Your vote">&#10003;</span>
+                      {/if}
+                      {option.title}
+                    </span>
+                    <span class="poll-pct">
+                      {pollVotesCount > 0 ? Math.round(option.votes_count / pollVotesCount * 100) : 0}%
+                    </span>
+                  </div>
+                {:else}
+                  <button
+                    type="button"
+                    class="poll-option poll-votable"
+                    class:poll-selected={selectedPollOptions.includes(i)}
+                    onclick={(e) => { e.stopPropagation(); togglePollOption(i); }}
+                  >
+                    <span class="poll-check-indicator">
+                      {#if post.poll?.multiple}
+                        {#if selectedPollOptions.includes(i)}&#9632;{:else}&#9633;{/if}
+                      {:else}
+                        {#if selectedPollOptions.includes(i)}&#9679;{:else}&#9675;{/if}
+                      {/if}
+                    </span>
+                    <span class="poll-label">{option.title}</span>
+                  </button>
+                {/if}
+              {/each}
+
+              {#if !showPollResults && selectedPollOptions.length > 0}
+                <button
+                  type="button"
+                  class="poll-vote-btn"
+                  onclick={(e) => { e.stopPropagation(); submitPollVote(); }}
+                  disabled={pollVoting}
+                >
+                  {pollVoting ? 'Voting...' : 'Vote'}
+                </button>
+              {/if}
+
+              <div class="poll-info">
+                {pollVotersCount} {pollVotersCount === 1 ? 'voter' : 'voters'}
+                &middot; {pollVotesCount} {pollVotesCount === 1 ? 'vote' : 'votes'}
+                {#if post.poll.expires_at && !pollExpired}
+                  &middot; ends {relativeTime(post.poll.expires_at)}
+                {:else if pollExpired}
+                  &middot; closed
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          {#if post.quote && !compact}
+            <QuoteCard post={post.quote} />
+          {/if}
+        {/if}
+      </div>
+
+      {#if !compact}
+        <div class="post-actions-row">
+          <PostActions {post} onedit={startEditing} />
+          {#if $isStaffMember}
+            <AdminPostActions {post} />
+          {/if}
         </div>
       {/if}
-
-      {#if post.quote && !compact}
-        <QuoteCard post={post.quote} />
-      {/if}
-    {/if}
-  </div>
-
-  {#if !compact}
-    <div class="post-actions-row">
-      <PostActions {post} onedit={startEditing} />
-      {#if $isStaffMember}
-        <AdminPostActions {post} />
-      {/if}
     </div>
-  {/if}
+  </div>
 </article>
 
 <style>
   .post-card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    background: var(--color-surface-container-lowest);
+    border: var(--ghost-border);
     border-radius: var(--radius-xl);
-    padding: var(--space-4);
+    padding: 24px;
     cursor: pointer;
-    transition: box-shadow var(--transition-base), border-color var(--transition-base);
+    transition: background-color 300ms ease;
   }
 
   .post-card:hover {
-    box-shadow: var(--shadow-md);
-    border-color: var(--color-border);
+    background: var(--color-surface);
   }
 
   .post-card:focus-visible {
@@ -368,14 +367,13 @@
   }
 
   .post-card.compact {
-    padding: var(--space-3);
+    padding: 16px;
   }
 
-  .post-header {
+  /* Main flex layout: avatar + content */
+  .post-layout {
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-3);
-    margin-block-end: var(--space-2);
+    gap: 16px;
   }
 
   .post-avatar {
@@ -383,51 +381,60 @@
   }
 
   .avatar-img {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-full);
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
     object-fit: cover;
   }
 
   .compact .avatar-img {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
   }
 
   .avatar-placeholder {
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-full);
+    width: 48px;
+    height: 48px;
+    border-radius: 9999px;
     background: var(--color-primary);
-    color: var(--color-text-inverse);
+    color: var(--color-on-primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: var(--font-semibold);
-    font-size: var(--text-sm);
+    font-weight: 700;
+    font-size: 1rem;
   }
 
   .compact .avatar-placeholder {
-    width: 32px;
-    height: 32px;
-    font-size: var(--text-xs);
+    width: 36px;
+    height: 36px;
+    font-size: 0.8rem;
   }
 
-  .post-meta {
+  .post-content-col {
     flex: 1;
     min-width: 0;
   }
 
+  /* Author line */
   .post-author-line {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    justify-content: space-between;
+    margin-block-end: 2px;
+  }
+
+  .post-author-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     flex-wrap: wrap;
-    font-size: var(--text-sm);
+    min-width: 0;
   }
 
   .post-display-name {
-    font-weight: var(--font-semibold);
+    font-weight: 700;
+    font-size: 16px;
     color: var(--color-text);
     text-decoration: none;
     overflow: hidden;
@@ -439,19 +446,25 @@
     text-decoration: underline;
   }
 
+  .post-handle-time {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+  }
+
   .post-handle {
-    color: var(--color-text-tertiary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .post-separator {
-    color: var(--color-text-tertiary);
+  .post-dot {
+    flex-shrink: 0;
   }
 
   .post-time {
-    color: var(--color-text-tertiary);
     white-space: nowrap;
   }
 
@@ -460,43 +473,31 @@
   }
 
   .post-edited {
-    color: var(--color-text-tertiary);
     font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
   }
 
   .post-reply-indicator {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    gap: 4px;
     font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
-    margin-block-start: var(--space-1);
+    color: var(--color-text-secondary);
+    margin-block-end: 4px;
   }
 
-  .post-actions-row {
-    display: flex;
-    align-items: center;
-    padding-inline-start: calc(40px + var(--space-3));
-    margin-block-start: var(--space-2);
+  .reply-icon {
+    font-size: 14px;
   }
 
-  .post-actions-row :global(.post-actions) {
-    flex: 1;
-    margin-block-start: 0;
-    padding-inline-start: 0;
-  }
-
+  /* Post body */
   .post-body {
-    padding-inline-start: calc(40px + var(--space-3));
-  }
-
-  .compact .post-body {
-    padding-inline-start: calc(32px + var(--space-3));
+    margin-block-start: 4px;
   }
 
   .post-content {
-    font-size: var(--text-sm);
-    line-height: var(--leading-relaxed);
+    font-size: 15px;
+    line-height: 1.65;
     color: var(--color-text);
     word-break: break-word;
     overflow-wrap: break-word;
@@ -504,34 +505,42 @@
 
   .post-content :global(a) {
     color: var(--color-primary);
+    font-weight: 500;
+  }
+
+  .post-content :global(.hashtag),
+  .post-content :global(a[href*="/tags/"]) {
+    color: var(--color-primary);
+    font-weight: 500;
   }
 
   .post-content :global(p) {
-    margin-block-end: var(--space-2);
+    margin-block-end: 8px;
   }
 
   .post-content :global(p:last-child) {
     margin-block-end: 0;
   }
 
+  /* CW */
   .post-cw {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-tertiary);
-    border-radius: var(--radius-md);
-    margin-block-end: var(--space-2);
-    font-size: var(--text-sm);
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--color-surface);
+    border-radius: 8px;
+    margin-block-end: 8px;
+    font-size: 0.875rem;
   }
 
   .cw-label {
     font-size: var(--text-xs);
-    font-weight: var(--font-bold);
+    font-weight: 700;
     color: var(--color-warning);
-    background: var(--color-warning-light);
-    padding: 1px var(--space-1);
-    border-radius: var(--radius-sm);
+    background: var(--color-warning-soft);
+    padding: 1px 6px;
+    border-radius: 4px;
     flex-shrink: 0;
   }
 
@@ -546,74 +555,75 @@
     background: none;
     border: none;
     cursor: pointer;
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    border-radius: 4px;
     white-space: nowrap;
+    font-weight: 600;
   }
 
   .cw-toggle:hover {
-    background: var(--color-primary-light);
+    background: var(--color-primary-soft);
   }
 
   /* Edit form */
   .edit-form {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .edit-textarea {
     width: 100%;
-    padding: var(--space-2) var(--space-3);
+    padding: 8px 12px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+    border-radius: 8px;
+    font-size: 15px;
     font-family: inherit;
     color: var(--color-text);
-    background: var(--color-bg);
+    background: var(--color-surface-container-lowest);
     resize: vertical;
-    line-height: var(--leading-relaxed);
+    line-height: 1.65;
   }
 
   .edit-textarea:focus {
     outline: none;
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px var(--color-primary-light);
+    box-shadow: 0 0 0 2px var(--color-primary-soft);
   }
 
   .edit-error {
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     color: var(--color-danger);
   }
 
   .edit-actions {
     display: flex;
     justify-content: flex-end;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .edit-cancel {
-    padding: var(--space-1) var(--space-3);
+    padding: 6px 16px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
+    border-radius: 9999px;
     background: transparent;
     color: var(--color-text);
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     cursor: pointer;
   }
 
   .edit-cancel:hover {
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
   }
 
   .edit-save {
-    padding: var(--space-1) var(--space-3);
+    padding: 6px 16px;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: 9999px;
     background: var(--color-primary);
-    color: var(--color-text-inverse);
-    font-size: var(--text-sm);
-    font-weight: 600;
+    color: var(--color-on-primary);
+    font-size: 0.875rem;
+    font-weight: 700;
     cursor: pointer;
   }
 
@@ -629,10 +639,11 @@
   /* Media Grid */
   .media-grid {
     display: grid;
-    gap: var(--space-1);
-    margin-block-start: var(--space-3);
-    border-radius: var(--radius-lg);
+    gap: 4px;
+    margin-block-start: 12px;
+    border-radius: 12px;
     overflow: hidden;
+    border: var(--ghost-border);
   }
 
   .media-grid-1 {
@@ -651,7 +662,7 @@
   .media-item {
     position: relative;
     overflow: hidden;
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
   }
 
   .media-img {
@@ -660,6 +671,7 @@
     object-fit: cover;
     display: block;
     max-height: 400px;
+    aspect-ratio: 16 / 9;
   }
 
   .media-grid-2 .media-img,
@@ -671,10 +683,11 @@
     width: 100%;
     max-height: 400px;
     display: block;
+    aspect-ratio: 16 / 9;
   }
 
   .media-audio {
-    padding: var(--space-3);
+    padding: 12px;
     display: flex;
     align-items: center;
   }
@@ -685,21 +698,21 @@
 
   /* Poll */
   .post-poll {
-    margin-block-start: var(--space-3);
+    margin-block-start: 12px;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: 8px;
   }
 
   .poll-option {
     position: relative;
-    padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-tertiary);
-    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    background: var(--color-surface);
+    border-radius: 10px;
     overflow: hidden;
     display: flex;
     align-items: center;
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
   }
 
   .poll-result {
@@ -710,27 +723,27 @@
     border: 1px solid var(--color-border);
     background: transparent;
     cursor: pointer;
-    gap: var(--space-2);
+    gap: 8px;
     width: 100%;
     text-align: start;
     font-family: inherit;
     color: var(--color-text);
-    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+    transition: background-color 150ms ease, border-color 150ms ease;
   }
 
   .poll-votable:hover {
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
     border-color: var(--color-primary);
   }
 
   .poll-selected {
     border-color: var(--color-primary);
-    background: var(--color-primary-light, rgba(99, 102, 241, 0.1));
+    background: var(--color-primary-soft);
   }
 
   .poll-check-indicator {
     flex-shrink: 0;
-    font-size: var(--text-base);
+    font-size: 1rem;
     color: var(--color-primary);
     line-height: 1;
   }
@@ -738,7 +751,7 @@
   .poll-voted-check {
     color: var(--color-primary);
     font-weight: 700;
-    margin-inline-end: var(--space-1);
+    margin-inline-end: 4px;
   }
 
   .poll-bar {
@@ -746,8 +759,8 @@
     inset-block-start: 0;
     inset-inline-start: 0;
     height: 100%;
-    background: var(--color-primary-light);
-    transition: width var(--transition-slow);
+    background: var(--color-primary-soft);
+    transition: width 300ms ease;
     z-index: 0;
   }
 
@@ -759,25 +772,25 @@
   .poll-pct {
     position: relative;
     z-index: 1;
-    font-weight: var(--font-semibold);
+    font-weight: 600;
     color: var(--color-text-secondary);
   }
 
   .poll-vote-btn {
     align-self: flex-start;
-    padding: var(--space-1) var(--space-4);
+    padding: 6px 20px;
     border: 1px solid var(--color-primary);
-    border-radius: var(--radius-md);
+    border-radius: 9999px;
     background: transparent;
     color: var(--color-primary);
-    font-size: var(--text-sm);
+    font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
-    transition: background-color var(--transition-fast);
+    transition: background-color 150ms ease;
   }
 
   .poll-vote-btn:hover:not(:disabled) {
-    background: var(--color-primary-light);
+    background: var(--color-primary-soft);
   }
 
   .poll-vote-btn:disabled {
@@ -788,5 +801,18 @@
   .poll-info {
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
+  }
+
+  /* Actions row */
+  .post-actions-row {
+    display: flex;
+    align-items: center;
+    padding-block-start: 8px;
+  }
+
+  .post-actions-row :global(.post-actions) {
+    flex: 1;
+    margin-block-start: 0;
+    padding-inline-start: 0;
   }
 </style>

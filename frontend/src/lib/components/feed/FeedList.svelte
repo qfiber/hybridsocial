@@ -90,10 +90,7 @@
       >
         {#if isBoost}
           <div class="boost-label">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-              <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-            </svg>
+            <span class="material-symbols-outlined boost-icon">cached</span>
             <span>{entry.account?.display_name || entry.account?.handle || 'Someone'} boosted</span>
           </div>
         {/if}
@@ -114,44 +111,46 @@
 </div>
 
 <style>
-  .boost-label {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-4);
-    padding-block-start: var(--space-2);
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .boost-label svg {
-    color: var(--color-primary);
-  }
-
   .feed-list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 28px;
     max-width: var(--feed-max-width);
     width: 100%;
     margin: 0 auto;
+  }
+
+  .boost-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 24px;
+    padding-block-end: 4px;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    font-weight: 500;
+  }
+
+  .boost-icon {
+    font-size: 16px;
+    color: var(--color-primary);
   }
 
   .new-posts-pill {
     position: sticky;
     inset-block-start: var(--header-height);
     align-self: center;
-    padding: var(--space-2) var(--space-4);
+    padding: 8px 20px;
     background: var(--color-primary);
-    color: var(--color-text-inverse);
+    color: var(--color-on-primary);
     border: none;
-    border-radius: var(--radius-full);
-    font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
     cursor: pointer;
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 12px rgba(0, 106, 105, 0.25);
     z-index: var(--z-sticky);
-    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    transition: background-color 150ms ease, transform 150ms ease;
     animation: pill-enter 0.3s ease;
   }
 
@@ -187,19 +186,19 @@
   }
 
   .feed-empty {
-    padding: var(--space-16) var(--space-4);
+    padding: 80px 16px;
     text-align: center;
   }
 
   .feed-empty-text {
-    font-size: var(--text-base);
+    font-size: 1rem;
     color: var(--color-text-tertiary);
   }
 
   .feed-loading {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
+    gap: 28px;
   }
 
   .feed-sentinel {
