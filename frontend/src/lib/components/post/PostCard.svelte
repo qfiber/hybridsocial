@@ -339,7 +339,9 @@
       </div>
 
       {#if !compact}
-        <PostActions {post} onedit={startEditing} />
+        <div class="post-actions-separator">
+          <PostActions {post} onedit={startEditing} />
+        </div>
       {/if}
     </div>
   </div>
@@ -802,4 +804,9 @@
     color: var(--color-text-tertiary);
   }
 
+  .post-actions-separator {
+    margin-block-start: 20px;
+    padding-block-start: 12px;
+    border-top: 1px solid rgba(188, 201, 200, 0.15);
+  }
 </style>
