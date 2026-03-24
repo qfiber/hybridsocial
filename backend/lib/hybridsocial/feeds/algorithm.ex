@@ -7,7 +7,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
   import Ecto.Query
 
   alias Hybridsocial.Repo
-  alias Hybridsocial.Feeds.Signals
+  alias Hybridsocial.Feeds.{Signals, Visibility}
   alias Hybridsocial.Social.{Post, Follow, Reaction, Boost}
 
   @default_limit 20
@@ -90,6 +90,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> where([p], p.inserted_at >= ^cutoff)
       |> maybe_max_id(Keyword.get(opts, :max_id))
       |> maybe_min_id(Keyword.get(opts, :min_id))
+      |> Visibility.apply_shadow_ban_filter(identity_id)
       |> preload(:identity)
       |> Repo.all()
 
@@ -102,6 +103,8 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> where([p], p.reaction_count >= 1 or p.boost_count >= 1)
       |> maybe_max_id(Keyword.get(opts, :max_id))
       |> maybe_min_id(Keyword.get(opts, :min_id))
+      |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.apply_silence_filter()
       |> preload(:identity)
       |> Repo.all()
 

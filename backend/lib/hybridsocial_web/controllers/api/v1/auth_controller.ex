@@ -46,6 +46,31 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
         |> put_status(:unprocessable_entity)
         |> json(%{error: "auth.handle_reserved"})
 
+      {:error, :invite_required} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "auth.invite_required"})
+
+      {:error, :invalid_invite_code} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "auth.invalid_invite_code"})
+
+      {:error, :invite_disabled} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "auth.invite_disabled"})
+
+      {:error, :invite_expired} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "auth.invite_expired"})
+
+      {:error, :invite_max_uses_reached} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "auth.invite_max_uses_reached"})
+
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -206,6 +231,8 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       badges: Hybridsocial.Badges.instance_badges(identity),
       verification_tier: Hybridsocial.Premium.TierLimits.get_tier(identity),
       limits: Hybridsocial.Premium.TierLimits.limits_for(identity),
+      trust_level: identity.trust_level,
+      trust_restrictions: Hybridsocial.Accounts.Trust.trust_restrictions(identity),
       roles: roles,
       permissions: permissions,
       created_at: identity.inserted_at,

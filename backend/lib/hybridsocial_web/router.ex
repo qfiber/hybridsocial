@@ -3,6 +3,7 @@ defmodule HybridsocialWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    plug HybridsocialWeb.Plugs.IpBan
     plug HybridsocialWeb.Plugs.RateLimiter
   end
 
@@ -456,6 +457,14 @@ defmodule HybridsocialWeb.Router do
     post "/", ReportController, :create
   end
 
+  # Appeals (authenticated — user-facing)
+  scope "/api/v1/appeals", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :authenticated]
+
+    post "/", AppealController, :create
+    get "/", AppealController, :index
+  end
+
   # Admin routes (authenticated + admin)
   scope "/api/v1/admin", HybridsocialWeb.Api.V1 do
     pipe_through [:api, :admin]
@@ -514,6 +523,67 @@ defmodule HybridsocialWeb.Router do
     get "/verifications", AdminController, :list_verifications
     post "/verifications/:id/approve", AdminController, :approve_verification
     post "/verifications/:id/reject", AdminController, :reject_verification
+
+    # Instance Policies
+    get "/instance_policies", AdminController, :list_instance_policies
+    post "/instance_policies", AdminController, :create_instance_policy
+    put "/instance_policies/:id", AdminController, :update_instance_policy
+    delete "/instance_policies/:id", AdminController, :delete_instance_policy
+    post "/instance_policies/:id/purge", AdminController, :purge_instance_content
+    post "/instance_policies/:id/purge_preview", AdminController, :purge_instance_preview
+
+    # Webhooks
+    get "/webhooks", AdminController, :list_webhooks
+    post "/webhooks", AdminController, :create_webhook
+    put "/webhooks/:id", AdminController, :update_webhook
+    delete "/webhooks/:id", AdminController, :delete_webhook
+
+    # IP Bans
+    get "/ip_bans", AdminController, :list_ip_bans
+    post "/ip_bans", AdminController, :create_ip_ban
+    delete "/ip_bans/:id", AdminController, :delete_ip_ban
+
+    # Email Domain Bans
+    get "/email_domain_bans", AdminController, :list_email_domain_bans
+    post "/email_domain_bans", AdminController, :create_email_domain_ban
+    delete "/email_domain_bans/:id", AdminController, :delete_email_domain_ban
+
+    # Media Hash Bans
+    get "/media_hash_bans", AdminController, :list_media_hash_bans
+    post "/media_hash_bans", AdminController, :create_media_hash_ban
+    post "/media_hash_bans/from_post/:post_id", AdminController, :create_media_hash_ban_from_post
+    delete "/media_hash_bans/:id", AdminController, :delete_media_hash_ban
+
+    # Appeals
+    get "/appeals", AdminController, :list_appeals
+    post "/appeals/:id/approve", AdminController, :approve_appeal
+    post "/appeals/:id/reject", AdminController, :reject_appeal
+
+    # Moderation Notes
+    get "/accounts/:id/notes", AdminController, :list_moderation_notes
+    post "/accounts/:id/notes", AdminController, :create_moderation_note
+    delete "/notes/:id", AdminController, :delete_moderation_note
+
+    # Invite Codes
+    get "/invites", AdminController, :list_invites
+    post "/invites", AdminController, :create_invite
+    delete "/invites/:id", AdminController, :delete_invite
+
+    # Trust Levels
+    post "/accounts/:id/trust_level", AdminController, :set_trust_level
+
+    # Admin Post Management
+    get "/posts/:id", AdminController, :show_post
+    delete "/posts/:id", AdminController, :delete_post
+    post "/posts/:id/sensitive", AdminController, :force_sensitive
+    post "/posts/:id/unsensitive", AdminController, :remove_sensitive
+
+    # Moderation Queue
+    get "/moderation_queue", AdminController, :list_moderation_queue
+    get "/moderation_queue/stats", AdminController, :moderation_queue_stats
+    post "/moderation_queue/:id/approve", AdminController, :approve_queued_item
+    post "/moderation_queue/:id/reject", AdminController, :reject_queued_item
+    post "/moderation_queue/:id/escalate", AdminController, :escalate_queued_item
 
     # Site Pages (legal / about)
     get "/site_pages", Admin.SitePagesController, :index

@@ -359,6 +359,96 @@ defmodule Hybridsocial.Social.Posts do
     %{posts: posts, next_cursor: next_cursor}
   end
 
+  # --- Admin operations ---
+
+  @doc """
+  Retrieves any post by ID, including private/deleted posts. For admin use only.
+  """
+  def admin_get_post(post_id) do
+    Post
+    |> Repo.get(post_id)
+    |> case do
+      nil -> {:error, :not_found}
+      post -> {:ok, Repo.preload(post, [:identity, :parent, :quote, poll: :options])}
+    end
+  end
+
+  @doc """
+  Soft-deletes any post (sets deleted_at) with an audit log entry.
+  Also publishes a Delete ActivityPub activity for federated posts.
+  """
+  def admin_delete_post(post_id, admin_id, reason \\ "") do
+    with {:ok, post} <- admin_get_post(post_id),
+         {:ok, post} <- do_admin_soft_delete(post) do
+      Hybridsocial.Moderation.log(admin_id, "post.admin_deleted", "post", post_id, %{
+        reason: reason,
+        post_identity_id: post.identity_id
+      })
+
+      # Publish Delete activity for federated posts
+      if post.ap_id do
+        try do
+          activity = Hybridsocial.Federation.ActivityBuilder.build_delete(post)
+          Hybridsocial.Federation.Publisher.publish(activity, post.identity)
+        rescue
+          _ -> :ok
+        end
+      end
+
+      {:ok, post}
+    end
+  end
+
+  defp do_admin_soft_delete(%Post{deleted_at: nil} = post) do
+    post
+    |> Post.soft_delete_changeset()
+    |> Repo.update()
+  end
+
+  defp do_admin_soft_delete(%Post{} = post), do: {:ok, post}
+
+  @doc """
+  Force-marks a post as sensitive with an audit log entry.
+  """
+  def admin_force_sensitive(post_id, admin_id) do
+    with {:ok, post} <- admin_get_post(post_id) do
+      case post
+           |> Ecto.Changeset.change(sensitive: true)
+           |> Repo.update() do
+        {:ok, updated} ->
+          Hybridsocial.Moderation.log(admin_id, "post.force_sensitive", "post", post_id, %{
+            post_identity_id: post.identity_id
+          })
+
+          {:ok, updated}
+
+        error ->
+          error
+      end
+    end
+  end
+
+  @doc """
+  Removes forced sensitive marking from a post with an audit log entry.
+  """
+  def admin_remove_sensitive(post_id, admin_id) do
+    with {:ok, post} <- admin_get_post(post_id) do
+      case post
+           |> Ecto.Changeset.change(sensitive: false)
+           |> Repo.update() do
+        {:ok, updated} ->
+          Hybridsocial.Moderation.log(admin_id, "post.remove_sensitive", "post", post_id, %{
+            post_identity_id: post.identity_id
+          })
+
+          {:ok, updated}
+
+        error ->
+          error
+      end
+    end
+  end
+
   # --- Private helpers ---
 
   defp get_owned_post(post_id, identity_id) do

@@ -42,6 +42,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
       |> apply_cursor_filters(opts)
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)
+      |> Visibility.apply_shadow_ban_filter(identity_id)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
       |> preload(:identity)

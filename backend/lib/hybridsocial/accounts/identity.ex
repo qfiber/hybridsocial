@@ -25,11 +25,17 @@ defmodule Hybridsocial.Accounts.Identity do
     field :is_bot, :boolean, default: false
     field :is_admin, :boolean, default: false
     field :is_suspended, :boolean, default: false
+    field :is_silenced, :boolean, default: false
+    field :silenced_until, :utc_datetime_usec
+    field :silence_reason, :string
+    field :is_shadow_banned, :boolean, default: false
+    field :force_sensitive, :boolean, default: false
     field :show_badge, :boolean, default: true
     field :verification_tier, :string, default: "free"
     field :suspended_at, :utc_datetime_usec
     field :also_known_as, {:array, :string}, default: []
     field :moved_to, :string
+    field :trust_level, :integer, default: 0
     field :deleted_at, :utc_datetime_usec
 
     has_one :user, Hybridsocial.Accounts.User, foreign_key: :identity_id
@@ -73,7 +79,7 @@ defmodule Hybridsocial.Accounts.Identity do
 
   def admin_update_changeset(identity, attrs) do
     identity
-    |> cast(attrs, @update_fields ++ [:verification_tier])
+    |> cast(attrs, @update_fields ++ [:verification_tier, :trust_level])
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
     |> validate_length(:avatar_url, max: 2048)
@@ -102,6 +108,46 @@ defmodule Hybridsocial.Accounts.Identity do
   def unsuspend_changeset(identity) do
     identity
     |> change(is_suspended: false, suspended_at: nil)
+  end
+
+  def silence_changeset(identity, attrs) do
+    identity
+    |> cast(attrs, [:is_silenced, :silenced_until, :silence_reason])
+    |> put_change(:is_silenced, true)
+  end
+
+  def unsilence_changeset(identity) do
+    identity
+    |> change(is_silenced: false, silenced_until: nil, silence_reason: nil)
+  end
+
+  def shadow_ban_changeset(identity) do
+    identity
+    |> change(is_shadow_banned: true)
+  end
+
+  def unshadow_ban_changeset(identity) do
+    identity
+    |> change(is_shadow_banned: false)
+  end
+
+  def force_sensitive_changeset(identity) do
+    identity
+    |> change(force_sensitive: true)
+  end
+
+  def unforce_sensitive_changeset(identity) do
+    identity
+    |> change(force_sensitive: false)
+  end
+
+  @doc "Returns true if the identity is currently silenced (checking expiry)."
+  def silenced?(%__MODULE__{is_silenced: false}), do: false
+
+  def silenced?(%__MODULE__{is_silenced: true, silenced_until: nil}), do: true
+
+  def silenced?(%__MODULE__{is_silenced: true, silenced_until: until}) do
+    DateTime.compare(DateTime.utc_now(), until) == :lt
   end
 
   def soft_delete_changeset(identity) do

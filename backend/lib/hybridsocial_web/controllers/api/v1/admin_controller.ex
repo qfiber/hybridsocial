@@ -2,7 +2,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Moderation
+  alias Hybridsocial.Federation
   alias Hybridsocial.Accounts
+  alias Hybridsocial.Social.Posts
   alias Hybridsocial.Auth.RBAC
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
@@ -491,6 +493,13 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       case action do
         "suspend" -> "users.suspend"
         "unsuspend" -> "users.suspend"
+        "silence" -> "users.moderate"
+        "unsilence" -> "users.moderate"
+        "shadow_ban" -> "users.moderate"
+        "unshadow_ban" -> "users.moderate"
+        "force_sensitive" -> "users.moderate"
+        "unforce_sensitive" -> "users.moderate"
+        "revoke_all_sessions" -> "users.moderate"
         "warn" -> "users.warn"
         "update" -> "users.edit"
         _ -> "users.view"
@@ -561,6 +570,113 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
         |> put_status(:unprocessable_entity)
         |> json(%{error: "validation.failed", details: format_errors(changeset)})
     end
+  end
+
+  defp handle_account_action(conn, identity, "silence", admin_id, params) do
+    silence_attrs = %{
+      "silenced_until" => params["silenced_until"],
+      "silence_reason" => params["reason"]
+    }
+
+    case Accounts.silence_identity(identity, silence_attrs) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.silenced", "identity", identity.id, %{
+          reason: params["reason"] || "",
+          silenced_until: params["silenced_until"]
+        })
+
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.action_failed"})
+    end
+  end
+
+  defp handle_account_action(conn, identity, "unsilence", admin_id, params) do
+    case Accounts.unsilence_identity(identity) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.unsilenced", "identity", identity.id, %{
+          reason: params["reason"] || ""
+        })
+
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.action_failed"})
+    end
+  end
+
+  defp handle_account_action(conn, identity, "shadow_ban", admin_id, params) do
+    case Accounts.shadow_ban_identity(identity) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.shadow_banned", "identity", identity.id, %{
+          reason: params["reason"] || ""
+        })
+
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.action_failed"})
+    end
+  end
+
+  defp handle_account_action(conn, identity, "unshadow_ban", admin_id, params) do
+    case Accounts.unshadow_ban_identity(identity) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.unshadow_banned", "identity", identity.id, %{
+          reason: params["reason"] || ""
+        })
+
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.action_failed"})
+    end
+  end
+
+  defp handle_account_action(conn, identity, "force_sensitive", admin_id, params) do
+    case Accounts.force_sensitive_identity(identity) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.force_sensitive", "identity", identity.id, %{
+          reason: params["reason"] || ""
+        })
+
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.action_failed"})
+    end
+  end
+
+  defp handle_account_action(conn, identity, "unforce_sensitive", admin_id, params) do
+    case Accounts.unforce_sensitive_identity(identity) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.unforce_sensitive", "identity", identity.id, %{
+          reason: params["reason"] || ""
+        })
+
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, _} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.action_failed"})
+    end
+  end
+
+  defp handle_account_action(conn, identity, "revoke_all_sessions", admin_id, params) do
+    {count, _} = Accounts.admin_revoke_all_tokens(identity.id)
+
+    Moderation.log(admin_id, "account.sessions_revoked", "identity", identity.id, %{
+      reason: params["reason"] || "",
+      revoked_count: count
+    })
+
+    conn
+    |> put_status(:ok)
+    |> json(%{
+      data: serialize_account(identity),
+      message: "account.sessions_revoked",
+      revoked_count: count
+    })
   end
 
   defp handle_account_action(conn, _identity, _action, _admin_id, _params) do
@@ -730,7 +846,959 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     end
   end
 
+  # ── Instance Policies ────────────────────────────────────────────────
+
+  def list_instance_policies(conn, _params) do
+    with :ok <- require_permission(conn, "federation.manage") do
+      policies = Federation.list_instance_policies()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(policies, &serialize_instance_policy/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_instance_policy(conn, %{"domain" => domain} = params) do
+    with :ok <- require_permission(conn, "federation.manage") do
+      admin_id = conn.assigns.current_identity.id
+      policy = params["policy_type"] || params["policy"]
+      reason = params["reason"]
+
+      case Federation.set_instance_policy(domain, policy, reason, admin_id) do
+        {:ok, instance_policy} ->
+          Moderation.log(admin_id, "instance_policy.created", "instance_policy", domain, %{
+            domain: domain,
+            policy: policy,
+            reason: reason
+          })
+
+          conn
+          |> put_status(:created)
+          |> json(%{data: serialize_instance_policy(instance_policy)})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_instance_policy(conn, %{"id" => domain} = params) do
+    with :ok <- require_permission(conn, "federation.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Federation.get_instance_policy(domain) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "instance_policy.not_found"})
+
+        _existing ->
+          policy = params["policy_type"] || params["policy"]
+          reason = params["reason"]
+
+          case Federation.set_instance_policy(domain, policy, reason, admin_id) do
+            {:ok, updated} ->
+              Moderation.log(
+                admin_id,
+                "instance_policy.updated",
+                "instance_policy",
+                domain,
+                %{
+                  domain: domain,
+                  policy: policy,
+                  reason: reason
+                }
+              )
+
+              conn |> put_status(:ok) |> json(%{data: serialize_instance_policy(updated)})
+
+            {:error, %Ecto.Changeset{} = changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_instance_policy(conn, %{"id" => domain}) do
+    with :ok <- require_permission(conn, "federation.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Federation.delete_instance_policy(domain) do
+        {:ok, _} ->
+          Moderation.log(admin_id, "instance_policy.deleted", "instance_policy", domain, %{
+            domain: domain
+          })
+
+          conn |> put_status(:ok) |> json(%{message: "instance_policy.deleted"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "instance_policy.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Webhooks ────────────────────────────────────────────────────────
+
+  def list_webhooks(conn, _params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      webhooks = Moderation.list_webhooks()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(webhooks, &serialize_webhook/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_webhook(conn, params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      admin_id = conn.assigns.current_identity.id
+      attrs = Map.put(params, "created_by", admin_id)
+
+      case Moderation.create_webhook(attrs) do
+        {:ok, webhook} ->
+          Moderation.log(admin_id, "webhook.created", "webhook", webhook.id, %{
+            url: webhook.url,
+            events: webhook.events
+          })
+
+          conn |> put_status(:created) |> json(%{data: serialize_webhook(webhook)})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_webhook(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      admin_id = conn.assigns.current_identity.id
+      attrs = Map.drop(params, ["id"])
+
+      case Moderation.update_webhook(id, attrs) do
+        {:ok, webhook} ->
+          Moderation.log(admin_id, "webhook.updated", "webhook", webhook.id, %{
+            url: webhook.url,
+            events: webhook.events
+          })
+
+          conn |> put_status(:ok) |> json(%{data: serialize_webhook(webhook)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "webhook.not_found"})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_webhook(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.delete_webhook(id) do
+        {:ok, webhook} ->
+          Moderation.log(admin_id, "webhook.deleted", "webhook", id, %{
+            url: webhook.url
+          })
+
+          conn |> put_status(:ok) |> json(%{message: "webhook.deleted"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "webhook.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── IP Bans ─────────────────────────────────────────────────────────
+
+  def list_ip_bans(conn, _params) do
+    with :ok <- require_permission(conn, "users.suspend") do
+      bans = Moderation.list_ip_bans()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(bans, &serialize_ip_ban/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_ip_ban(conn, params) do
+    with :ok <- require_permission(conn, "users.suspend") do
+      admin_id = conn.assigns.current_identity.id
+
+      attrs = %{
+        "ip_address" => params["ip_address"],
+        "subnet_mask" => params["subnet_mask"],
+        "reason" => params["reason"],
+        "expires_at" => params["expires_at"],
+        "created_by" => admin_id
+      }
+
+      case Moderation.create_ip_ban(attrs) do
+        {:ok, ban} ->
+          Moderation.log(admin_id, "ip_ban.created", "ip_ban", ban.id, %{
+            ip_address: ban.ip_address,
+            subnet_mask: ban.subnet_mask,
+            reason: ban.reason
+          })
+
+          conn |> put_status(:created) |> json(%{data: serialize_ip_ban(ban)})
+
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_ip_ban(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.suspend") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.delete_ip_ban(id) do
+        {:ok, _} ->
+          Moderation.log(admin_id, "ip_ban.deleted", "ip_ban", id, %{})
+          conn |> put_status(:ok) |> json(%{message: "ip_ban.deleted"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "ip_ban.not_found"})
+
+        {:error, _} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "ip_ban.delete_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Email Domain Bans ──────────────────────────────────────────────
+
+  def list_email_domain_bans(conn, _params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      bans = Moderation.list_email_domain_bans()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(bans, &serialize_email_domain_ban/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_email_domain_ban(conn, params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      attrs = %{
+        "domain" => params["domain"],
+        "reason" => params["reason"],
+        "created_by" => admin_id
+      }
+
+      case Moderation.create_email_domain_ban(attrs) do
+        {:ok, ban} ->
+          Moderation.log(admin_id, "email_domain_ban.created", "email_domain_ban", ban.id, %{
+            domain: ban.domain,
+            reason: ban.reason
+          })
+
+          conn |> put_status(:created) |> json(%{data: serialize_email_domain_ban(ban)})
+
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_email_domain_ban(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.delete_email_domain_ban(id) do
+        {:ok, _} ->
+          Moderation.log(admin_id, "email_domain_ban.deleted", "email_domain_ban", id, %{})
+          conn |> put_status(:ok) |> json(%{message: "email_domain_ban.deleted"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "email_domain_ban.not_found"})
+
+        {:error, _} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "email_domain_ban.delete_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Appeals (Admin) ──────────────────────────────────────────────────
+
+  def list_appeals(conn, params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      opts = [
+        status: params["status"],
+        limit: clamp_limit(params["limit"]),
+        offset: parse_int(params["offset"], 0)
+      ]
+
+      appeals = Moderation.list_appeals(opts)
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(appeals, &serialize_appeal/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def approve_appeal(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+      response = params["response"]
+
+      case Moderation.approve_appeal(id, admin_id, response) do
+        {:ok, appeal} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_appeal(appeal)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "appeal.not_found"})
+
+        {:error, :already_reviewed} ->
+          conn |> put_status(:conflict) |> json(%{error: "appeal.already_reviewed"})
+
+        {:error, _} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "appeal.approve_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def reject_appeal(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+      response = params["response"]
+
+      case Moderation.reject_appeal(id, admin_id, response) do
+        {:ok, appeal} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_appeal(appeal)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "appeal.not_found"})
+
+        {:error, :already_reviewed} ->
+          conn |> put_status(:conflict) |> json(%{error: "appeal.already_reviewed"})
+
+        {:error, _} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "appeal.reject_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Moderation Notes ────────────────────────────────────────────────
+
+  def list_moderation_notes(conn, %{"id" => identity_id}) do
+    with :ok <- require_permission(conn, "users.view") do
+      notes = Moderation.list_moderation_notes(identity_id)
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(notes, &serialize_moderation_note/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_moderation_note(conn, %{"id" => identity_id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      attrs = %{
+        "target_identity_id" => identity_id,
+        "author_id" => admin_id,
+        "content" => params["content"]
+      }
+
+      case Moderation.create_moderation_note(attrs) do
+        {:ok, note} ->
+          Moderation.log(admin_id, "moderation_note.created", "moderation_note", note.id, %{
+            target_identity_id: identity_id
+          })
+
+          conn |> put_status(:created) |> json(%{data: serialize_moderation_note(note)})
+
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_moderation_note(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.delete_moderation_note(id) do
+        {:ok, _} ->
+          Moderation.log(admin_id, "moderation_note.deleted", "moderation_note", id, %{})
+          conn |> put_status(:ok) |> json(%{message: "moderation_note.deleted"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "moderation_note.not_found"})
+
+        {:error, _} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "moderation_note.delete_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Admin Post Management ──────────────────────────────────────────
+
+  def show_post(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      case Posts.admin_get_post(id) do
+        {:ok, post} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_post(post)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "post.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_post(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+      reason = params["reason"] || ""
+
+      case Posts.admin_delete_post(id, admin_id, reason) do
+        {:ok, post} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_post(post)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "post.not_found"})
+
+        {:error, _} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "post.delete_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def force_sensitive(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Posts.admin_force_sensitive(id, admin_id) do
+        {:ok, post} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_post(post)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "post.not_found"})
+
+        {:error, _} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "post.update_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def remove_sensitive(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Posts.admin_remove_sensitive(id, admin_id) do
+        {:ok, post} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_post(post)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "post.not_found"})
+
+        {:error, _} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "post.update_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Moderation Queue ──────────────────────────────────────────────────
+
+  def list_moderation_queue(conn, params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      opts = [
+        status: params["status"],
+        item_type: params["item_type"],
+        severity: params["severity"],
+        limit: clamp_limit(params["limit"]),
+        offset: parse_int(params["offset"], 0)
+      ]
+
+      items = Moderation.list_queue(opts)
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(items, &serialize_queued_item/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def moderation_queue_stats(conn, _params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      stats = Moderation.queue_stats()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: stats})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def approve_queued_item(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.approve_queued_item(id, admin_id) do
+        {:ok, item} ->
+          Moderation.log(admin_id, "queue_item.approved", "queued_item", id, %{
+            item_type: item.item_type,
+            item_id: item.item_id
+          })
+
+          conn |> put_status(:ok) |> json(%{data: serialize_queued_item(item)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "queued_item.not_found"})
+
+        {:error, :already_reviewed} ->
+          conn |> put_status(:conflict) |> json(%{error: "queued_item.already_reviewed"})
+
+        {:error, _} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "queued_item.approve_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def reject_queued_item(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+      reason = params["reason"] || ""
+
+      case Moderation.reject_queued_item(id, admin_id, reason) do
+        {:ok, item} ->
+          Moderation.log(admin_id, "queue_item.rejected", "queued_item", id, %{
+            item_type: item.item_type,
+            item_id: item.item_id,
+            reason: reason
+          })
+
+          conn |> put_status(:ok) |> json(%{data: serialize_queued_item(item)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "queued_item.not_found"})
+
+        {:error, :already_reviewed} ->
+          conn |> put_status(:conflict) |> json(%{error: "queued_item.already_reviewed"})
+
+        {:error, _} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "queued_item.reject_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def escalate_queued_item(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.escalate_queued_item(id, admin_id) do
+        {:ok, item} ->
+          conn |> put_status(:ok) |> json(%{data: serialize_queued_item(item)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "queued_item.not_found"})
+
+        {:error, :cannot_escalate} ->
+          conn |> put_status(:conflict) |> json(%{error: "queued_item.cannot_escalate"})
+
+        {:error, _} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "queued_item.escalate_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Defederation Cleanup ─────────────────────────────────────────────
+
+  alias Hybridsocial.Federation.Cleanup
+
+  def purge_instance_content(conn, %{"id" => domain}) do
+    with :ok <- require_permission(conn, "federation.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Federation.get_instance_policy(domain) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "instance_policy.not_found"})
+
+        %{policy: "suspend"} ->
+          {:ok, stats} = Cleanup.purge_instance_content(domain)
+
+          Moderation.log(
+            admin_id,
+            "instance.content_purged",
+            "instance_policy",
+            domain,
+            stats
+          )
+
+          conn |> put_status(:ok) |> json(%{data: stats})
+
+        _policy ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "instance_policy.not_suspended"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def purge_instance_preview(conn, %{"id" => domain}) do
+    with :ok <- require_permission(conn, "federation.manage") do
+      case Federation.get_instance_policy(domain) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "instance_policy.not_found"})
+
+        _policy ->
+          {:ok, stats} = Cleanup.purge_instance_content(domain, dry_run: true)
+          conn |> put_status(:ok) |> json(%{data: stats})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Media Hash Bans ─────────────────────────────────────────────────
+
+  def list_media_hash_bans(conn, _params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      bans = Moderation.list_media_hash_bans()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(bans, &serialize_media_hash_ban/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_media_hash_ban(conn, params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      attrs = %{
+        "hash" => params["hash"],
+        "hash_type" => params["hash_type"] || "sha256",
+        "description" => params["description"],
+        "created_by" => admin_id
+      }
+
+      case Moderation.create_media_hash_ban(attrs) do
+        {:ok, ban} ->
+          Moderation.log(admin_id, "media_hash_ban.created", "media_hash_ban", ban.id, %{
+            hash: ban.hash,
+            hash_type: ban.hash_type,
+            description: ban.description
+          })
+
+          conn |> put_status(:created) |> json(%{data: serialize_media_hash_ban(ban)})
+
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_media_hash_ban_from_post(conn, %{"post_id" => post_id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+      do_ban_post_media(conn, post_id, admin_id)
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp do_ban_post_media(conn, post_id, admin_id) do
+    case Hybridsocial.Social.Posts.get_post(post_id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "post.not_found"})
+
+      post ->
+        media_files = get_post_media(post)
+
+        if media_files == [] do
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "post.no_media"})
+        else
+          bans = ban_media_files(media_files, admin_id)
+
+          Moderation.log(admin_id, "media_hash_ban.from_post", "post", post_id, %{
+            bans_created: length(bans)
+          })
+
+          conn
+          |> put_status(:created)
+          |> json(%{data: Enum.map(bans, &serialize_media_hash_ban/1)})
+        end
+    end
+  end
+
+  defp ban_media_files(media_files, admin_id) do
+    Enum.reduce(media_files, [], fn media_file, acc ->
+      case compute_and_ban_media(media_file, admin_id) do
+        {:ok, ban} -> [ban | acc]
+        _ -> acc
+      end
+    end)
+  end
+
+  defp get_post_media(post) do
+    import Ecto.Query
+    alias Hybridsocial.Media.MediaFile
+
+    post_time = post.inserted_at
+    window_start = DateTime.add(post_time, -60, :second)
+    window_end = DateTime.add(post_time, 60, :second)
+
+    MediaFile
+    |> where([m], m.identity_id == ^post.identity_id)
+    |> where([m], m.inserted_at >= ^window_start and m.inserted_at <= ^window_end)
+    |> where([m], is_nil(m.deleted_at))
+    |> Hybridsocial.Repo.all()
+  end
+
+  defp compute_and_ban_media(media_file, admin_id) do
+    alias Hybridsocial.Media.Storage
+
+    storage_path = media_file.storage_path
+
+    case Hybridsocial.Media.Hash.compute_hash(Storage.uploads_dir() <> "/" <> storage_path) do
+      {:ok, hash} ->
+        attrs = %{
+          "hash" => hash,
+          "hash_type" => "sha256",
+          "description" => "Banned from post media",
+          "created_by" => admin_id
+        }
+
+        Moderation.create_media_hash_ban(attrs)
+
+      _ ->
+        {:error, :hash_failed}
+    end
+  end
+
+  def delete_media_hash_ban(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Moderation.delete_media_hash_ban(id) do
+        {:ok, _} ->
+          Moderation.log(admin_id, "media_hash_ban.deleted", "media_hash_ban", id, %{})
+          conn |> put_status(:ok) |> json(%{message: "media_hash_ban.deleted"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "media_hash_ban.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
   # ── Serializers ──────────────────────────────────────────────────────
+
+  defp serialize_media_hash_ban(ban) do
+    %{
+      id: ban.id,
+      hash: ban.hash,
+      hash_type: ban.hash_type,
+      description: ban.description,
+      created_by: ban.created_by,
+      created_at: ban.inserted_at
+    }
+  end
+
+  defp serialize_post(post) do
+    %{
+      id: post.id,
+      content: post.content,
+      content_html: post.content_html,
+      post_type: post.post_type,
+      visibility: post.visibility,
+      sensitive: post.sensitive,
+      spoiler_text: post.spoiler_text,
+      language: post.language,
+      identity_id: post.identity_id,
+      parent_id: post.parent_id,
+      root_id: post.root_id,
+      quote_id: post.quote_id,
+      ap_id: post.ap_id,
+      reply_count: post.reply_count,
+      boost_count: post.boost_count,
+      reaction_count: post.reaction_count,
+      is_pinned: post.is_pinned,
+      published_at: post.published_at,
+      edited_at: post.edited_at,
+      deleted_at: post.deleted_at,
+      created_at: post.inserted_at,
+      identity:
+        if(Ecto.assoc_loaded?(post.identity) && post.identity,
+          do: %{
+            id: post.identity.id,
+            handle: post.identity.handle,
+            display_name: post.identity.display_name
+          }
+        )
+    }
+  end
+
+  defp serialize_queued_item(item) do
+    %{
+      id: item.id,
+      item_type: item.item_type,
+      item_id: item.item_id,
+      source: item.source,
+      reason: item.reason,
+      severity: item.severity,
+      status: item.status,
+      reviewed_by: item.reviewed_by,
+      reviewed_at: item.reviewed_at,
+      created_at: item.inserted_at,
+      updated_at: item.updated_at
+    }
+  end
+
+  defp serialize_appeal(appeal) do
+    %{
+      id: appeal.id,
+      identity_id: appeal.identity_id,
+      action_type: appeal.action_type,
+      reason: appeal.reason,
+      status: appeal.status,
+      reviewed_by: appeal.reviewed_by,
+      reviewed_at: appeal.reviewed_at,
+      response: appeal.response,
+      created_at: appeal.inserted_at,
+      account:
+        if(appeal.identity,
+          do: %{
+            id: appeal.identity.id,
+            handle: appeal.identity.handle,
+            display_name: appeal.identity.display_name
+          }
+        )
+    }
+  end
+
+  defp serialize_moderation_note(note) do
+    %{
+      id: note.id,
+      target_identity_id: note.target_identity_id,
+      author_id: note.author_id,
+      content: note.content,
+      created_at: note.inserted_at,
+      author:
+        if(note.author,
+          do: %{
+            id: note.author.id,
+            handle: note.author.handle,
+            display_name: note.author.display_name
+          }
+        )
+    }
+  end
+
+  defp serialize_ip_ban(ban) do
+    %{
+      id: ban.id,
+      ip_address: ban.ip_address,
+      subnet_mask: ban.subnet_mask,
+      reason: ban.reason,
+      expires_at: ban.expires_at,
+      created_by: ban.created_by,
+      created_at: ban.inserted_at
+    }
+  end
+
+  defp serialize_email_domain_ban(ban) do
+    %{
+      id: ban.id,
+      domain: ban.domain,
+      reason: ban.reason,
+      created_by: ban.created_by,
+      created_at: ban.inserted_at
+    }
+  end
 
   defp serialize_report(report) do
     %{
@@ -770,7 +1838,13 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       display_name: identity.display_name,
       type: identity.type,
       is_suspended: identity.is_suspended,
+      is_silenced: identity.is_silenced,
+      silenced_until: identity.silenced_until,
+      silence_reason: identity.silence_reason,
+      is_shadow_banned: identity.is_shadow_banned,
+      force_sensitive: identity.force_sensitive,
       is_admin: identity.is_admin,
+      trust_level: identity.trust_level,
       created_at: identity.inserted_at
     }
   end
@@ -805,6 +1879,29 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     }
   end
 
+  defp serialize_instance_policy(policy) do
+    %{
+      domain: policy.domain,
+      policy: policy.policy,
+      reason: policy.reason,
+      created_by: policy.created_by,
+      created_at: policy.inserted_at,
+      updated_at: policy.updated_at
+    }
+  end
+
+  defp serialize_webhook(webhook) do
+    %{
+      id: webhook.id,
+      url: webhook.url,
+      events: webhook.events,
+      enabled: webhook.enabled,
+      created_by: webhook.created_by,
+      created_at: webhook.inserted_at,
+      updated_at: webhook.updated_at
+    }
+  end
+
   defp format_errors(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
@@ -823,4 +1920,126 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp parse_int(val, _default) when is_integer(val), do: val
+
+  # ── Invite Codes ──────────────────────────────────────────────────
+
+  def list_invites(conn, _params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      invites = Accounts.list_invites()
+
+      conn
+      |> put_status(:ok)
+      |> json(%{data: Enum.map(invites, &serialize_invite/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_invite(conn, params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      attrs = %{
+        "created_by" => admin_id,
+        "max_uses" => params["max_uses"],
+        "expires_at" => parse_datetime(params["expires_at"])
+      }
+
+      case Accounts.create_invite(attrs) do
+        {:ok, invite} ->
+          Moderation.log(admin_id, "invite.created", "invite", invite.id, %{
+            code: invite.code,
+            max_uses: invite.max_uses
+          })
+
+          invite = Hybridsocial.Repo.preload(invite, :creator)
+          conn |> put_status(:created) |> json(%{data: serialize_invite(invite)})
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_invite(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Accounts.disable_invite(id) do
+        {:ok, invite} ->
+          Moderation.log(admin_id, "invite.disabled", "invite", invite.id, %{code: invite.code})
+          conn |> put_status(:ok) |> json(%{message: "invite.disabled"})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "invite.not_found"})
+
+        {:error, _} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "invite.delete_failed"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp parse_datetime(nil), do: nil
+
+  defp parse_datetime(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _} -> dt
+      _ -> nil
+    end
+  end
+
+  defp parse_datetime(_), do: nil
+
+  defp serialize_invite(invite) do
+    %{
+      id: invite.id,
+      code: invite.code,
+      max_uses: invite.max_uses,
+      uses: invite.uses,
+      expires_at: invite.expires_at,
+      disabled: invite.disabled,
+      created_by: if(invite.creator, do: invite.creator.handle, else: nil),
+      created_at: invite.inserted_at
+    }
+  end
+
+  # ── Trust Level ──────────────────────────────────────────────────
+
+  def set_trust_level(conn, %{"id" => id, "trust_level" => level}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Accounts.get_identity(id) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+        identity ->
+          trust_level = if is_binary(level), do: String.to_integer(level), else: level
+
+          case Accounts.admin_update_identity(identity, %{"trust_level" => trust_level}) do
+            {:ok, updated} ->
+              Moderation.log(admin_id, "account.trust_level_set", "identity", id, %{
+                trust_level: trust_level
+              })
+
+              conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+            {:error, _} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "account.trust_level_update_failed"})
+          end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
 end

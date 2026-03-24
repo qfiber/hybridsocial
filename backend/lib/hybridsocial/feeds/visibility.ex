@@ -7,6 +7,7 @@ defmodule Hybridsocial.Feeds.Visibility do
   import Ecto.Query
 
   alias Hybridsocial.Social.{Follow, Block, Mute}
+  alias Hybridsocial.Accounts.Identity
 
   @doc """
   Checks if a specific post is visible to a viewer.
@@ -125,5 +126,56 @@ defmodule Hybridsocial.Feeds.Visibility do
       |> select([m], m.muted_id)
 
     where(query, [p], p.identity_id not in subquery(muted_ids))
+  end
+
+  @doc """
+  Excludes posts from silenced accounts on public/global timelines.
+  Silenced users' posts are hidden from public timelines but remain visible
+  to their followers. Respects silenced_until expiry.
+  """
+  def apply_silence_filter(query) do
+    now = DateTime.utc_now()
+
+    silenced_ids =
+      Identity
+      |> where(
+        [i],
+        i.is_silenced == true and
+          (is_nil(i.silenced_until) or i.silenced_until > ^now)
+      )
+      |> select([i], i.id)
+
+    where(query, [p], p.identity_id not in subquery(silenced_ids))
+  end
+
+  @doc """
+  Excludes posts from shadow-banned accounts. Shadow-banned users can only
+  see their own posts — everyone else should not see them.
+
+  When viewer_id is nil (unauthenticated), all shadow-banned posts are excluded.
+  When viewer_id matches the post author, the post is kept (the shadow-banned
+  user can see their own content).
+  """
+  def apply_shadow_ban_filter(query, nil) do
+    shadow_banned_ids =
+      Identity
+      |> where([i], i.is_shadow_banned == true)
+      |> select([i], i.id)
+
+    where(query, [p], p.identity_id not in subquery(shadow_banned_ids))
+  end
+
+  def apply_shadow_ban_filter(query, viewer_identity_id) do
+    shadow_banned_ids =
+      Identity
+      |> where([i], i.is_shadow_banned == true)
+      |> select([i], i.id)
+
+    where(
+      query,
+      [p],
+      p.identity_id == ^viewer_identity_id or
+        p.identity_id not in subquery(shadow_banned_ids)
+    )
   end
 end

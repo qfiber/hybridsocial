@@ -90,6 +90,8 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
       |> apply_cursor_filters(opts)
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)
+      |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.apply_silence_filter()
       |> order_by([p],
         desc: fragment("? + ? * 2 + ?", p.reaction_count, p.boost_count, p.reply_count)
       )

@@ -34,11 +34,18 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/public - Public timeline (optional auth)"
   def public(conn, params) do
+    viewer_id =
+      case conn.assigns[:current_identity] do
+        nil -> nil
+        identity -> identity.id
+      end
+
     opts =
       parse_pagination_params(params)
       |> Keyword.merge(
         include_replies: params["include_replies"] == "true",
-        local_only: Map.get(params, "local", "true") == "true"
+        local_only: Map.get(params, "local", "true") == "true",
+        viewer_id: viewer_id
       )
 
     posts = Feeds.public_timeline(opts)
@@ -52,7 +59,15 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/tag/:hashtag - Hashtag timeline (optional auth)"
   def hashtag(conn, %{"hashtag" => hashtag} = params) do
-    opts = parse_pagination_params(params)
+    viewer_id =
+      case conn.assigns[:current_identity] do
+        nil -> nil
+        identity -> identity.id
+      end
+
+    opts =
+      parse_pagination_params(params)
+      |> Keyword.put(:viewer_id, viewer_id)
 
     posts = Feeds.hashtag_timeline(hashtag, opts)
     serialized = Enum.map(posts, &serialize_post/1)
@@ -112,9 +127,18 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/global - Global timeline (optional auth)"
   def global(conn, params) do
+    viewer_id =
+      case conn.assigns[:current_identity] do
+        nil -> nil
+        identity -> identity.id
+      end
+
     opts =
       parse_pagination_params(params)
-      |> Keyword.merge(include_replies: params["include_replies"] == "true")
+      |> Keyword.merge(
+        include_replies: params["include_replies"] == "true",
+        viewer_id: viewer_id
+      )
 
     posts = Feeds.global_timeline(opts)
     serialized = Enum.map(posts, &serialize_post/1)
@@ -218,12 +242,19 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
         page_id: post.page_id
       )
 
+    # If the identity has force_sensitive enabled, override sensitive to true
+    sensitive =
+      case post.identity do
+        %{force_sensitive: true} -> true
+        _ -> post.sensitive
+      end
+
     %{
       id: post.id,
       content: post.content,
       content_html: post.content_html,
       visibility: post.visibility,
-      sensitive: post.sensitive,
+      sensitive: sensitive,
       spoiler_text: post.spoiler_text,
       reply_count: post.reply_count,
       boost_count: post.boost_count,

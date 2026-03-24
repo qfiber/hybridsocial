@@ -86,6 +86,7 @@ defmodule Hybridsocial.Feeds do
   defp fetch_public_timeline(opts) do
     limit = parse_limit(opts)
     include_replies = Keyword.get(opts, :include_replies, false)
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     query =
       Post
@@ -93,6 +94,8 @@ defmodule Hybridsocial.Feeds do
       |> where([p], is_nil(p.deleted_at))
       |> maybe_exclude_replies(include_replies)
       |> apply_cursor_filters(opts)
+      |> Visibility.apply_silence_filter()
+      |> Visibility.apply_shadow_ban_filter(viewer_id)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
       |> preload(:identity)
@@ -191,6 +194,7 @@ defmodule Hybridsocial.Feeds do
   def hashtag_timeline(hashtag, opts \\ []) do
     limit = parse_limit(opts)
     tag_pattern = "%##{hashtag}%"
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     query =
       Post
@@ -198,6 +202,8 @@ defmodule Hybridsocial.Feeds do
       |> where([p], is_nil(p.deleted_at))
       |> where([p], ilike(p.content, ^tag_pattern))
       |> apply_cursor_filters(opts)
+      |> Visibility.apply_silence_filter()
+      |> Visibility.apply_shadow_ban_filter(viewer_id)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
       |> preload(:identity)
@@ -274,6 +280,7 @@ defmodule Hybridsocial.Feeds do
   def global_timeline(opts \\ []) do
     limit = parse_limit(opts)
     include_replies = Keyword.get(opts, :include_replies, false)
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     query =
       Post
@@ -281,6 +288,8 @@ defmodule Hybridsocial.Feeds do
       |> where([p], is_nil(p.deleted_at))
       |> maybe_exclude_replies(include_replies)
       |> apply_cursor_filters(opts)
+      |> Visibility.apply_silence_filter()
+      |> Visibility.apply_shadow_ban_filter(viewer_id)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
       |> preload(:identity)

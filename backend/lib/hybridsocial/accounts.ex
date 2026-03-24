@@ -4,7 +4,7 @@ defmodule Hybridsocial.Accounts do
   """
   import Ecto.Query
   alias Hybridsocial.Repo
-  alias Hybridsocial.Accounts.{Identity, User}
+  alias Hybridsocial.Accounts.{Identity, Invite, User}
 
   # --- Identity queries ---
 
@@ -39,8 +39,17 @@ defmodule Hybridsocial.Accounts do
     with :ok <- check_pow(attrs),
          :ok <- check_turnstile(attrs),
          :ok <- check_email_domain(attrs),
-         :ok <- check_handle_available(attrs) do
-      do_register_user(attrs)
+         :ok <- check_handle_available(attrs),
+         :ok <- check_invite_code(attrs) do
+      result = do_register_user(attrs)
+
+      # Consume the invite code on successful registration
+      with {:ok, _identity} <- result,
+           code when is_binary(code) <- attrs["invite_code"] do
+        use_invite(code)
+      end
+
+      result
     end
   end
 
@@ -112,18 +121,21 @@ defmodule Hybridsocial.Accounts do
       email ->
         domain = email |> String.split("@") |> List.last()
 
-        if function_exported?(Hybridsocial.Moderation, :domain_banned?, 2) do
-          try do
-            if Hybridsocial.Moderation.domain_banned?(domain, "email") do
+        try do
+          # Check the dedicated email_domain_bans table
+          if Hybridsocial.Moderation.email_domain_banned?(domain) do
+            {:error, :email_domain_banned}
+          else
+            # Also check the legacy banned_domains table with type "email"
+            if function_exported?(Hybridsocial.Moderation, :domain_banned?, 2) and
+                 Hybridsocial.Moderation.domain_banned?(domain, "email") do
               {:error, :email_domain_banned}
             else
               :ok
             end
-          rescue
-            _ -> :ok
           end
-        else
-          :ok
+        rescue
+          _ -> :ok
         end
     end
   end
@@ -139,6 +151,102 @@ defmodule Hybridsocial.Accounts do
         else
           :ok
         end
+    end
+  end
+
+  defp check_invite_code(attrs) do
+    reg_mode = Hybridsocial.Config.get("registration_mode", "open")
+
+    if reg_mode == "invite_only" do
+      case attrs["invite_code"] do
+        nil ->
+          {:error, :invite_required}
+
+        code ->
+          case validate_invite_code(code) do
+            {:ok, _invite} -> :ok
+            {:error, reason} -> {:error, reason}
+          end
+      end
+    else
+      :ok
+    end
+  end
+
+  # --- Invite Codes ---
+
+  @doc "Create a new invite code."
+  def create_invite(attrs) do
+    %Invite{}
+    |> Invite.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "List all invites."
+  def list_invites do
+    Invite
+    |> order_by([i], desc: i.inserted_at)
+    |> Repo.all()
+    |> Repo.preload(:creator)
+  end
+
+  @doc "Disable an invite."
+  def disable_invite(id) do
+    case Repo.get(Invite, id) do
+      nil -> {:error, :not_found}
+      invite -> invite |> Ecto.Changeset.change(disabled: true) |> Repo.update()
+    end
+  end
+
+  @doc "Delete an invite."
+  def delete_invite(id) do
+    case Repo.get(Invite, id) do
+      nil -> {:error, :not_found}
+      invite -> Repo.delete(invite)
+    end
+  end
+
+  @doc "Validate and increment usage of an invite code."
+  def use_invite(code) when is_binary(code) do
+    case validate_invite_code(code) do
+      {:ok, invite} ->
+        invite
+        |> Ecto.Changeset.change(uses: invite.uses + 1)
+        |> Repo.update()
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc "Validate an invite code — checks existence, disabled, expiry, max uses."
+  def validate_invite_code(code) when is_binary(code) do
+    case Repo.one(from(i in Invite, where: i.code == ^code)) do
+      nil ->
+        {:error, :invalid_invite_code}
+
+      %Invite{disabled: true} ->
+        {:error, :invite_disabled}
+
+      %Invite{expires_at: expires_at} = invite when not is_nil(expires_at) ->
+        if DateTime.compare(DateTime.utc_now(), expires_at) == :gt do
+          {:error, :invite_expired}
+        else
+          check_invite_uses(invite)
+        end
+
+      invite ->
+        check_invite_uses(invite)
+    end
+  end
+
+  defp check_invite_uses(%Invite{max_uses: nil} = invite), do: {:ok, invite}
+
+  defp check_invite_uses(%Invite{uses: uses, max_uses: max_uses} = invite) do
+    if uses >= max_uses do
+      {:error, :invite_max_uses_reached}
+    else
+      {:ok, invite}
     end
   end
 
@@ -267,6 +375,55 @@ defmodule Hybridsocial.Accounts do
       len == 3 and Hybridsocial.Config.get("premium_3char_handle_enabled", false) -> true
       true -> false
     end
+  end
+
+  # --- Silencing ---
+
+  def silence_identity(identity, attrs \\ %{}) do
+    identity
+    |> Identity.silence_changeset(attrs)
+    |> Repo.update()
+  end
+
+  def unsilence_identity(identity) do
+    identity
+    |> Identity.unsilence_changeset()
+    |> Repo.update()
+  end
+
+  # --- Shadow Banning ---
+
+  def shadow_ban_identity(identity) do
+    identity
+    |> Identity.shadow_ban_changeset()
+    |> Repo.update()
+  end
+
+  def unshadow_ban_identity(identity) do
+    identity
+    |> Identity.unshadow_ban_changeset()
+    |> Repo.update()
+  end
+
+  # --- Sensitivity Forcing ---
+
+  def force_sensitive_identity(identity) do
+    identity
+    |> Identity.force_sensitive_changeset()
+    |> Repo.update()
+  end
+
+  def unforce_sensitive_identity(identity) do
+    identity
+    |> Identity.unforce_sensitive_changeset()
+    |> Repo.update()
+  end
+
+  # --- Admin Token Revocation ---
+
+  @doc "Revokes all active OAuth tokens for an identity. Used by admin actions."
+  def admin_revoke_all_tokens(identity_id) do
+    revoke_all_tokens(identity_id)
   end
 
   # --- Account deletion ---

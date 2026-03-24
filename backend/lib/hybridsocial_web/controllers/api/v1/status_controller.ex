@@ -336,13 +336,20 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
           nil
       end
 
+    # If the identity has force_sensitive enabled, override sensitive to true
+    sensitive =
+      case post.identity do
+        %{force_sensitive: true} -> true
+        _ -> post.sensitive
+      end
+
     %{
       id: post.id,
       type: post.post_type,
       content: post.content,
       content_html: post.content_html,
       visibility: post.visibility,
-      sensitive: post.sensitive,
+      sensitive: sensitive,
       spoiler_text: post.spoiler_text,
       language: post.language,
       reply_count: post.reply_count,
