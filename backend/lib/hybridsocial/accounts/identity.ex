@@ -53,7 +53,15 @@ defmodule Hybridsocial.Accounts.Identity do
 
   def update_changeset(identity, attrs) do
     identity
-    |> cast(attrs, [:display_name, :bio, :avatar_url, :header_url, :metadata, :is_locked, :show_badge])
+    |> cast(attrs, [
+      :display_name,
+      :bio,
+      :avatar_url,
+      :header_url,
+      :metadata,
+      :is_locked,
+      :show_badge
+    ])
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
     |> validate_length(:avatar_url, max: 2048)

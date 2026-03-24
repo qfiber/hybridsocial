@@ -48,32 +48,32 @@ defmodule Hybridsocial.Federation.WebFinger do
       ]
 
       case HTTPoison.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
-      {:ok, %{status_code: 200, body: body}} ->
-        case Jason.decode(body) do
-          {:ok, data} ->
-            ap_id =
-              data
-              |> Map.get("links", [])
-              |> Enum.find(fn link ->
-                link["rel"] == "self" && link["type"] == "application/activity+json"
-              end)
-              |> case do
-                nil -> nil
-                link -> link["href"]
-              end
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, data} ->
+              ap_id =
+                data
+                |> Map.get("links", [])
+                |> Enum.find(fn link ->
+                  link["rel"] == "self" && link["type"] == "application/activity+json"
+                end)
+                |> case do
+                  nil -> nil
+                  link -> link["href"]
+                end
 
-            {:ok, %{data: data, ap_id: ap_id}}
+              {:ok, %{data: data, ap_id: ap_id}}
 
-          {:error, _} ->
-            {:error, :invalid_response}
-        end
+            {:error, _} ->
+              {:error, :invalid_response}
+          end
 
-      {:ok, %{status_code: 404}} ->
-        {:error, :not_found}
+        {:ok, %{status_code: 404}} ->
+          {:error, :not_found}
 
-      {:error, reason} ->
-        {:error, reason}
-    end
+        {:error, reason} ->
+          {:error, reason}
+      end
     else
       {:error, reason} -> {:error, reason}
     end

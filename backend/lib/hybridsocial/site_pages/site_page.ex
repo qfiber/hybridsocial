@@ -25,7 +25,9 @@ defmodule Hybridsocial.SitePages.SitePage do
     |> validate_required([:slug, :title])
     |> validate_length(:title, max: 100)
     |> validate_length(:body_markdown, max: 50_000)
-    |> validate_inclusion(:slug, @allowed_slugs, message: "must be one of: #{Enum.join(@allowed_slugs, ", ")}")
+    |> validate_inclusion(:slug, @allowed_slugs,
+      message: "must be one of: #{Enum.join(@allowed_slugs, ", ")}"
+    )
     |> unique_constraint(:slug)
     |> render_markdown()
   end
@@ -78,7 +80,9 @@ defmodule Hybridsocial.SitePages.SitePage do
           block
           |> String.split("\n")
           |> Enum.map(fn line ->
-            content = String.replace(line, ~r/^[\-\*]\s+/, "") |> escape_html() |> inline_formatting()
+            content =
+              String.replace(line, ~r/^[\-\*]\s+/, "") |> escape_html() |> inline_formatting()
+
             "<li>#{content}</li>"
           end)
           |> Enum.join("\n")
@@ -102,7 +106,10 @@ defmodule Hybridsocial.SitePages.SitePage do
     |> String.replace(~r/\*\*(.+?)\*\*/, "<strong>\\1</strong>")
     |> String.replace(~r/\*(.+?)\*/, "<em>\\1</em>")
     |> String.replace(~r/`(.+?)`/, "<code>\\1</code>")
-    |> String.replace(~r/\[(.+?)\]\((.+?)\)/, "<a href=\"\\2\" rel=\"noopener noreferrer\">\\1</a>")
+    |> String.replace(
+      ~r/\[(.+?)\]\((.+?)\)/,
+      "<a href=\"\\2\" rel=\"noopener noreferrer\">\\1</a>"
+    )
   end
 
   defp escape_html(text) do

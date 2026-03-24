@@ -96,7 +96,8 @@ defmodule Hybridsocial.Promotions do
     now = DateTime.utc_now()
 
     Promotion
-    |> where([p],
+    |> where(
+      [p],
       p.identity_id == ^identity_id and
         p.status == "active" and
         p.expires_at > ^now and
@@ -112,7 +113,8 @@ defmodule Hybridsocial.Promotions do
     now = DateTime.utc_now()
 
     Promotion
-    |> where([p],
+    |> where(
+      [p],
       p.identity_id == ^identity_id and
         p.status == "active" and
         p.expires_at > ^now and
@@ -129,7 +131,8 @@ defmodule Hybridsocial.Promotions do
 
     query =
       Promotion
-      |> where([p],
+      |> where(
+        [p],
         p.status == "active" and
           p.expires_at > ^now and
           is_nil(p.deleted_at)

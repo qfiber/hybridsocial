@@ -202,18 +202,20 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
           id: boost.id,
           type: "boost",
           created_at: boost.inserted_at,
-          account: serialize_account(boost.identity, Hybridsocial.Badges.instance_badges(boost.identity)),
+          account:
+            serialize_account(boost.identity, Hybridsocial.Badges.instance_badges(boost.identity)),
           post: serialize_post(boost.post)
         }
     end)
   end
 
   defp serialize_post(post) do
-    badges = Hybridsocial.Badges.badges_for_post(
-      post.identity,
-      group_id: post.group_id,
-      page_id: post.page_id
-    )
+    badges =
+      Hybridsocial.Badges.badges_for_post(
+        post.identity,
+        group_id: post.group_id,
+        page_id: post.page_id
+      )
 
     %{
       id: post.id,

@@ -133,7 +133,9 @@ defmodule Hybridsocial.Nats.Setup do
         end
 
       {:error, reason} ->
-        Logger.warning("JetStream stream create request failed for #{config.name}: #{inspect(reason)}")
+        Logger.warning(
+          "JetStream stream create request failed for #{config.name}: #{inspect(reason)}"
+        )
     end
   end
 

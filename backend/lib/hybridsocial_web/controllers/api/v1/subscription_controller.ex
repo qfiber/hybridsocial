@@ -115,7 +115,8 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
           error: "verification.domain_not_verified",
           instructions: %{
             dns: "Add a TXT record: hybridsocial-verify=#{identity.handle}",
-            rel_me: "Add <a rel=\"me\" href=\"#{HybridsocialWeb.Endpoint.url()}/@#{identity.handle}\"> to your website"
+            rel_me:
+              "Add <a rel=\"me\" href=\"#{HybridsocialWeb.Endpoint.url()}/@#{identity.handle}\"> to your website"
           }
         })
 

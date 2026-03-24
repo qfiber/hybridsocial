@@ -87,6 +87,7 @@ defmodule HybridsocialWeb.Api.V1.SessionController do
   defp geolocate_ip("127." <> _), do: "Local"
   defp geolocate_ip("10." <> _), do: "Private network"
   defp geolocate_ip("192.168." <> _), do: "Private network"
+
   defp geolocate_ip("172." <> rest) do
     case Integer.parse(rest) do
       {n, _} when n >= 16 and n <= 31 -> "Private network"
@@ -105,7 +106,8 @@ defmodule HybridsocialWeb.Api.V1.SessionController do
         # Fetch from ip-api.com (free tier, http only)
         result =
           try do
-            case HTTPoison.get("http://ip-api.com/json/#{ip}?fields=status,country,city",
+            case HTTPoison.get(
+                   "http://ip-api.com/json/#{ip}?fields=status,country,city",
                    [],
                    recv_timeout: 3_000,
                    timeout: 3_000

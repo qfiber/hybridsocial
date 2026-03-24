@@ -34,7 +34,9 @@ defmodule Hybridsocial.Nats do
 
     if connected?() do
       case Gnat.pub(@connection_name, subject, payload) do
-        :ok -> :ok
+        :ok ->
+          :ok
+
         {:error, reason} ->
           Logger.warning("NATS publish failed on #{subject}: #{inspect(reason)}")
           {:error, reason}
@@ -50,7 +52,9 @@ defmodule Hybridsocial.Nats do
 
     if connected?() do
       case Gnat.pub(@connection_name, subject, payload) do
-        :ok -> :ok
+        :ok ->
+          :ok
+
         {:error, reason} ->
           Logger.warning("NATS JetStream publish failed on #{subject}: #{inspect(reason)}")
           {:error, reason}
@@ -103,7 +107,10 @@ defmodule Hybridsocial.Nats do
         {:noreply, %{status: :connected, pid: pid}}
 
       {:error, reason} ->
-        Logger.warning("NATS connection failed: #{inspect(reason)}, retrying in #{@reconnect_interval}ms")
+        Logger.warning(
+          "NATS connection failed: #{inspect(reason)}, retrying in #{@reconnect_interval}ms"
+        )
+
         Process.send_after(self(), :connect, @reconnect_interval)
         {:noreply, %{status: :disconnected, pid: nil}}
     end

@@ -127,21 +127,21 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       |> json(%{error: "reaction.invalid_type", valid_types: @valid_reaction_types})
     else
       case Posts.react(id, identity.id, type) do
-      {:ok, reaction} ->
-        conn
-        |> put_status(:ok)
-        |> json(%{id: reaction.id, type: reaction.type, post_id: reaction.post_id})
+        {:ok, reaction} ->
+          conn
+          |> put_status(:ok)
+          |> json(%{id: reaction.id, type: reaction.type, post_id: reaction.post_id})
 
-      {:error, :not_found} ->
-        conn
-        |> put_status(:not_found)
-        |> json(%{error: "status.not_found"})
+        {:error, :not_found} ->
+          conn
+          |> put_status(:not_found)
+          |> json(%{error: "status.not_found"})
 
-      {:error, changeset} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: "validation.failed", details: format_errors(changeset)})
-    end
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
     end
   end
 
@@ -307,11 +307,12 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
   # --- Serialization ---
 
   defp serialize_post(post) do
-    badges = Hybridsocial.Badges.badges_for_post(
-      post.identity,
-      group_id: post.group_id,
-      page_id: post.page_id
-    )
+    badges =
+      Hybridsocial.Badges.badges_for_post(
+        post.identity,
+        group_id: post.group_id,
+        page_id: post.page_id
+      )
 
     account = serialize_account(post.identity, badges)
 

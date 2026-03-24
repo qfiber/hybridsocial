@@ -4,7 +4,10 @@ defmodule Hybridsocial.Repo.Migrations.CreatePromotions do
   def change do
     create table(:promotions, primary_key: false) do
       add :id, :binary_id, primary_key: true
-      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all), null: false
+
+      add :identity_id, references(:identities, type: :binary_id, on_delete: :delete_all),
+        null: false
+
       add :status, :string, null: false, default: "pending"
       add :payment_provider, :string
       add :payment_id, :string

@@ -129,10 +129,17 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     |> Enum.filter(&String.starts_with?(&1, "db"))
     |> Enum.map(fn line ->
       [db, stats] = String.split(line, ":", parts: 2)
-      pairs = stats |> String.trim() |> String.split(",") |> Enum.map(fn pair ->
-        [k, v] = String.split(pair, "=")
-        {k, v}
-      end) |> Map.new()
+
+      pairs =
+        stats
+        |> String.trim()
+        |> String.split(",")
+        |> Enum.map(fn pair ->
+          [k, v] = String.split(pair, "=")
+          {k, v}
+        end)
+        |> Map.new()
+
       %{db: String.trim(db), keys: pairs["keys"] || "0", expires: pairs["expires"] || "0"}
     end)
   end
@@ -142,35 +149,45 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
     try do
       # Basic cluster info
-      cluster_info = case HTTPoison.get(url, [], recv_timeout: 5_000, timeout: 5_000) do
-        {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
-        _ -> nil
-      end
+      cluster_info =
+        case HTTPoison.get(url, [], recv_timeout: 5_000, timeout: 5_000) do
+          {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
+          _ -> nil
+        end
 
       # Cluster health
-      health = case HTTPoison.get("#{url}/_cluster/health", [], recv_timeout: 5_000, timeout: 5_000) do
-        {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
-        _ -> nil
-      end
+      health =
+        case HTTPoison.get("#{url}/_cluster/health", [], recv_timeout: 5_000, timeout: 5_000) do
+          {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
+          _ -> nil
+        end
 
       # Index stats
-      indices = case HTTPoison.get("#{url}/_cat/indices?format=json", [], recv_timeout: 5_000, timeout: 5_000) do
-        {:ok, %{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, list} when is_list(list) ->
-              Enum.map(list, fn idx ->
-                %{
-                  name: idx["index"],
-                  health: idx["health"],
-                  docs_count: idx["docs.count"],
-                  store_size: idx["store.size"],
-                  status: idx["status"]
-                }
-              end)
-            _ -> []
-          end
-        _ -> []
-      end
+      indices =
+        case HTTPoison.get("#{url}/_cat/indices?format=json", [],
+               recv_timeout: 5_000,
+               timeout: 5_000
+             ) do
+          {:ok, %{status_code: 200, body: body}} ->
+            case Jason.decode(body) do
+              {:ok, list} when is_list(list) ->
+                Enum.map(list, fn idx ->
+                  %{
+                    name: idx["index"],
+                    health: idx["health"],
+                    docs_count: idx["docs.count"],
+                    store_size: idx["store.size"],
+                    status: idx["status"]
+                  }
+                end)
+
+              _ ->
+                []
+            end
+
+          _ ->
+            []
+        end
 
       if cluster_info do
         %{
@@ -198,33 +215,47 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
     try do
       # Check if NATS client port is reachable
-      port_status = case :gen_tcp.connect(to_charlist(nats_host), nats_port, [], 3_000) do
-        {:ok, socket} ->
-          :gen_tcp.close(socket)
-          :up
-        {:error, _} ->
-          :down
-      end
+      port_status =
+        case :gen_tcp.connect(to_charlist(nats_host), nats_port, [], 3_000) do
+          {:ok, socket} ->
+            :gen_tcp.close(socket)
+            :up
+
+          {:error, _} ->
+            :down
+        end
 
       # Try to get NATS server info from monitoring endpoint
-      server_info = case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/varz", [], recv_timeout: 3_000, timeout: 3_000) do
-        {:ok, %{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, data} -> data
-            _ -> nil
-          end
-        _ -> nil
-      end
+      server_info =
+        case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/varz", [],
+               recv_timeout: 3_000,
+               timeout: 3_000
+             ) do
+          {:ok, %{status_code: 200, body: body}} ->
+            case Jason.decode(body) do
+              {:ok, data} -> data
+              _ -> nil
+            end
+
+          _ ->
+            nil
+        end
 
       # Try to get JetStream info
-      jetstream_info = case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/jsz", [], recv_timeout: 3_000, timeout: 3_000) do
-        {:ok, %{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, data} -> data
-            _ -> nil
-          end
-        _ -> nil
-      end
+      jetstream_info =
+        case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/jsz", [],
+               recv_timeout: 3_000,
+               timeout: 3_000
+             ) do
+          {:ok, %{status_code: 200, body: body}} ->
+            case Jason.decode(body) do
+              {:ok, data} -> data
+              _ -> nil
+            end
+
+          _ ->
+            nil
+        end
 
       if port_status == :up do
         app_connected = Hybridsocial.Nats.connected?()
@@ -233,35 +264,39 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           status: "up",
           integration: if(app_connected, do: "active", else: "connecting"),
           app_connected: app_connected,
-          note: if(app_connected,
-            do: "NATS connected. JetStream handling federation delivery, real-time streaming, and background jobs.",
-            else: "NATS server running. Application connecting..."
-          )
+          note:
+            if(app_connected,
+              do:
+                "NATS connected. JetStream handling federation delivery, real-time streaming, and background jobs.",
+              else: "NATS server running. Application connecting..."
+            )
         }
 
-        result = if server_info do
-          Map.merge(result, %{
-            version: server_info["version"] || "unknown",
-            uptime_seconds: server_info["uptime"] || 0,
-            connections: server_info["connections"] || 0,
-            total_messages: server_info["in_msgs"] || 0,
-            total_bytes: server_info["in_bytes"] || 0
-          })
-        else
-          result
-        end
+        result =
+          if server_info do
+            Map.merge(result, %{
+              version: server_info["version"] || "unknown",
+              uptime_seconds: server_info["uptime"] || 0,
+              connections: server_info["connections"] || 0,
+              total_messages: server_info["in_msgs"] || 0,
+              total_bytes: server_info["in_bytes"] || 0
+            })
+          else
+            result
+          end
 
-        result = if jetstream_info do
-          Map.merge(result, %{
-            jetstream_enabled: true,
-            js_streams: jetstream_info["streams"] || 0,
-            js_consumers: jetstream_info["consumers"] || 0,
-            js_memory: jetstream_info["memory"] || 0,
-            js_storage: jetstream_info["storage"] || 0
-          })
-        else
-          Map.put(result, :jetstream_enabled, false)
-        end
+        result =
+          if jetstream_info do
+            Map.merge(result, %{
+              jetstream_enabled: true,
+              js_streams: jetstream_info["streams"] || 0,
+              js_consumers: jetstream_info["consumers"] || 0,
+              js_memory: jetstream_info["memory"] || 0,
+              js_storage: jetstream_info["storage"] || 0
+            })
+          else
+            Map.put(result, :jetstream_enabled, false)
+          end
 
         result
       else
@@ -345,12 +380,15 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       metadata: verification.metadata,
       verified_at: verification.verified_at,
       created_at: verification.inserted_at,
-      account: if(identity, do: %{
-        id: identity.id,
-        handle: identity.handle,
-        display_name: identity.display_name,
-        avatar_url: identity.avatar_url
-      })
+      account:
+        if(identity,
+          do: %{
+            id: identity.id,
+            handle: identity.handle,
+            display_name: identity.display_name,
+            avatar_url: identity.avatar_url
+          }
+        )
     }
   end
 

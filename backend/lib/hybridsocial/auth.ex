@@ -30,7 +30,8 @@ defmodule Hybridsocial.Auth do
   defp issue_tokens(user, session_info \\ %{}) do
     with {:ok, access_token, _claims} <- Token.generate_access_token(user.identity_id),
          {refresh_token, refresh_hash} <- Token.generate_refresh_token(),
-         {:ok, _oauth_token} <- create_token_record(user.identity_id, access_token, refresh_hash, session_info) do
+         {:ok, _oauth_token} <-
+           create_token_record(user.identity_id, access_token, refresh_hash, session_info) do
       # Update last login
       user |> User.login_changeset() |> Repo.update()
 
@@ -84,7 +85,12 @@ defmodule Hybridsocial.Auth do
         with {:ok, access_token, _claims} <- Token.generate_access_token(oauth_token.identity_id),
              {new_refresh, new_refresh_hash} <- Token.generate_refresh_token(),
              {:ok, _} <-
-               create_token_record(oauth_token.identity_id, access_token, new_refresh_hash, merged_info) do
+               create_token_record(
+                 oauth_token.identity_id,
+                 access_token,
+                 new_refresh_hash,
+                 merged_info
+               ) do
           {:ok,
            %{
              access_token: access_token,
@@ -112,7 +118,7 @@ defmodule Hybridsocial.Auth do
   def list_sessions(identity_id) do
     OAuthToken
     |> where([t], t.identity_id == ^identity_id and is_nil(t.revoked_at))
-    |> order_by([t], [desc_nulls_last: t.last_active_at])
+    |> order_by([t], desc_nulls_last: t.last_active_at)
     |> Repo.all()
   end
 
@@ -136,7 +142,8 @@ defmodule Hybridsocial.Auth do
 
     {count, _} =
       OAuthToken
-      |> where([t],
+      |> where(
+        [t],
         t.identity_id == ^identity_id and
           is_nil(t.revoked_at) and
           t.token_hash != ^current_hash
@@ -226,7 +233,8 @@ defmodule Hybridsocial.Auth do
     cutoff = DateTime.add(DateTime.utc_now(), -30 * 86400, :second)
 
     OAuthToken
-    |> where([t],
+    |> where(
+      [t],
       t.identity_id == ^identity_id and
         not is_nil(t.revoked_at) and
         t.revoked_at < ^cutoff
@@ -256,25 +264,27 @@ defmodule Hybridsocial.Auth do
   def parse_device_name(nil), do: "Unknown device"
 
   def parse_device_name(ua) when is_binary(ua) do
-    browser = cond do
-      ua =~ ~r/Firefox/i -> "Firefox"
-      ua =~ ~r/Edg/i -> "Edge"
-      ua =~ ~r/OPR|Opera/i -> "Opera"
-      ua =~ ~r/Chrome/i -> "Chrome"
-      ua =~ ~r/Safari/i -> "Safari"
-      ua =~ ~r/curl/i -> "curl"
-      true -> "Browser"
-    end
+    browser =
+      cond do
+        ua =~ ~r/Firefox/i -> "Firefox"
+        ua =~ ~r/Edg/i -> "Edge"
+        ua =~ ~r/OPR|Opera/i -> "Opera"
+        ua =~ ~r/Chrome/i -> "Chrome"
+        ua =~ ~r/Safari/i -> "Safari"
+        ua =~ ~r/curl/i -> "curl"
+        true -> "Browser"
+      end
 
-    os = cond do
-      ua =~ ~r/Android/i -> "Android"
-      ua =~ ~r/iPhone|iPad/i -> "iOS"
-      ua =~ ~r/Mac OS/i -> "macOS"
-      ua =~ ~r/Windows/i -> "Windows"
-      ua =~ ~r/Linux/i -> "Linux"
-      ua =~ ~r/CrOS/i -> "ChromeOS"
-      true -> "Unknown"
-    end
+    os =
+      cond do
+        ua =~ ~r/Android/i -> "Android"
+        ua =~ ~r/iPhone|iPad/i -> "iOS"
+        ua =~ ~r/Mac OS/i -> "macOS"
+        ua =~ ~r/Windows/i -> "Windows"
+        ua =~ ~r/Linux/i -> "Linux"
+        ua =~ ~r/CrOS/i -> "ChromeOS"
+        true -> "Unknown"
+      end
 
     "#{browser} on #{os}"
   end

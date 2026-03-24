@@ -240,9 +240,10 @@ defmodule Hybridsocial.Accounts do
     blocklist = Hybridsocial.Config.get("reserved_handles", [])
 
     blocklist_reserved =
-      is_list(blocklist) and Enum.any?(blocklist, fn blocked ->
-        String.downcase(to_string(blocked)) == normalized
-      end)
+      is_list(blocklist) and
+        Enum.any?(blocklist, fn blocked ->
+          String.downcase(to_string(blocked)) == normalized
+        end)
 
     # Check 3: Short handle requires premium purchase
     short_handle_blocked = short_handle_restricted?(normalized)

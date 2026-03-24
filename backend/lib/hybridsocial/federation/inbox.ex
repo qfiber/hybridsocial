@@ -612,6 +612,7 @@ defmodule Hybridsocial.Federation.Inbox do
 
       # Build signing string for GET (no digest needed)
       signed_headers = ["(request-target)", "host", "date"]
+
       request_data = %{
         "(request-target)" => "get #{parsed.path}",
         "host" => parsed.host,

@@ -129,13 +129,19 @@ defmodule Hybridsocial.Social.Post do
     case get_change(changeset, :content_html) do
       nil ->
         case get_change(changeset, :content) do
-          nil -> changeset
-          content -> put_change(changeset, :content_html, Hybridsocial.Content.Sanitizer.sanitize_post_content(content))
+          nil ->
+            changeset
+
+          content ->
+            put_change(
+              changeset,
+              :content_html,
+              Hybridsocial.Content.Sanitizer.sanitize_post_content(content)
+            )
         end
 
       _already_set ->
         changeset
     end
   end
-
 end

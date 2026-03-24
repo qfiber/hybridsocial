@@ -61,7 +61,8 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
 
         Hybridsocial.Repo.one(
           from(i in Hybridsocial.Accounts.Identity,
-            where: fragment("? LIKE ?", i.ap_actor_url, ^"%://#{domain}/%") and is_nil(i.deleted_at),
+            where:
+              fragment("? LIKE ?", i.ap_actor_url, ^"%://#{domain}/%") and is_nil(i.deleted_at),
             where: fragment("split_part(?, '/', -1) = ?", i.ap_actor_url, ^username),
             limit: 1
           )

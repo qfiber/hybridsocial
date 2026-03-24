@@ -32,12 +32,12 @@ defmodule HybridsocialWeb.Api.V1.Admin.SitePagesController do
   def show(conn, %{"id" => id}) do
     with :ok <- require_permission(conn, "settings.view") do
       case SitePages.get_page(id) do
-      nil ->
-        conn |> put_status(:not_found) |> json(%{error: "page.not_found"})
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "page.not_found"})
 
-      page ->
-        json(conn, %{data: serialize(page)})
-    end
+        page ->
+          json(conn, %{data: serialize(page)})
+      end
     else
       {:error, perm} -> deny(conn, perm)
     end
@@ -48,22 +48,22 @@ defmodule HybridsocialWeb.Api.V1.Admin.SitePagesController do
       admin_id = conn.assigns.current_identity.id
 
       case SitePages.get_page(id) do
-      nil ->
-        conn |> put_status(:not_found) |> json(%{error: "page.not_found"})
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "page.not_found"})
 
-      page ->
-        attrs = Map.take(params, ["title", "body_markdown", "published"])
+        page ->
+          attrs = Map.take(params, ["title", "body_markdown", "published"])
 
-        case SitePages.update_page(page, attrs, admin_id) do
-          {:ok, updated} ->
-            json(conn, %{data: serialize(updated)})
+          case SitePages.update_page(page, attrs, admin_id) do
+            {:ok, updated} ->
+              json(conn, %{data: serialize(updated)})
 
-          {:error, changeset} ->
-            conn
-            |> put_status(:unprocessable_entity)
-            |> json(%{error: "validation.failed", details: format_errors(changeset)})
-        end
-    end
+            {:error, changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          end
+      end
     else
       {:error, perm} -> deny(conn, perm)
     end
@@ -72,8 +72,8 @@ defmodule HybridsocialWeb.Api.V1.Admin.SitePagesController do
   def seed(conn, _params) do
     with :ok <- require_permission(conn, "settings.manage") do
       SitePages.ensure_defaults()
-    pages = SitePages.list_pages()
-    json(conn, %{data: Enum.map(pages, &serialize/1)})
+      pages = SitePages.list_pages()
+      json(conn, %{data: Enum.map(pages, &serialize/1)})
     else
       {:error, perm} -> deny(conn, perm)
     end

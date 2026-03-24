@@ -105,7 +105,8 @@ defmodule Hybridsocial.Nats.JobConsumer do
           if data["id"], do: Indexer.remove_post(data["id"])
 
         {"index", "identity"} ->
-          if data["id"], do: Indexer.index_identity(Hybridsocial.Accounts.get_identity(data["id"]))
+          if data["id"],
+            do: Indexer.index_identity(Hybridsocial.Accounts.get_identity(data["id"]))
 
         {"index", "group"} ->
           if data["id"], do: Indexer.index_group(Hybridsocial.Groups.get_group(data["id"]))

@@ -62,28 +62,33 @@ defmodule Hybridsocial.Federation.ObjectResolver do
         {"User-Agent", "HybridSocial/0.1.0"}
       ]
 
-      case HTTPoison.get(url, headers, follow_redirect: true, max_redirect: 3, recv_timeout: 15_000, timeout: 15_000) do
-      {:ok, %HTTPoison.Response{status_code: status, body: body}}
-      when status in 200..299 ->
-        case Jason.decode(body) do
-          {:ok, object} -> {:ok, object}
-          {:error, _} -> {:error, :invalid_json}
-        end
+      case HTTPoison.get(url, headers,
+             follow_redirect: true,
+             max_redirect: 3,
+             recv_timeout: 15_000,
+             timeout: 15_000
+           ) do
+        {:ok, %HTTPoison.Response{status_code: status, body: body}}
+        when status in 200..299 ->
+          case Jason.decode(body) do
+            {:ok, object} -> {:ok, object}
+            {:error, _} -> {:error, :invalid_json}
+          end
 
-      {:ok, %HTTPoison.Response{status_code: 404}} ->
-        {:error, :not_found}
+        {:ok, %HTTPoison.Response{status_code: 404}} ->
+          {:error, :not_found}
 
-      {:ok, %HTTPoison.Response{status_code: 410}} ->
-        {:error, :gone}
+        {:ok, %HTTPoison.Response{status_code: 410}} ->
+          {:error, :gone}
 
-      {:ok, %HTTPoison.Response{status_code: status}} ->
-        Logger.warning("Failed to fetch AP object #{url}: HTTP #{status}")
-        {:error, {:http_error, status}}
+        {:ok, %HTTPoison.Response{status_code: status}} ->
+          Logger.warning("Failed to fetch AP object #{url}: HTTP #{status}")
+          {:error, {:http_error, status}}
 
-      {:error, %HTTPoison.Error{reason: reason}} ->
-        Logger.warning("Failed to fetch AP object #{url}: #{inspect(reason)}")
-        {:error, {:fetch_failed, reason}}
-    end
+        {:error, %HTTPoison.Error{reason: reason}} ->
+          Logger.warning("Failed to fetch AP object #{url}: #{inspect(reason)}")
+          {:error, {:fetch_failed, reason}}
+      end
     else
       {:error, reason} -> {:error, {:blocked_url, reason}}
     end
