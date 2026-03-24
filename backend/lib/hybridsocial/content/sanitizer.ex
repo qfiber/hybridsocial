@@ -109,9 +109,17 @@ defmodule Hybridsocial.Content.Sanitizer do
   end
 
   defp convert_mentions(text) do
-    Regex.replace(~r/@([a-zA-Z0-9_]+)(@[a-zA-Z0-9._-]+)?/u, text, fn full, _user, _domain ->
-      # full is already HTML-escaped since escape_html ran first
-      ~s(<span class="mention">#{full}</span>)
+    Regex.replace(~r/@([a-zA-Z0-9_]+)(@[a-zA-Z0-9._-]+)?/u, text, fn full, user, domain ->
+      safe_user = escape_attr(user)
+
+      if domain != "" do
+        # Remote mention: @user@domain.tld → link to /@user@domain.tld, display @user
+        safe_full = escape_attr(String.trim_leading(full, "@"))
+        ~s(<a href="/@#{safe_full}" class="mention" title="#{full}">@#{safe_user}</a>)
+      else
+        # Local mention: @user → link to /@user
+        ~s(<a href="/@#{safe_user}" class="mention">@#{safe_user}</a>)
+      end
     end)
   end
 

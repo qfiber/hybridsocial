@@ -519,3 +519,16 @@ ol {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-outline-variant);
 }
+
+/* --- Mention & Hashtag Links (rendered from post content_html) --- */
+a.mention,
+a.hashtag {
+  color: var(--color-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+a.mention:hover,
+a.hashtag:hover {
+  text-decoration: underline;
+}
