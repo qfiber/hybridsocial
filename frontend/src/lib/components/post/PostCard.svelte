@@ -224,7 +224,6 @@
 
         <div class="cw-reveal" class:cw-revealed={!post.sensitive || showSensitive || !post.spoiler_text}>
           <div class="cw-reveal-inner">
-          {#if !post.sensitive || showSensitive || !post.spoiler_text}
           {#if editing}
             <div class="edit-form">
               <textarea
@@ -352,7 +351,6 @@
           {#if post.quote && !compact}
             <QuoteCard post={post.quote} />
           {/if}
-        {/if}
           </div>
         </div>
       </div>

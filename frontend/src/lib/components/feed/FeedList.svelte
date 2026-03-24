@@ -23,6 +23,24 @@
   let sentinelEl: HTMLDivElement | undefined = $state();
   let newPostsCount = $state(0);
   let showStagger = $state(true);
+  let knownIds = $state(new Set<string>());
+  let newIds = $state(new Set<string>());
+
+  // Track which posts are newly prepended
+  $effect(() => {
+    const fresh = new Set<string>();
+    for (const p of posts) {
+      if (!knownIds.has(p.id)) {
+        fresh.add(p.id);
+      }
+    }
+    if (fresh.size > 0 && !showStagger) {
+      newIds = fresh;
+      // Clear "new" status after animation completes
+      setTimeout(() => { newIds = new Set(); }, 500);
+    }
+    knownIds = new Set(posts.map(p => p.id));
+  });
 
   // IntersectionObserver for infinite scroll
   onMount(() => {
@@ -87,6 +105,7 @@
         class="feed-item"
         style={showStagger ? `animation-delay: ${i * 60}ms` : ''}
         class:stagger={showStagger}
+        class:feed-item-new={newIds.has(entry.id)}
       >
         {#if isBoost}
           <div class="boost-label">
@@ -182,6 +201,22 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  /* New post fade-in from top */
+  .feed-item-new {
+    animation: new-post-enter 0.4s ease both;
+  }
+
+  @keyframes new-post-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
     }
   }
 
