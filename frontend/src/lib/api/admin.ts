@@ -16,7 +16,16 @@ import type {
   Announcement,
   EmailConfig,
   AdminThemeConfig,
-  PaginatedResponse
+  PaginatedResponse,
+  Webhook,
+  Appeal,
+  ModerationNote,
+  ModerationQueueItem,
+  ModerationQueueStats,
+  InviteCode,
+  EmailDomainBan,
+  MediaHashBan,
+  InstancePurgePreview
 } from './types.js';
 
 // Dashboard
@@ -268,4 +277,170 @@ export function updateSitePage(id: string, attrs: { title?: string; body_markdow
 
 export function seedSitePages(): Promise<SitePage[]> {
   return api.post('/api/v1/admin/site_pages/seed').then((r: { data: SitePage[] }) => r.data);
+}
+
+// Webhooks
+export function getWebhooks(): Promise<Webhook[]> {
+  return api.get('/api/v1/admin/webhooks');
+}
+
+export function createWebhook(webhook: { url: string; events: string[]; secret?: string; enabled?: boolean }): Promise<Webhook> {
+  return api.post('/api/v1/admin/webhooks', webhook);
+}
+
+export function updateWebhook(id: string, webhook: Partial<{ url: string; events: string[]; secret: string; enabled: boolean }>): Promise<Webhook> {
+  return api.put(`/api/v1/admin/webhooks/${id}`, webhook);
+}
+
+export function deleteWebhook(id: string): Promise<void> {
+  return api.delete(`/api/v1/admin/webhooks/${id}`);
+}
+
+// Appeals
+export function getAppeals(params?: Record<string, string>): Promise<Appeal[]> {
+  return api.get('/api/v1/admin/appeals', params);
+}
+
+export function approveAppeal(id: string, response?: string): Promise<Appeal> {
+  return api.post(`/api/v1/admin/appeals/${id}/approve`, { response });
+}
+
+export function rejectAppeal(id: string, response?: string): Promise<Appeal> {
+  return api.post(`/api/v1/admin/appeals/${id}/reject`, { response });
+}
+
+// Moderation Notes
+export function getModerationNotes(accountId: string): Promise<ModerationNote[]> {
+  return api.get(`/api/v1/admin/users/${accountId}/notes`);
+}
+
+export function createModerationNote(accountId: string, content: string): Promise<ModerationNote> {
+  return api.post(`/api/v1/admin/users/${accountId}/notes`, { content });
+}
+
+export function deleteModerationNote(id: string): Promise<void> {
+  return api.delete(`/api/v1/admin/notes/${id}`);
+}
+
+// Moderation Queue
+export function getModerationQueue(params?: Record<string, string>): Promise<ModerationQueueItem[]> {
+  return api.get('/api/v1/admin/moderation_queue', params);
+}
+
+export function getModerationQueueStats(): Promise<ModerationQueueStats> {
+  return api.get('/api/v1/admin/moderation_queue/stats');
+}
+
+export function approveQueueItem(id: string): Promise<ModerationQueueItem> {
+  return api.post(`/api/v1/admin/moderation_queue/${id}/approve`);
+}
+
+export function rejectQueueItem(id: string, reason?: string): Promise<ModerationQueueItem> {
+  return api.post(`/api/v1/admin/moderation_queue/${id}/reject`, { reason });
+}
+
+export function escalateQueueItem(id: string): Promise<ModerationQueueItem> {
+  return api.post(`/api/v1/admin/moderation_queue/${id}/escalate`);
+}
+
+// Invite Codes
+export function getInvites(): Promise<InviteCode[]> {
+  return api.get('/api/v1/admin/invites');
+}
+
+export function createInvite(params: { max_uses?: number; expires_at?: string }): Promise<InviteCode> {
+  return api.post('/api/v1/admin/invites', params);
+}
+
+export function deleteInvite(id: string): Promise<void> {
+  return api.delete(`/api/v1/admin/invites/${id}`);
+}
+
+// Email Domain Bans
+export function getEmailDomainBans(): Promise<EmailDomainBan[]> {
+  return api.get('/api/v1/admin/email_domain_bans');
+}
+
+export function createEmailDomainBan(domain: string, reason?: string): Promise<EmailDomainBan> {
+  return api.post('/api/v1/admin/email_domain_bans', { domain, reason });
+}
+
+export function deleteEmailDomainBan(id: string): Promise<void> {
+  return api.delete(`/api/v1/admin/email_domain_bans/${id}`);
+}
+
+// Media Hash Bans
+export function getMediaHashBans(): Promise<MediaHashBan[]> {
+  return api.get('/api/v1/admin/media_hash_bans');
+}
+
+export function createMediaHashBan(params: { hash: string; hash_type: string; description?: string }): Promise<MediaHashBan> {
+  return api.post('/api/v1/admin/media_hash_bans', params);
+}
+
+export function deleteMediaHashBan(id: string): Promise<void> {
+  return api.delete(`/api/v1/admin/media_hash_bans/${id}`);
+}
+
+export function banMediaFromPost(postId: string): Promise<void> {
+  return api.post(`/api/v1/admin/statuses/${postId}/ban_media`);
+}
+
+// Instance Purge
+export function purgeInstancePreview(domain: string): Promise<InstancePurgePreview> {
+  return api.get(`/api/v1/admin/instances/${encodeURIComponent(domain)}/purge_preview`);
+}
+
+export function purgeInstanceContent(domain: string): Promise<void> {
+  return api.post(`/api/v1/admin/instances/${encodeURIComponent(domain)}/purge`);
+}
+
+// Admin Post Actions
+export function adminGetPost(id: string): Promise<Record<string, unknown>> {
+  return api.get(`/api/v1/admin/statuses/${id}`);
+}
+
+export function adminDeletePost(id: string, reason?: string): Promise<void> {
+  return api.delete(`/api/v1/admin/statuses/${id}`, { reason });
+}
+
+export function adminForceSensitive(id: string): Promise<void> {
+  return api.post(`/api/v1/admin/statuses/${id}/force_sensitive`);
+}
+
+export function adminRemoveSensitive(id: string): Promise<void> {
+  return api.post(`/api/v1/admin/statuses/${id}/remove_sensitive`);
+}
+
+// Account Actions
+export function silenceUser(id: string, params?: { duration?: number; reason?: string }): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/silence`, params);
+}
+
+export function unsilenceUser(id: string): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/unsilence`);
+}
+
+export function shadowBanUser(id: string): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/shadow_ban`);
+}
+
+export function unshadowBanUser(id: string): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/unshadow_ban`);
+}
+
+export function forceSensitiveUser(id: string): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/force_sensitive`);
+}
+
+export function unforceSensitiveUser(id: string): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/unforce_sensitive`);
+}
+
+export function revokeAllSessions(id: string): Promise<void> {
+  return api.post(`/api/v1/admin/users/${id}/revoke_sessions`);
+}
+
+export function setTrustLevel(id: string, level: number): Promise<AdminUser> {
+  return api.post(`/api/v1/admin/users/${id}/trust_level`, { level });
 }

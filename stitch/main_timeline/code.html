@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HybridSocial | The Digital Curator</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-error-container": "#93000a",
+              "tertiary-fixed": "#ffdbcb",
+              "tertiary-fixed-dim": "#ffb692",
+              "on-secondary-container": "#426b6b",
+              "secondary": "#3c6564",
+              "on-secondary-fixed": "#002020",
+              "surface-container": "#eceeef",
+              "inverse-primary": "#5ed9d7",
+              "primary-fixed": "#7df5f4",
+              "on-primary-fixed": "#002020",
+              "primary": "#006a69",
+              "on-primary-fixed-variant": "#00504f",
+              "outline": "#6d7a79",
+              "surface-dim": "#d8dadb",
+              "on-surface-variant": "#3d4949",
+              "error": "#ba1a1a",
+              "surface-container-lowest": "#ffffff",
+              "on-tertiary-fixed": "#341100",
+              "background": "#f8fafb",
+              "on-tertiary-container": "#511e00",
+              "outline-variant": "#bcc9c8",
+              "on-error": "#ffffff",
+              "surface": "#f8fafb",
+              "tertiary": "#95491d",
+              "tertiary-container": "#d87d4d",
+              "on-background": "#191c1d",
+              "surface-variant": "#e1e3e4",
+              "on-surface": "#191c1d",
+              "surface-container-highest": "#e1e3e4",
+              "inverse-surface": "#2e3132",
+              "secondary-container": "#bfebe9",
+              "secondary-fixed": "#bfebe9",
+              "on-secondary-fixed-variant": "#234d4d",
+              "surface-container-high": "#e6e8e9",
+              "surface-bright": "#f8fafb",
+              "on-primary": "#ffffff",
+              "primary-fixed-dim": "#5ed9d7",
+              "on-secondary": "#ffffff",
+              "surface-container-low": "#f2f4f5",
+              "on-tertiary-fixed-variant": "#773206",
+              "secondary-fixed-dim": "#a3cfcd",
+              "primary-container": "#0ea5a4",
+              "inverse-on-surface": "#eff1f2",
+              "on-tertiary": "#ffffff",
+              "surface-tint": "#006a69",
+              "error-container": "#ffdad6",
+              "on-primary-container": "#003333"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafb;
+        }
+        h1, h2, h3 {
+            font-family: 'Manrope', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased">
+<!-- Top Navigation Bar (Shared Component Anchor) -->
+<header class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md fixed top-0 w-full z-50 tonal-shift bg-slate-50">
+<div class="flex justify-between items-center px-8 h-16 w-full max-w-7xl mx-auto">
+<div class="flex items-center gap-8">
+<span class="text-2xl font-black text-teal-600 tracking-tight">HybridSocial</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800 px-3 py-1 rounded-full transition-colors" href="#">Explore</a>
+<a class="text-teal-600 dark:text-teal-400 font-bold border-b-2 border-teal-600 px-3 py-1" href="#">Trends</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden sm:block">
+<input class="bg-surface-container-high border-none rounded-full px-5 py-2 text-sm w-64 focus:ring-2 focus:ring-primary transition-all" placeholder="Search curated nodes..." type="text"/>
+</div>
+<button class="p-2 text-on-surface-variant hover:bg-slate-100 rounded-full transition-all scale-95 active:duration-75">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-slate-100 rounded-full transition-all scale-95 active:duration-75">
+<span class="material-symbols-outlined">mail</span>
+</button>
+<img alt="User profile" class="w-8 h-8 rounded-full object-cover ring-2 ring-primary ring-offset-2" data-alt="Close-up professional headshot of a young creative professional with a friendly smile and warm natural lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD64NOvQek-IIe78mY2k6BPToMJUHVL9pEX7FzbPCPtXKSmlVUthzuNSsQWuVadhCtiTL2DSJQIWVah7YDtD2w8Y6HzAzLBKS5v5P_vmqx0fjW33upmXmoR2bnui_0fCeC4_RcVF7I14jBdeHOV073PI4YmlxjMCsBMpEK2eVWffvYcGOFrZhTMNnowjmE8ryXSI_oE20lgHkfybdSr5g1LYW6KR2zuX3n3QUn0lFEijzOk5_6oxL4JE_SHquEldV0WO3pqkwrdPN4"/>
+</div>
+</div>
+</header>
+<!-- Main Layout Container -->
+<main class="max-w-7xl mx-auto pt-24 px-8 flex justify-center gap-[24px]">
+<!-- Left Sidebar (SideNavBar Shared Component) -->
+<aside class="h-screen sticky top-24 w-[240px] flex flex-col gap-1 py-4">
+<nav class="space-y-2">
+<!-- Home - Active State -->
+<a class="flex items-center gap-4 px-4 py-3 bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 rounded-full font-bold transform scale-98 transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">home</span>
+<span class="font-semibold text-[15px]">Home</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="font-semibold text-[15px]">Notifications</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">mail</span>
+<span class="font-semibold text-[15px]">Messages</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-semibold text-[15px]">Groups</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">bookmark</span>
+<span class="font-semibold text-[15px]">Bookmarks</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">trending_up</span>
+<span class="font-semibold text-[15px]">Trends</span>
+</a>
+<a class="flex items-center gap-4 px-4 py-3 text-slate-700 dark:text-slate-300 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-all" href="#">
+<span class="material-symbols-outlined">explore</span>
+<span class="font-semibold text-[15px]">Explore</span>
+</a>
+</nav>
+<div class="mt-8">
+<button class="w-full bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold py-4 rounded-full shadow-lg shadow-primary/10 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add</span>
+                    Create Post
+                </button>
+</div>
+<!-- User Footer in Sidebar -->
+<div class="mt-auto pb-12 flex items-center gap-3 px-4">
+<img alt="Avatar" class="w-10 h-10 rounded-full border-2 border-primary/20" data-alt="Close-up of a smiling young adult face with clear skin and soft lighting in a professional setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCdan2w5c8bBdIQpzlQsWpgiobThU4EsxctSESmXvg6_Pkzr6a9vVkHQxiApZ12axKWglBf4jMSRX2jMqRx1x_sm5mZpkrYMe0t9KQUdpfIdMqTaT1bSRXMb8KhTwoh-V0OEmdaB-jqJKT6xnlBuTs5v6DrTqAfGlhZUCikqmbx_83bSc9DlYof_di82byF6tdd_SPw3S_hKRNBH43fGmOJaNFCi4odumEuwQoSSWlSVgOsteCfwN6YjSk5G5r-l1AYDJiBdWM3siM"/>
+<div class="overflow-hidden">
+<p class="font-bold text-sm truncate">Alex Rivera</p>
+<p class="text-xs text-on-surface-variant truncate">@arivera_node</p>
+</div>
+</div>
+</aside>
+<!-- Main Feed Center Column -->
+<section class="w-[680px] flex flex-col gap-[28px]">
+<!-- Compose Box -->
+<div class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15">
+<div class="flex gap-4">
+<img alt="Me" class="w-12 h-12 rounded-full object-cover" data-alt="Profile photo of a man in a modern workspace" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC47Fo0rsxvFG5XVnRtCOzYANeEojHlbmx6Nsp3MbHwD43CcYpUoEJFVtrMNmb04VDocnkJWHY3kTlNjrYnk_SDmQPv2cM27RYnJQ9aJteao8igINnRTUMv_eBj0lJm7E5beuyv5xefuCNb7MCS13aG1LOaIQ0v7eGyCdSMZ_HIrBZ1KSnlW22VWSD5WpsP6h-YaMXq3IA1C8es4O0eWfQ7GiYC8Q3n6L07GG6YPvDv14dZQ60bVewF-h81R2DWJWA3KN-iOEi3W6E"/>
+<div class="flex-1">
+<textarea class="w-full border-none focus:ring-0 text-lg resize-none placeholder:text-on-surface-variant/50 pt-2 min-h-[100px]" placeholder="What's happening in your node?"></textarea>
+<div class="flex items-center justify-between border-t border-outline-variant/10 pt-4 mt-2">
+<div class="flex gap-1">
+<button class="p-2 text-primary hover:bg-secondary-container/30 rounded-full transition-colors"><span class="material-symbols-outlined">image</span></button>
+<button class="p-2 text-primary hover:bg-secondary-container/30 rounded-full transition-colors"><span class="material-symbols-outlined">gif_box</span></button>
+<button class="p-2 text-primary hover:bg-secondary-container/30 rounded-full transition-colors"><span class="material-symbols-outlined">poll</span></button>
+<button class="p-2 text-primary hover:bg-secondary-container/30 rounded-full transition-colors"><span class="material-symbols-outlined">sentiment_satisfied</span></button>
+</div>
+<button class="bg-primary text-on-primary px-8 py-2 rounded-full font-bold text-sm hover:opacity-90 transition-all">Post</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Feed Items -->
+<div class="space-y-[28px]">
+<!-- Post 1 -->
+<article class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15 hover:bg-slate-50 transition-colors duration-300">
+<div class="flex gap-4">
+<img alt="Author" class="w-12 h-12 rounded-full object-cover" data-alt="Portrait of a creative woman with glasses in a sunlit studio space" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-LyESk_HPPmLcz-OA2yGOpGDEjXsy3sQMtRqgGYoXVYYW5aZTdAZU06ZYjDn-rZ5xEMK4AVumDIRLm49d2mYyAIMtR7PelxuO3ne9dsgSQqDu2e5SIrxlM9Ui-2AO9YGqMNwJnGit32RDMp_HaECopF1z6p6icM5uVtD1N6NMZTbj3dabWz0l70XNkwyvXxbOW4DGrj18VZDryUL_QfRHjZhiKMK0F4OFPu58p7tHxICPF9BbKT43SGPEEIjoxHcG-BeP05JzWcQ"/>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-bold text-[16px]">Elena Vance</span>
+<span class="text-on-surface-variant text-sm">@evance_curator · 2h</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">more_horiz</span></button>
+</div>
+<p class="text-[15px] leading-relaxed text-on-surface mb-4">
+                                Just finished architecting the new decentralized protocol for the <span class="text-primary font-medium">#HybridNetwork</span>. The focus on local-first data integrity is going to change how we think about social ownership. 🌐✨
+                            </p>
+<img alt="Tech Visual" class="rounded-[12px] w-full aspect-video object-cover mb-4 border border-outline-variant/10" data-alt="Abstract 3D visualization of glowing nodes connected by lines of light on a deep dark background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATp6reIugkHoAjvWOS2Zho0-47YlH5c9Y5Nqn2W8uaS0Py6kDNIsK0S47VYMue8FYC_39sKKvZTh6QAKnDQFoC8w4SuRc8mkajQMAYP4CFANCauBTQ1ZoUgV5oDHhafyczl33R5jkmISvCsUa1heH06ymKF6FPIyMZKT20Ar6xUF65K788__60RQFAQhY-MAVe_O4ZnYoGnWxTORp-pwEv8FKHAev5Xvfj913BTdg40Aldg24Y75saBwOAg66EyYEHF10XuaSpP8Q"/>
+<div class="flex items-center justify-between text-on-surface-variant max-w-md pt-2">
+<button class="flex items-center gap-2 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">chat_bubble</span>
+<span class="text-xs">24</span>
+</button>
+<button class="flex items-center gap-2 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">cached</span>
+<span class="text-xs">12</span>
+</button>
+<button class="flex items-center gap-2 hover:text-error transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">favorite</span>
+<span class="text-xs">156</span>
+</button>
+<button class="flex items-center gap-2 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">share</span>
+</button>
+</div>
+</div>
+</div>
+</article>
+<!-- Post 2 -->
+<article class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15 hover:bg-slate-50 transition-colors duration-300">
+<div class="flex gap-4">
+<img alt="Author" class="w-12 h-12 rounded-full object-cover" data-alt="Profile photo of a man in a minimalist blazer against a clean studio backdrop" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAbR1qY1GKTlDAuXH3o6foKzDTn2KQuayNFQt2GyAgz3fmEmmoFSxq27BvJU67NlxJD56fyz11YkbuheZ1nVDyV0h0s51pm9B042ZTvcluYtw2T8tCXvbJRYwWqxAzFsIdUCImXOVFQ2Yvh57_dJDUofBEn-PmsdAl-ZjwD-Tp901g6zIZEi8Sdpk41K_29QkDWa9UkHLpYZJls-Wf1IiIPR5o-Y7_ir05fipBAq7lpJluSNr--HHX1eEm4T1XVqT-H1gobMArmdB0"/>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-bold text-[16px]">Marcus Chen</span>
+<span class="text-on-surface-variant text-sm">@mchen_design · 5h</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">more_horiz</span></button>
+</div>
+<p class="text-[15px] leading-relaxed text-on-surface mb-4">
+                                Minimalist typography isn't about having less—it's about making what you have mean more. Great systems are built on constraints. <span class="text-primary font-medium">#DesignEthos</span> <span class="text-primary font-medium">#ProductDesign</span>
+</p>
+<div class="flex items-center justify-between text-on-surface-variant max-w-md pt-2">
+<button class="flex items-center gap-2 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="text-xs">8</span>
+</button>
+<button class="flex items-center gap-2 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined">cached</span>
+<span class="text-xs">4</span>
+</button>
+<button class="flex items-center gap-2 hover:text-error transition-colors group">
+<span class="material-symbols-outlined">favorite</span>
+<span class="text-xs">89</span>
+</button>
+<button class="flex items-center gap-2 hover:text-primary transition-colors group">
+<span class="material-symbols-outlined">share</span>
+</button>
+</div>
+</div>
+</div>
+</article>
+<!-- Post 3 -->
+<article class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15 hover:bg-slate-50 transition-colors duration-300">
+<div class="flex gap-4">
+<div class="w-12 h-12 bg-secondary-container rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">groups</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="font-bold text-[16px]">Architectural Nodes</span>
+<span class="text-on-surface-variant text-sm">Promoted Community</span>
+</div>
+<button class="text-on-surface-variant hover:text-primary"><span class="material-symbols-outlined">more_horiz</span></button>
+</div>
+<p class="text-[15px] leading-relaxed text-on-surface mb-4">
+                                Join over 5,000 curators exploring the intersection of brutalist architecture and digital interfaces. 🏗️
+                            </p>
+<div class="grid grid-cols-2 gap-2 mb-4">
+<img class="rounded-[8px] w-full h-40 object-cover" data-alt="High-angle shot of a minimalist skyscraper with sharp geometric lines and blue glass" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCORH22PT44xVuG3931KuB0TzqRDP1VyquIWs42DGwr0pXdWxAjstTIuPL9cBFIUaX8IAxi0ztYAl59v2GUrNsNLvZz2tKsfEiHnTak0OWtJBcisXiIXm9qwFq0qs6Sm90vESdCL7ciCY63yPuh20pZhE3IcEmsqkQ8X_Bvu6ZI_Xrd-QEmrltra7FLP0Ta9Z2heDZ62AzNvznfmbaDnEKAG64F233dhRy0Vqqf5NHM6JT34Zj2VuLtfQFgIdxyBiRt8es9Fmz2KTI"/>
+<img class="rounded-[8px] w-full h-40 object-cover" data-alt="Concrete modernist building with dramatic shadows and sharp sunlight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBje6m8OLFQ0CjNFBDq3MjL5cJQz_Iz16AuTKnsfetuBYqQsePvDQt3XBVhjqbEToHwphXFssvfHeGCrKqWhTcafIAEB5Nou4NZEpZ3r4HoIuMnTcz9lQ-B3jwKw92cLH8niDYa8RaX0xgJug4RPUZVK4vLEiYNmt5sntmX2n5xk3cm--Zbp1OxP7BQ2jjDYCT-JApju3pVDtz3ADdipIGFzq5cGq5gA0F8Vj7dPvAroFh_OvsXc45vuHJW0-cQmAPxpGIuPJF6kFs"/>
+</div>
+<button class="w-full py-2 border-2 border-primary text-primary rounded-full font-bold hover:bg-primary hover:text-on-primary transition-all">Join Community</button>
+</div>
+</div>
+</article>
+</div>
+</section>
+<!-- Right Sidebar (Trends & Followers) -->
+<aside class="w-[320px] hidden lg:flex flex-col gap-6">
+<!-- Trends Card -->
+<div class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15">
+<h2 class="font-bold text-xl mb-6">Trends for you</h2>
+<div class="space-y-6">
+<div>
+<p class="text-xs text-on-surface-variant">Trending in Technology</p>
+<p class="font-bold text-[16px]">#DecentralizedWeb</p>
+<p class="text-xs text-on-surface-variant">24.5k Posts</p>
+</div>
+<div>
+<p class="text-xs text-on-surface-variant">Design · Trending</p>
+<p class="font-bold text-[16px]">#SoftMinimalism</p>
+<p class="text-xs text-on-surface-variant">12.1k Posts</p>
+</div>
+<div>
+<p class="text-xs text-on-surface-variant">Politics</p>
+<p class="font-bold text-[16px]">Digital Rights Act</p>
+<p class="text-xs text-on-surface-variant">8.2k Posts</p>
+</div>
+<a class="block text-primary text-sm font-semibold hover:underline" href="#">Show more</a>
+</div>
+</div>
+<!-- Who to Follow Card -->
+<div class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15">
+<h2 class="font-bold text-xl mb-6">Who to follow</h2>
+<div class="space-y-6">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="User" class="w-10 h-10 rounded-full" data-alt="Portrait of a young professional with short hair and a friendly expression" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMIy6BxFcBrD4CT-E2inMoI6EJN8vcdL_IXcPQSlQcIp4gUzu9uiouiTqLfOVbPR3lzcmA8wZbB9yeej_5mmXTZkug86Y9MggGD9ZflF1cl989tXk4wVWt2UGI0aQEnypIOPHWqoPlljpQYBDNqwSM95_TwM2hHDgJp_VC7CBVU_kTGEXOnYVxD8zphytXU4mjpwkEGE-nBsGlroR2qU_SHqBD9XQ6XtM80K24LUrRQdy6C-8XJjuSSv31NpzzibWoqnAdAb2A1kA"/>
+<div>
+<p class="font-bold text-sm">Jordan Smith</p>
+<p class="text-xs text-on-surface-variant">@jsmith_io</p>
+</div>
+</div>
+<button class="bg-on-surface text-surface px-4 py-1.5 rounded-full text-xs font-bold hover:opacity-80 transition-all">Follow</button>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="User" class="w-10 h-10 rounded-full" data-alt="Portrait of a woman with curly hair looking directly into the camera with soft warm lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC21YZ4j7sswJKrpqwNFw2HvG0tiEKGZt3CmQpLLjLV_HPCxBL7pQR57DuX8ncDASJrU7O1D8ilca-fKon_MH5OeMke7pWBgu75QNLC_ZV1ZA8iwgSKnSL7NFaUr8yJuIobQoFwiGXxdtE2dafmlUyuQyf300x1xqg7BoEh8kEesRP7lng5D53BrS0PZF-kmYiqC3_1Oz_xCdWJ7LjNKsPAGylJla1-ZFv0G1GdAR25XsMYfOzr59X3BaCyZA8sDREadaUctc-YCtU"/>
+<div>
+<p class="font-bold text-sm">Sarah Blake</p>
+<p class="text-xs text-on-surface-variant">@blake_curates</p>
+</div>
+</div>
+<button class="bg-on-surface text-surface px-4 py-1.5 rounded-full text-xs font-bold hover:opacity-80 transition-all">Follow</button>
+</div>
+<a class="block text-primary text-sm font-semibold hover:underline" href="#">Show more</a>
+</div>
+</div>
+<!-- Communities Card -->
+<div class="bg-surface-container-lowest rounded-[14px] p-6 border border-outline-variant/15">
+<h2 class="font-bold text-xl mb-6">Active Communities</h2>
+<div class="space-y-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center text-teal-600">
+<span class="material-symbols-outlined">brush</span>
+</div>
+<div>
+<p class="font-bold text-sm">Abstract Art Node</p>
+<p class="text-xs text-on-surface-variant">3.2k curators</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">
+<span class="material-symbols-outlined">terminal</span>
+</div>
+<div>
+<p class="font-bold text-sm">Rust Engineers</p>
+<p class="text-xs text-on-surface-variant">12.8k curators</p>
+</div>
+</div>
+</div>
+</div>
+<footer class="px-6 text-[11px] text-on-surface-variant/60 flex flex-wrap gap-x-3 gap-y-1">
+<a class="hover:underline" href="#">Terms of Service</a>
+<a class="hover:underline" href="#">Privacy Policy</a>
+<a class="hover:underline" href="#">Cookie Policy</a>
+<a class="hover:underline" href="#">Accessibility</a>
+<a class="hover:underline" href="#">Ads info</a>
+<span>© 2024 HybridSocial</span>
+</footer>
+</aside>
+</main>
+</body></html>

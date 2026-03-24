@@ -22,10 +22,12 @@ defmodule Hybridsocial.Moderation.Filters.DefaultEngine do
   @impl true
   def check(text, context \\ %{}) do
     filter_context = Map.get(context, :context, "all")
+    filter_scope = Map.get(context, :scope, "all")
 
     filters =
       Moderation.list_filters()
       |> Enum.filter(&matches_context?(&1, filter_context))
+      |> Enum.filter(&matches_scope?(&1, filter_scope))
 
     do_check(text, filters)
   end
@@ -34,6 +36,11 @@ defmodule Hybridsocial.Moderation.Filters.DefaultEngine do
   defp matches_context?(%ContentFilter{context: ctx}, ctx), do: true
   defp matches_context?(_filter, "all"), do: true
   defp matches_context?(_filter, _requested), do: false
+
+  defp matches_scope?(%ContentFilter{scope: "all"}, _requested), do: true
+  defp matches_scope?(%ContentFilter{scope: scope}, scope), do: true
+  defp matches_scope?(_filter, "all"), do: true
+  defp matches_scope?(_filter, _requested), do: false
 
   defp do_check(text, []), do: {:ok, text}
 

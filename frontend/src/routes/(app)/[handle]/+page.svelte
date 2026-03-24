@@ -5,8 +5,9 @@
   import type { Identity, Relationship, Post } from '$lib/api/types.js';
   import { lookupAccount, getRelationship, follow, unfollow, block, unblock, mute, unmute } from '$lib/api/accounts.js';
   import { getAccountStatuses } from '$lib/api/statuses.js';
-  import { authStore } from '$lib/stores/auth.js';
+  import { authStore, isStaffMember } from '$lib/stores/auth.js';
   import ProfileHeader from '$lib/components/profile/ProfileHeader.svelte';
+  import AdminProfileActions from '$lib/components/admin/AdminProfileActions.svelte';
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import FeedList from '$lib/components/feed/FeedList.svelte';
 
@@ -191,6 +192,10 @@
       onmessage={handleMessage}
       onedit={handleEdit}
     />
+
+    {#if $isStaffMember && !isOwnProfile}
+      <AdminProfileActions {account} />
+    {/if}
 
     <div class="profile-feed-section">
       <Tabs {tabs} bind:active={activeTab}>

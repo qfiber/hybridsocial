@@ -1857,6 +1857,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       action: filter.action,
       replacement: filter.replacement,
       context: filter.context,
+      scope: filter.scope,
       created_at: filter.inserted_at
     }
   end

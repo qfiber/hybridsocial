@@ -3,7 +3,9 @@
   import { relativeTime, fullDateTime } from '$lib/utils/time.js';
   import { editPost } from '$lib/api/statuses.js';
   import { api } from '$lib/api/client.js';
+  import { isStaffMember } from '$lib/stores/auth.js';
   import PostActions from './PostActions.svelte';
+  import AdminPostActions from '$lib/components/admin/AdminPostActions.svelte';
   import QuoteCard from './QuoteCard.svelte';
   import LinkPreview from './LinkPreview.svelte';
   import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
@@ -336,7 +338,12 @@
   </div>
 
   {#if !compact}
-    <PostActions {post} onedit={startEditing} />
+    <div class="post-actions-row">
+      <PostActions {post} onedit={startEditing} />
+      {#if $isStaffMember}
+        <AdminPostActions {post} />
+      {/if}
+    </div>
   {/if}
 </article>
 
@@ -464,6 +471,19 @@
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
     margin-block-start: var(--space-1);
+  }
+
+  .post-actions-row {
+    display: flex;
+    align-items: center;
+    padding-inline-start: calc(40px + var(--space-3));
+    margin-block-start: var(--space-2);
+  }
+
+  .post-actions-row :global(.post-actions) {
+    flex: 1;
+    margin-block-start: 0;
+    padding-inline-start: 0;
   }
 
   .post-body {

@@ -42,6 +42,7 @@
   let newFilterPattern = $state('');
   let newFilterAction = $state<'warn' | 'hide' | 'reject'>('warn');
   let newFilterReplacement = $state('');
+  let newFilterScope = $state<'all' | 'local' | 'remote'>('all');
 
   // Banned Domains state
   let bannedDomains: BannedDomain[] = $state([]);
@@ -153,7 +154,8 @@
         type: newFilterType,
         pattern: newFilterPattern,
         action: newFilterAction,
-        replacement: newFilterReplacement || null
+        replacement: newFilterReplacement || null,
+        scope: newFilterScope
       });
       filters = [...filters, filter];
       newFilterPattern = '';
@@ -303,6 +305,11 @@
           <option value="hide">Hide</option>
           <option value="reject">Reject</option>
         </select>
+        <select class="input" bind:value={newFilterScope} style="width: 120px">
+          <option value="all">All posts</option>
+          <option value="local">Local only</option>
+          <option value="remote">Remote only</option>
+        </select>
         <input class="input" type="text" bind:value={newFilterReplacement} placeholder="Replacement (optional)" />
         <button class="btn btn-primary" type="submit">Add</button>
       </form>
@@ -314,6 +321,9 @@
               <span class="badge-type">{filter.type}</span>
               <code class="filter-pattern">{filter.pattern}</code>
               <span class="badge-action badge-{filter.action}">{filter.action}</span>
+              {#if filter.scope !== 'all'}
+                <span class="badge-scope">{filter.scope}</span>
+              {/if}
               {#if filter.replacement}
                 <span class="text-secondary">- {filter.replacement}</span>
               {/if}
@@ -514,6 +524,16 @@
   .badge-reject {
     background: var(--color-danger-soft);
     color: #991b1b;
+  }
+
+  .badge-scope {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    text-transform: capitalize;
   }
 
   .empty-text {

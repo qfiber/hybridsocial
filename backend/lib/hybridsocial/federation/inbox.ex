@@ -110,26 +110,36 @@ defmodule Hybridsocial.Federation.Inbox do
     with {:ok, remote_identity} <- resolve_or_create_remote_identity(actor_ap_id) do
       post_attrs = ActivityMapper.to_post(object)
 
-      # Check if we already have this post
-      case get_post_by_ap_id(post_attrs["ap_id"]) do
-        nil ->
-          # Resolve parent post if this is a reply
-          parent_id = resolve_parent_post_id(post_attrs["parent_ap_id"])
+      # Run content filters with "remote" scope for federated content
+      content_text = post_attrs["content"] || ""
 
-          insert_attrs =
-            post_attrs
-            |> Map.delete("parent_ap_id")
-            |> Map.put("identity_id", remote_identity.id)
-            |> maybe_put_parent(parent_id)
+      case Hybridsocial.Moderation.check_content(content_text, "remote") do
+        {:reject, reason} ->
+          Logger.info("Rejected remote post from #{actor_ap_id}: #{reason}")
+          {:error, :content_rejected}
 
-          %Post{}
-          |> Post.create_changeset(insert_attrs)
-          |> maybe_put_published_at(post_attrs["published_at"])
-          |> maybe_put_content_html(post_attrs["content_html"])
-          |> Repo.insert()
+        {:flag, reason} ->
+          # Allow the post but queue it for moderation review
+          result = insert_remote_post(post_attrs, remote_identity)
 
-        existing ->
-          {:ok, existing}
+          case result do
+            {:ok, post} ->
+              Hybridsocial.Moderation.queue_for_review(%{
+                "item_type" => "post",
+                "item_id" => post.id,
+                "source" => "content_filter",
+                "reason" => reason,
+                "severity" => "medium"
+              })
+
+              {:ok, post}
+
+            error ->
+              error
+          end
+
+        _ ->
+          insert_remote_post(post_attrs, remote_identity)
       end
     end
   end
@@ -142,6 +152,28 @@ defmodule Hybridsocial.Federation.Inbox do
   end
 
   defp handle_create(_), do: {:error, :invalid_create_activity}
+
+  defp insert_remote_post(post_attrs, remote_identity) do
+    case get_post_by_ap_id(post_attrs["ap_id"]) do
+      nil ->
+        parent_id = resolve_parent_post_id(post_attrs["parent_ap_id"])
+
+        insert_attrs =
+          post_attrs
+          |> Map.delete("parent_ap_id")
+          |> Map.put("identity_id", remote_identity.id)
+          |> maybe_put_parent(parent_id)
+
+        %Post{}
+        |> Post.create_changeset(insert_attrs)
+        |> maybe_put_published_at(post_attrs["published_at"])
+        |> maybe_put_content_html(post_attrs["content_html"])
+        |> Repo.insert()
+
+      existing ->
+        {:ok, existing}
+    end
+  end
 
   # --- Like ---
 

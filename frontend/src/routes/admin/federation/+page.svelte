@@ -2,13 +2,15 @@
   import { onMount } from 'svelte';
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import DataTable from '$lib/components/admin/DataTable.svelte';
+  import Modal from '$lib/components/ui/Modal.svelte';
   import { addToast } from '$lib/stores/toast.js';
   import {
     getKnownInstances,
     getFederationPolicies, createFederationPolicy, deleteFederationPolicy,
-    getDeliveryQueueStats, retryDeliveryQueue
+    getDeliveryQueueStats, retryDeliveryQueue,
+    purgeInstancePreview, purgeInstanceContent
   } from '$lib/api/admin.js';
-  import type { KnownInstance, FederationPolicy, DeliveryQueueStats } from '$lib/api/types.js';
+  import type { KnownInstance, FederationPolicy, DeliveryQueueStats, InstancePurgePreview } from '$lib/api/types.js';
 
   const tabs = [
     { id: 'instances', label: 'Known Instances' },
@@ -40,13 +42,20 @@
   let policies: FederationPolicy[] = $state([]);
   let policiesLoading = $state(false);
   let newPolicyDomain = $state('');
-  let newPolicyType = $state<'allow' | 'silence' | 'suspend'>('silence');
+  let newPolicyType = $state<'allow' | 'silence' | 'suspend' | 'force_nsfw' | 'block_media'>('silence');
   let newPolicyReason = $state('');
 
   // Delivery Queue
   let deliveryStats: DeliveryQueueStats | null = $state(null);
   let deliveryLoading = $state(false);
   let retrying = $state(false);
+
+  // Purge
+  let purgeModalOpen = $state(false);
+  let purgeDomain = $state('');
+  let purgePreview: InstancePurgePreview | null = $state(null);
+  let purgePreviewLoading = $state(false);
+  let purging = $state(false);
 
   onMount(async () => {
     await loadInstances();
@@ -134,6 +143,50 @@
     }
   }
 
+  async function openPurgeModal(domain: string) {
+    purgeDomain = domain;
+    purgePreview = null;
+    purgeModalOpen = true;
+    purgePreviewLoading = true;
+    try {
+      purgePreview = await purgeInstancePreview(domain);
+    } catch {
+      addToast('Failed to load purge preview', 'error');
+    } finally {
+      purgePreviewLoading = false;
+    }
+  }
+
+  async function handlePurge() {
+    if (!purgeDomain) return;
+    purging = true;
+    try {
+      await purgeInstanceContent(purgeDomain);
+      addToast(`Content from ${purgeDomain} purged`, 'success');
+      purgeModalOpen = false;
+      await loadInstances();
+    } catch {
+      addToast('Failed to purge instance content', 'error');
+    } finally {
+      purging = false;
+    }
+  }
+
+  function isSuspended(domain: string): boolean {
+    return policies.some((p) => p.domain === domain && p.policy === 'suspend');
+  }
+
+  function policyBadgeClass(policy: string): string {
+    switch (policy) {
+      case 'allow': return 'policy-allow';
+      case 'silence': return 'policy-silence';
+      case 'suspend': return 'policy-suspend';
+      case 'force_nsfw': return 'policy-force_nsfw';
+      case 'block_media': return 'policy-block_media';
+      default: return '';
+    }
+  }
+
   function formatDate(iso: string | null): string {
     if (!iso) return 'Never';
     return new Date(iso).toLocaleDateString(undefined, {
@@ -187,10 +240,12 @@
     {:else if activeTab === 'policies'}
       <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleAddPolicy(); }}>
         <input class="input" type="text" bind:value={newPolicyDomain} placeholder="domain.example" required />
-        <select class="input" bind:value={newPolicyType} style="width: 140px">
+        <select class="input" bind:value={newPolicyType} style="width: 160px">
           <option value="allow">Allow</option>
           <option value="silence">Silence</option>
           <option value="suspend">Suspend</option>
+          <option value="force_nsfw">Force NSFW</option>
+          <option value="block_media">Block Media</option>
         </select>
         <input class="input" type="text" bind:value={newPolicyReason} placeholder="Reason (optional)" />
         <button class="btn btn-primary" type="submit">Add Policy</button>
@@ -201,16 +256,25 @@
           <div class="list-item card">
             <div class="list-item-info">
               <strong>{policy.domain}</strong>
-              <span class="policy-badge policy-{policy.policy}">{policy.policy}</span>
+              <span class="policy-badge {policyBadgeClass(policy.policy)}">{policy.policy.replace(/_/g, ' ')}</span>
               {#if policy.reason}
                 <span class="text-secondary">- {policy.reason}</span>
               {/if}
             </div>
-            <button
-              class="btn btn-sm btn-danger"
-              type="button"
-              onclick={() => handleDeletePolicy(policy.id)}
-            >Remove</button>
+            <div class="list-item-actions">
+              {#if policy.policy === 'suspend'}
+                <button
+                  class="btn btn-sm btn-outline"
+                  type="button"
+                  onclick={() => openPurgeModal(policy.domain)}
+                >Purge Content</button>
+              {/if}
+              <button
+                class="btn btn-sm btn-danger"
+                type="button"
+                onclick={() => handleDeletePolicy(policy.id)}
+              >Remove</button>
+            </div>
           </div>
         {:else}
           <p class="empty-text">No federation policies configured</p>
@@ -254,6 +318,41 @@
     {/if}
   </Tabs>
 </div>
+
+<Modal bind:open={purgeModalOpen} title="Purge Instance Content">
+  <p class="purge-warning">
+    This will permanently remove all cached content from <strong>{purgeDomain}</strong>.
+  </p>
+  {#if purgePreviewLoading}
+    <div class="skeleton" style="height: 60px"></div>
+  {:else if purgePreview}
+    <div class="purge-stats">
+      <div class="purge-stat">
+        <span class="purge-stat-label">Users</span>
+        <span class="purge-stat-value">{purgePreview.users_count.toLocaleString()}</span>
+      </div>
+      <div class="purge-stat">
+        <span class="purge-stat-label">Posts</span>
+        <span class="purge-stat-value">{purgePreview.posts_count.toLocaleString()}</span>
+      </div>
+      <div class="purge-stat">
+        <span class="purge-stat-label">Media files</span>
+        <span class="purge-stat-value">{purgePreview.media_count.toLocaleString()}</span>
+      </div>
+    </div>
+  {/if}
+  <div class="modal-actions">
+    <button class="btn btn-ghost" type="button" onclick={() => (purgeModalOpen = false)}>Cancel</button>
+    <button
+      class="btn btn-danger"
+      type="button"
+      disabled={purging || purgePreviewLoading}
+      onclick={handlePurge}
+    >
+      {purging ? 'Purging...' : 'Purge All Content'}
+    </button>
+  </div>
+</Modal>
 
 <style>
   .federation-page {
@@ -323,6 +422,12 @@
     font-size: var(--text-sm);
   }
 
+  .list-item-actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-shrink: 0;
+  }
+
   .policy-badge {
     font-size: var(--text-xs);
     font-weight: 600;
@@ -344,6 +449,16 @@
   .policy-suspend {
     background: var(--color-danger-soft);
     color: #991b1b;
+  }
+
+  .policy-force_nsfw {
+    background: var(--color-info-soft);
+    color: #1e40af;
+  }
+
+  .policy-block_media {
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
   }
 
   .delivery-grid {
@@ -384,6 +499,45 @@
 
   .delivery-loading {
     padding: var(--space-4) 0;
+  }
+
+  .purge-warning {
+    font-size: var(--text-sm);
+    color: var(--color-danger);
+    margin-block-end: var(--space-4);
+  }
+
+  .purge-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+    margin-block-end: var(--space-4);
+  }
+
+  .purge-stat {
+    text-align: center;
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+  }
+
+  .purge-stat-label {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    margin-block-end: var(--space-1);
+  }
+
+  .purge-stat-value {
+    font-size: var(--text-lg);
+    font-weight: 700;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-block-start: var(--space-4);
   }
 
   .empty-text {

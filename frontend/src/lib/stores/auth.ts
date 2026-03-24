@@ -47,6 +47,8 @@ export const authStore = writable<AuthState>(initialState);
 export const currentUser = derived(authStore, ($s) => $s.user);
 export const isLoggedIn = derived(authStore, ($s) => !!$s.user);
 export const isAuthLoading = derived(authStore, ($s) => $s.loading);
+export const isAdmin = derived(authStore, ($s) => $s.user?.is_admin === true);
+export const isStaffMember = derived(authStore, ($s) => ($s.user?.roles?.length ?? 0) > 0 || $s.user?.is_admin === true);
 
 export function hasPermission(permission: string): boolean {
   const state = get(authStore);

@@ -152,11 +152,20 @@ defmodule Hybridsocial.Moderation do
     |> Repo.insert()
   end
 
-  def list_filters do
+  def list_filters(opts \\ []) do
     ContentFilter
+    |> filter_by_scope(opts[:scope])
     |> order_by([f], desc: f.inserted_at)
     |> Repo.all()
   end
+
+  defp filter_by_scope(query, nil), do: query
+
+  defp filter_by_scope(query, scope) when scope in ["local", "remote"] do
+    where(query, [f], f.scope == "all" or f.scope == ^scope)
+  end
+
+  defp filter_by_scope(query, _), do: query
 
   def update_filter(id, attrs) do
     case Repo.get(ContentFilter, id) do
@@ -172,16 +181,16 @@ defmodule Hybridsocial.Moderation do
     end
   end
 
-  def check_content(text) do
-    Hybridsocial.Moderation.FilterResolver.impl().check(text, %{context: "posts"})
+  def check_content(text, scope \\ "all") do
+    Hybridsocial.Moderation.FilterResolver.impl().check(text, %{context: "posts", scope: scope})
   end
 
   @doc """
   Checks content and automatically queues for review if flagged.
   Returns the filter result unchanged; queuing is a side-effect.
   """
-  def check_content_and_queue(text, item_type, item_id) do
-    result = check_content(text)
+  def check_content_and_queue(text, item_type, item_id, scope \\ "all") do
+    result = check_content(text, scope)
 
     case result do
       {:flag, reason} ->

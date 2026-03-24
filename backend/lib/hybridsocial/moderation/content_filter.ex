@@ -8,6 +8,7 @@ defmodule Hybridsocial.Moderation.ContentFilter do
   @types ~w(word phrase regex)
   @actions ~w(flag reject replace)
   @contexts ~w(posts usernames bios all)
+  @scopes ~w(all local remote)
 
   schema "content_filters" do
     field :type, :string
@@ -15,6 +16,7 @@ defmodule Hybridsocial.Moderation.ContentFilter do
     field :action, :string
     field :replacement, :string
     field :context, :string, default: "all"
+    field :scope, :string, default: "all"
 
     belongs_to :creator, Hybridsocial.Accounts.Identity, foreign_key: :created_by
 
@@ -23,13 +25,14 @@ defmodule Hybridsocial.Moderation.ContentFilter do
 
   def changeset(filter, attrs) do
     filter
-    |> cast(attrs, [:type, :pattern, :action, :replacement, :context, :created_by])
+    |> cast(attrs, [:type, :pattern, :action, :replacement, :context, :scope, :created_by])
     |> validate_required([:type, :pattern, :action])
     |> validate_length(:pattern, max: 1000)
     |> validate_length(:replacement, max: 500)
     |> validate_inclusion(:type, @types)
     |> validate_inclusion(:action, @actions)
     |> validate_inclusion(:context, @contexts)
+    |> validate_inclusion(:scope, @scopes)
     |> validate_replacement()
   end
 

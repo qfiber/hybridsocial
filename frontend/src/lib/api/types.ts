@@ -250,6 +250,10 @@ export interface AdminUser {
   is_bot: boolean;
   is_locked: boolean;
   status: 'active' | 'suspended' | 'pending';
+  silenced: boolean;
+  shadow_banned: boolean;
+  force_sensitive: boolean;
+  trust_level: number;
   post_count: number;
   followers_count: number;
   created_at: string;
@@ -276,6 +280,7 @@ export interface ContentFilter {
   pattern: string;
   action: 'warn' | 'hide' | 'reject';
   replacement: string | null;
+  scope: 'all' | 'local' | 'remote';
   created_at: string;
 }
 
@@ -310,10 +315,91 @@ export interface KnownInstance {
 export interface FederationPolicy {
   id: string;
   domain: string;
-  policy: 'allow' | 'silence' | 'suspend';
+  policy: 'allow' | 'silence' | 'suspend' | 'force_nsfw' | 'block_media';
   reason: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  events: string[];
+  secret: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Appeal {
+  id: string;
+  user: Identity;
+  action_type: string;
+  reason: string;
+  response: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  submitted_at: string;
+  resolved_at: string | null;
+  resolved_by: Identity | null;
+}
+
+export interface ModerationNote {
+  id: string;
+  account_id: string;
+  content: string;
+  author: Identity;
+  created_at: string;
+}
+
+export interface ModerationQueueItem {
+  id: string;
+  type: string;
+  content_preview: string;
+  source: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'pending' | 'approved' | 'rejected' | 'escalated';
+  reason: string | null;
+  created_at: string;
+}
+
+export interface ModerationQueueStats {
+  pending: number;
+  approved: number;
+  rejected: number;
+  escalated: number;
+}
+
+export interface InviteCode {
+  id: string;
+  code: string;
+  uses: number;
+  max_uses: number | null;
+  expires_at: string | null;
+  created_by: Identity;
+  status: 'active' | 'expired' | 'disabled';
+  created_at: string;
+}
+
+export interface EmailDomainBan {
+  id: string;
+  domain: string;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface MediaHashBan {
+  id: string;
+  hash: string;
+  hash_type: 'md5' | 'sha256' | 'phash';
+  description: string | null;
+  created_at: string;
+}
+
+export interface InstancePurgePreview {
+  domain: string;
+  users_count: number;
+  posts_count: number;
+  media_count: number;
 }
 
 export interface DeliveryQueueStats {
