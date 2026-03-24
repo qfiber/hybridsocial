@@ -74,7 +74,7 @@
       {/if}
 
       <div class="thread-main">
-        <PostCard {post} />
+        <PostCard {post} detail />
       </div>
 
       {#if descendants.length > 0}

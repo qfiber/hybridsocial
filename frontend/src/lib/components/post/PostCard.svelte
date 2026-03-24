@@ -14,9 +14,11 @@
   let {
     post,
     compact = false,
+    detail = false,
   }: {
     post: Post;
     compact?: boolean;
+    detail?: boolean;
   } = $props();
 
   let showSensitive = $state(false);
@@ -120,12 +122,16 @@
   }
 
   function handleCardClick(e: MouseEvent) {
+    if (detail) return;
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) return;
     const target = e.target as HTMLElement;
     if (target.closest('a, button, [role="button"], video, audio, textarea, select, input')) return;
     navigateToPost();
   }
 
   function handleCardKeydown(e: KeyboardEvent) {
+    if (detail) return;
     if (e.key === 'Enter' || e.key === ' ') {
       const target = e.target as HTMLElement;
       if (target.closest('a, button, [role="button"], textarea, select, input')) return;
@@ -138,8 +144,9 @@
 <article
   class="post-card"
   class:compact
+  class:detail
   role="article"
-  tabindex="0"
+  tabindex={detail ? -1 : 0}
   onclick={handleCardClick}
   onkeydown={handleCardKeydown}
   aria-label="Post by {displayName}"
@@ -160,23 +167,23 @@
     <div class="post-content-col">
       <div class="post-author-line">
         <div class="post-author-info">
-          <a href="/@{post.account.handle}" class="post-display-name">{displayName}</a>
-          {#if (post.account as any).verified}
-            <VerifiedBadge size="sm" />
-          {/if}
-          {#if (post.account as any).badges}
-            {#each (post.account as any).badges as badge (badge.type)}
-              <RoleBadge type={badge.type} label={badge.label} size="sm" />
-            {/each}
-          {/if}
-          <span class="post-handle-time">
-            <span class="post-handle">{handle}</span>
+          <div class="post-author-name-row">
+            <a href="/@{post.account.handle}" class="post-display-name">{displayName}</a>
+            {#if (post.account as any).verified}
+              <VerifiedBadge size="sm" />
+            {/if}
+            {#if (post.account as any).badges}
+              {#each (post.account as any).badges as badge (badge.type)}
+                <RoleBadge type={badge.type} label={badge.label} size="sm" />
+              {/each}
+            {/if}
             <span class="post-dot" aria-hidden="true">&middot;</span>
             <time class="post-time" datetime={post.created_at} title={fullDate}>{timeAgo}</time>
             {#if post.edited_at}
               <span class="post-edited" title="Edited {fullDateTime(post.edited_at)}">(edited)</span>
             {/if}
-          </span>
+          </div>
+          <span class="post-handle">{handle}</span>
         </div>
         {#if $isStaffMember}
           <AdminPostActions {post} />
@@ -355,6 +362,11 @@
     cursor: pointer;
     box-shadow: 0 1px 3px rgba(25, 28, 29, 0.04);
     transition: background-color 300ms ease, box-shadow 300ms ease;
+    user-select: text;
+  }
+
+  .post-card.detail {
+    cursor: default;
   }
 
   .post-card:hover {
@@ -426,9 +438,15 @@
 
   .post-author-info {
     display: flex;
+    flex-direction: column;
+    gap: 0;
+    min-width: 0;
+  }
+
+  .post-author-name-row {
+    display: flex;
     align-items: center;
     gap: 4px;
-    flex-wrap: wrap;
     min-width: 0;
   }
 
@@ -446,26 +464,27 @@
     text-decoration: underline;
   }
 
-  .post-handle-time {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-  }
-
   .post-handle {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    max-width: 200px;
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
+    mask-image: linear-gradient(to right, black 80%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 80%, transparent 100%);
   }
 
   .post-dot {
     flex-shrink: 0;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
   }
 
   .post-time {
     white-space: nowrap;
+    color: var(--color-text-secondary);
+    font-size: 0.875rem;
   }
 
   .post-time:hover {
