@@ -89,6 +89,7 @@
       case 'boolean': return 'checkbox';
       case 'integer': return 'number';
       case 'text': return 'textarea';
+      case 'json': return 'textarea';
       default: return 'text';
     }
   }

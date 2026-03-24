@@ -5,6 +5,7 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Dropdown from '$lib/components/ui/Dropdown.svelte';
   import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+  import RoleBadge from '$lib/components/ui/RoleBadge.svelte';
 
   let {
     account,
@@ -153,6 +154,11 @@
         {account.display_name || account.handle}
         {#if (account as any).verified}
           <VerifiedBadge size="md" />
+        {/if}
+        {#if (account as any).badges}
+          {#each (account as any).badges as badge (badge.type)}
+            <RoleBadge type={badge.type} label={badge.label} size="md" />
+          {/each}
         {/if}
       </h1>
       <span class="profile-handle">@{account.handle}</span>

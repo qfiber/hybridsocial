@@ -8,7 +8,6 @@ defmodule Hybridsocial.Pages.Branding do
   schema "page_branding" do
     field :theme_color, :string
     field :cover_image_url, :string
-    field :custom_css, :string
     field :logo_url, :string
     field :layout_preference, :map, default: %{}
 
@@ -21,26 +20,12 @@ defmodule Hybridsocial.Pages.Branding do
   end
 
   def changeset(branding, attrs) do
+    # custom_css is intentionally excluded — CSS injection is a security risk
     branding
-    |> cast(attrs, [:theme_color, :cover_image_url, :custom_css, :logo_url, :layout_preference])
-    |> sanitize_custom_css()
+    |> cast(attrs, [:theme_color, :cover_image_url, :logo_url, :layout_preference])
+    |> validate_length(:theme_color, max: 20)
+    |> validate_length(:cover_image_url, max: 2048)
+    |> validate_length(:logo_url, max: 2048)
     |> put_change(:updated_at, DateTime.utc_now() |> DateTime.truncate(:microsecond))
-  end
-
-  defp sanitize_custom_css(changeset) do
-    case get_change(changeset, :custom_css) do
-      nil ->
-        changeset
-
-      css ->
-        sanitized =
-          css
-          |> String.replace(~r/@import\b[^;]*;?/i, "")
-          |> String.replace(~r/url\s*\([^)]*\)/i, "")
-          |> String.replace(~r/expression\s*\([^)]*\)/i, "")
-          |> String.replace(~r/javascript\s*:/i, "")
-
-        put_change(changeset, :custom_css, sanitized)
-    end
   end
 end

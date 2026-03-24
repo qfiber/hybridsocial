@@ -54,7 +54,9 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
   end
 
   def login(conn, %{"email" => email, "password" => password}) do
-    case Auth.login(email, password) do
+    session_info = get_session_info(conn)
+
+    case Auth.login_with_session(email, password, session_info) do
       {:ok, tokens} ->
         Moderation.log(
           tokens.identity_id,
@@ -66,6 +68,7 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
         )
 
         conn
+        |> set_auth_cookies(tokens)
         |> put_status(:ok)
         |> json(tokens)
 
@@ -111,17 +114,35 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
     end
   end
 
-  def refresh(conn, %{"refresh_token" => refresh_token}) do
-    case Auth.refresh(refresh_token) do
-      {:ok, tokens} ->
-        conn
-        |> put_status(:ok)
-        |> json(tokens)
+  def refresh(conn, params) do
+    conn = Plug.Conn.fetch_cookies(conn)
 
-      {:error, :invalid_refresh_token} ->
-        conn
-        |> put_status(:unauthorized)
-        |> json(%{error: "auth.invalid_refresh_token"})
+    # Prefer body token (explicit), fall back to httpOnly cookie (implicit)
+    refresh_token =
+      case params["refresh_token"] do
+        token when is_binary(token) and byte_size(token) > 0 -> token
+        _ -> conn.cookies["hs_refresh"]
+      end
+
+    if is_nil(refresh_token) or refresh_token == "" do
+      conn
+      |> put_status(:unauthorized)
+      |> json(%{error: "auth.invalid_refresh_token"})
+    else
+      session_info = get_session_info(conn)
+
+      case Auth.refresh(refresh_token, session_info) do
+        {:ok, tokens} ->
+          conn
+          |> set_auth_cookies(tokens)
+          |> put_status(:ok)
+          |> json(tokens)
+
+        {:error, :invalid_refresh_token} ->
+          conn
+          |> put_status(:unauthorized)
+          |> json(%{error: "auth.invalid_refresh_token"})
+      end
     end
   end
 
@@ -142,6 +163,7 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
     end
 
     conn
+    |> clear_auth_cookies()
     |> put_status(:ok)
     |> json(%{message: "auth.logged_out"})
   end
@@ -180,6 +202,10 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       is_locked: identity.is_locked,
       is_bot: identity.is_bot,
       is_admin: identity.is_admin,
+      show_badge: identity.show_badge,
+      badges: Hybridsocial.Badges.instance_badges(identity),
+      verification_tier: Hybridsocial.Premium.TierLimits.get_tier(identity),
+      limits: Hybridsocial.Premium.TierLimits.limits_for(identity),
       roles: roles,
       permissions: permissions,
       created_at: identity.inserted_at,
@@ -269,7 +295,9 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
   end
 
   def login_with_otp(conn, %{"identity_id" => identity_id, "code" => code}) do
-    case Auth.login_with_otp(identity_id, code) do
+    session_info = get_session_info(conn)
+
+    case Auth.login_with_otp_session(identity_id, code, session_info) do
       {:ok, tokens} ->
         Moderation.log(
           identity_id,
@@ -281,6 +309,7 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
         )
 
         conn
+        |> set_auth_cookies(tokens)
         |> put_status(:ok)
         |> json(tokens)
 
@@ -350,11 +379,49 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
     json(conn, challenge)
   end
 
+  defp get_session_info(conn) do
+    %{
+      ip_address: get_client_ip(conn),
+      user_agent: List.first(Plug.Conn.get_req_header(conn, "user-agent"))
+    }
+  end
+
   defp get_client_ip(conn) do
     case Plug.Conn.get_req_header(conn, "x-forwarded-for") do
       [ip | _] -> ip |> String.split(",") |> hd() |> String.trim()
       [] -> conn.remote_ip |> :inet.ntoa() |> to_string()
     end
+  end
+
+  defp set_auth_cookies(conn, tokens) do
+    access_token = tokens.access_token || tokens[:access_token]
+    refresh_token = tokens.refresh_token || tokens[:refresh_token]
+
+    secure = conn.scheme == :https
+
+    conn
+    |> put_resp_cookie("hs_access", access_token,
+      http_only: true,
+      secure: secure,
+      same_site: "Lax",
+      path: "/",
+      max_age: 30 * 24 * 3600
+    )
+    |> put_resp_cookie("hs_refresh", refresh_token,
+      http_only: true,
+      secure: secure,
+      same_site: "Lax",
+      path: "/",
+      max_age: 30 * 24 * 3600
+    )
+  end
+
+  defp clear_auth_cookies(conn) do
+    secure = conn.scheme == :https
+
+    conn
+    |> delete_resp_cookie("hs_access", path: "/", secure: secure)
+    |> delete_resp_cookie("hs_refresh", path: "/", secure: secure)
   end
 
   defp format_errors(changeset) do

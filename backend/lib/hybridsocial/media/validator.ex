@@ -27,8 +27,8 @@ defmodule Hybridsocial.Media.Validator do
   Validates the file size against configurable limits per content type.
   Returns :ok or {:error, :file_too_large}.
   """
-  def validate_file_size(size, content_type) do
-    limit = size_limit(content_type)
+  def validate_file_size(size, content_type, opts \\ []) do
+    limit = size_limit(content_type, opts)
 
     if size <= limit do
       :ok
@@ -75,7 +75,19 @@ defmodule Hybridsocial.Media.Validator do
   defp webm?(<<0x1A, 0x45, 0xDF, 0xA3, _rest::binary>>), do: true
   defp webm?(_), do: false
 
-  defp size_limit("image/" <> _), do: @default_image_limit
-  defp size_limit("video/" <> _), do: @default_video_limit
-  defp size_limit(_), do: @default_image_limit
+  defp size_limit("image/" <> _, opts) do
+    case Keyword.get(opts, :image_size_mb) do
+      nil -> @default_image_limit
+      mb -> mb * 1024 * 1024
+    end
+  end
+
+  defp size_limit("video/" <> _, opts) do
+    case Keyword.get(opts, :video_size_mb) do
+      nil -> @default_video_limit
+      mb -> mb * 1024 * 1024
+    end
+  end
+
+  defp size_limit(_, _opts), do: @default_image_limit
 end

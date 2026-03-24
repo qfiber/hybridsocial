@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { page } from '$app/state';
   import type { Post, Identity, TrendingTag } from '$lib/api/types.js';
   import { search } from '$lib/api/search.js';
   import { getTrending } from '$lib/api/instance.js';
@@ -8,7 +9,6 @@
   import FeedList from '$lib/components/feed/FeedList.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
-
 
   let query = $state('');
   let activeTab = $state('posts');
@@ -48,6 +48,15 @@
       searchPosts = results.statuses || results.posts || [];
       searchAccounts = results.accounts || [];
       searchHashtags = results.hashtags || [];
+
+      // Auto-switch to the tab that has results
+      if (searchAccounts.length > 0 && searchPosts.length === 0) {
+        activeTab = 'accounts';
+      } else if (searchHashtags.length > 0 && searchPosts.length === 0 && searchAccounts.length === 0) {
+        activeTab = 'hashtags';
+      } else {
+        activeTab = 'posts';
+      }
     } catch {
       // Handle silently
     } finally {
@@ -55,10 +64,9 @@
     }
   }
 
-  function handleSearchKeydown(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      handleSearch();
-    }
+  function handleSearchSubmit(e: Event) {
+    e.preventDefault();
+    handleSearch();
   }
 
   async function loadPublicTimeline(reset = false) {
@@ -102,9 +110,24 @@
     loadPublicTimeline(true);
   });
 
+  // React to URL query param changes (header search navigates here with ?q=)
+  let lastUrlQuery = '';
+
+  $effect(() => {
+    const urlQuery = page.url.searchParams.get('q') || '';
+    if (urlQuery && urlQuery !== lastUrlQuery) {
+      lastUrlQuery = urlQuery;
+      query = urlQuery;
+      handleSearch();
+    }
+  });
+
   function clearSearch() {
     query = '';
     hasSearched = false;
+    searchPosts = [];
+    searchAccounts = [];
+    searchHashtags = [];
   }
 </script>
 
@@ -113,7 +136,7 @@
 </svelte:head>
 
 <div class="explore-page">
-  <div class="search-bar">
+  <form class="search-bar" onsubmit={handleSearchSubmit}>
     <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
@@ -122,24 +145,39 @@
       class="search-input"
       placeholder="Search posts, people, and hashtags..."
       bind:value={query}
-      onkeydown={handleSearchKeydown}
     />
-    {#if query}
+    {#if searching}
+      <div class="search-bar-spinner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.2" />
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round" />
+        </svg>
+      </div>
+    {:else if query}
       <button class="search-clear" type="button" onclick={clearSearch} aria-label="Clear search">
         <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="4" y1="4" x2="16" y2="16" /><line x1="16" y1="4" x2="4" y2="16" />
         </svg>
       </button>
     {/if}
-  </div>
+  </form>
 
   {#if hasSearched}
     <Tabs {tabs} bind:active={activeTab}>
       {#if searching}
         <div class="search-loading">
-          <Skeleton width="100%" height="60px" />
-          <Skeleton width="100%" height="60px" />
-          <Skeleton width="100%" height="60px" />
+          <div class="search-spinner">
+            <svg class="spinner-svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10" stroke-opacity="0.2" />
+              <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round" />
+            </svg>
+            <span>Searching...</span>
+          </div>
+          <div class="search-skeleton">
+            <Skeleton width="100%" height="56px" />
+            <Skeleton width="100%" height="56px" />
+            <Skeleton width="100%" height="56px" />
+          </div>
         </div>
       {:else if activeTab === 'posts'}
         {#if searchPosts.length === 0}
@@ -157,13 +195,13 @@
         {:else}
           <div class="accounts-list">
             {#each searchAccounts as account (account.id)}
-              <a href="/{account.handle}" class="account-item">
-                <Avatar src={account.avatar_url} name={account.display_name || account.handle} size="md" />
+              <a href="/{account.acct || account.handle}" class="account-item">
+                <Avatar src={account.avatar_url} name={account.display_name || account.acct || account.handle} size="md" />
                 <div class="account-info">
-                  <span class="account-name">{account.display_name || account.handle}</span>
-                  <span class="account-handle">@{account.handle}</span>
+                  <span class="account-name">{account.display_name || account.acct || account.handle}</span>
+                  <span class="account-handle">@{account.acct || account.handle}</span>
                   {#if account.bio}
-                    <p class="account-bio">{account.bio}</p>
+                    <p class="account-bio">{@html account.bio}</p>
                   {/if}
                 </div>
               </a>
@@ -298,10 +336,45 @@
     background: var(--color-surface);
   }
 
+  .search-bar-spinner {
+    position: absolute;
+    inset-inline-end: var(--space-3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: spin 0.8s linear infinite;
+  }
+
   .search-loading {
     display: flex;
     flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .search-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    font-size: var(--text-sm);
+    color: var(--color-primary);
+    font-weight: 500;
+  }
+
+  .spinner-svg {
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .search-skeleton {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-3);
+    opacity: 0.5;
   }
 
   .empty-results {

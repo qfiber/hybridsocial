@@ -1,89 +1,81 @@
 defmodule Hybridsocial.Streaming do
   @moduledoc """
-  Streaming context. Broadcasts events to PubSub topics for real-time updates.
+  Streaming context. Broadcasts events to both local PubSub and NATS
+  for multi-node real-time updates.
   """
 
   alias Phoenix.PubSub
 
   @pubsub Hybridsocial.PubSub
 
-  @doc """
-  Broadcasts a new or updated post to relevant PubSub topics.
-  Publishes to: public timeline, author's followers, groups, and hashtags.
-  """
   def broadcast_post(post) do
     event = %{event: "update", payload: post}
 
-    # Public timeline (only for public posts)
     if post[:visibility] == "public" or post["visibility"] == "public" do
-      PubSub.broadcast(@pubsub, "timeline:public", event)
+      local_broadcast("timeline:public", event)
+      nats_publish("events.timeline.public", event)
     end
 
-    # Author's followers
     author_id = post[:account_id] || post["account_id"]
 
     if author_id do
-      PubSub.broadcast(@pubsub, "user:#{author_id}", event)
+      local_broadcast("user:#{author_id}", event)
+      nats_publish("events.user.#{author_id}", event)
     end
 
-    # Group timeline
     group_id = post[:group_id] || post["group_id"]
 
     if group_id do
-      PubSub.broadcast(@pubsub, "group:#{group_id}", event)
+      local_broadcast("group:#{group_id}", event)
+      nats_publish("events.group.#{group_id}", event)
     end
 
-    # Hashtag timelines
     tags = post[:tags] || post["tags"] || []
 
     Enum.each(tags, fn tag ->
       tag_name = if is_map(tag), do: tag["name"] || tag[:name], else: tag
-      PubSub.broadcast(@pubsub, "hashtag:#{tag_name}", event)
+      local_broadcast("hashtag:#{tag_name}", event)
+      nats_publish("events.hashtag.#{tag_name}", event)
     end)
 
     :ok
   end
 
-  @doc """
-  Broadcasts a notification to a user's stream.
-  """
   def broadcast_notification(notification) do
     user_id = notification[:account_id] || notification["account_id"]
 
     if user_id do
-      PubSub.broadcast(
-        @pubsub,
-        "user:#{user_id}",
-        %{event: "notification", payload: notification}
-      )
+      event = %{event: "notification", payload: notification}
+      local_broadcast("user:#{user_id}", event)
+      nats_publish("events.user.#{user_id}", event)
     end
 
     :ok
   end
 
-  @doc """
-  Broadcasts a delete event for a post.
-  """
   def broadcast_delete(post_id) do
-    PubSub.broadcast(
-      @pubsub,
-      "timeline:public",
-      %{event: "delete", payload: post_id}
-    )
-
+    event = %{event: "delete", payload: post_id}
+    local_broadcast("timeline:public", event)
+    nats_publish("events.timeline.public", event)
     :ok
   end
 
-  @doc """
-  Broadcasts a direct message to conversation participants.
-  """
   def broadcast_dm(conversation_id, message) do
-    PubSub.broadcast(
-      @pubsub,
-      "direct:#{conversation_id}",
-      %{event: "conversation", payload: message}
-    )
-
+    event = %{event: "conversation", payload: message}
+    local_broadcast("direct:#{conversation_id}", event)
+    nats_publish("events.direct.#{conversation_id}", event)
     :ok
+  end
+
+  # Local PubSub (same node)
+  defp local_broadcast(topic, event) do
+    PubSub.broadcast(@pubsub, topic, event)
+  end
+
+  # NATS (cross-node) — fire and forget, non-blocking
+  defp nats_publish(subject, event) do
+    Hybridsocial.Nats.publish(subject, event)
+  rescue
+    _ -> :ok
   end
 end

@@ -90,7 +90,7 @@ defmodule Hybridsocial.Accounts.User do
 
   defp validate_password(changeset) do
     changeset
-    |> validate_length(:password, min: 8, max: 128)
+    |> validate_length(:password, min: 16, max: 128)
     |> validate_confirmation(:password, message: "passwords do not match")
   end
 

@@ -100,6 +100,34 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
     end
   end
 
+  # POST /api/v1/verification/domain
+  def verify_domain(conn, %{"domain" => domain}) do
+    identity = conn.assigns.current_identity
+
+    case Premium.verify_domain(identity.id, domain) do
+      {:ok, verification} ->
+        conn |> put_status(:ok) |> json(serialize_verification(verification))
+
+      {:error, :domain_not_verified} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{
+          error: "verification.domain_not_verified",
+          instructions: %{
+            dns: "Add a TXT record: hybridsocial-verify=#{identity.handle}",
+            rel_me: "Add <a rel=\"me\" href=\"#{HybridsocialWeb.Endpoint.url()}/@#{identity.handle}\"> to your website"
+          }
+        })
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+    end
+  end
+
+  def verify_domain(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "verification.domain_required"})
+  end
+
   # GET /api/v1/verification/status
   def verification_status(conn, _params) do
     identity = conn.assigns.current_identity

@@ -228,9 +228,38 @@ defmodule Hybridsocial.Accounts do
   end
 
   def handle_reserved?(handle) do
-    Hybridsocial.Accounts.HandleHistory
-    |> where([h], h.old_handle == ^handle and h.reserved_until > ^DateTime.utc_now())
-    |> Repo.exists?()
+    normalized = String.downcase(handle)
+
+    # Check 1: Previously used handle (cooling-off period)
+    history_reserved =
+      Hybridsocial.Accounts.HandleHistory
+      |> where([h], h.old_handle == ^handle and h.reserved_until > ^DateTime.utc_now())
+      |> Repo.exists?()
+
+    # Check 2: Admin-configured blocklist
+    blocklist = Hybridsocial.Config.get("reserved_handles", [])
+
+    blocklist_reserved =
+      is_list(blocklist) and Enum.any?(blocklist, fn blocked ->
+        String.downcase(to_string(blocked)) == normalized
+      end)
+
+    # Check 3: Short handle requires premium purchase
+    short_handle_blocked = short_handle_restricted?(normalized)
+
+    history_reserved or blocklist_reserved or short_handle_blocked
+  end
+
+  @doc "Check if a short handle requires premium purchase."
+  def short_handle_restricted?(handle) do
+    len = String.length(handle)
+
+    cond do
+      len == 1 and Hybridsocial.Config.get("premium_1char_handle_enabled", false) -> true
+      len == 2 and Hybridsocial.Config.get("premium_2char_handle_enabled", false) -> true
+      len == 3 and Hybridsocial.Config.get("premium_3char_handle_enabled", false) -> true
+      true -> false
+    end
   end
 
   # --- Account deletion ---

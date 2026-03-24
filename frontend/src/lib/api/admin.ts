@@ -212,3 +212,60 @@ export function updateEmailConfig(config: Partial<EmailConfig>): Promise<EmailCo
 export function sendTestEmail(to: string): Promise<void> {
   return api.post('/api/v1/admin/email/test', { to });
 }
+
+// Verifications
+export interface VerificationRequest {
+  id: string;
+  type: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  verified_at: string | null;
+  created_at: string;
+  account: {
+    id: string;
+    handle: string;
+    display_name: string | null;
+    avatar_url: string | null;
+  } | null;
+}
+
+export function getVerifications(params?: Record<string, string>): Promise<VerificationRequest[]> {
+  return api.get('/api/v1/admin/verifications', params).then((r: { data: VerificationRequest[] }) => r.data);
+}
+
+export function approveVerification(id: string): Promise<VerificationRequest> {
+  return api.post(`/api/v1/admin/verifications/${id}/approve`).then((r: { data: VerificationRequest }) => r.data);
+}
+
+export function rejectVerification(id: string): Promise<VerificationRequest> {
+  return api.post(`/api/v1/admin/verifications/${id}/reject`).then((r: { data: VerificationRequest }) => r.data);
+}
+
+// Site Pages (legal / about)
+export interface SitePage {
+  id: string;
+  slug: string;
+  title: string;
+  body_markdown: string;
+  body_html: string;
+  published: boolean;
+  last_edited_by: string | null;
+  updated_at: string;
+  created_at: string;
+}
+
+export function getSitePages(): Promise<SitePage[]> {
+  return api.get('/api/v1/admin/site_pages').then((r: { data: SitePage[] }) => r.data);
+}
+
+export function getSitePage(id: string): Promise<SitePage> {
+  return api.get(`/api/v1/admin/site_pages/${id}`).then((r: { data: SitePage }) => r.data);
+}
+
+export function updateSitePage(id: string, attrs: { title?: string; body_markdown?: string; published?: boolean }): Promise<SitePage> {
+  return api.put(`/api/v1/admin/site_pages/${id}`, attrs).then((r: { data: SitePage }) => r.data);
+}
+
+export function seedSitePages(): Promise<SitePage[]> {
+  return api.post('/api/v1/admin/site_pages/seed').then((r: { data: SitePage[] }) => r.data);
+}

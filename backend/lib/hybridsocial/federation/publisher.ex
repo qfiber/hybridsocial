@@ -159,12 +159,32 @@ defmodule Hybridsocial.Federation.Publisher do
   # --- Private helpers ---
 
   defp queue_delivery(activity, delivery, identity) do
-    Task.Supervisor.start_child(
-      Hybridsocial.Federation.DeliveryTaskSupervisor,
-      fn ->
-        process_delivery(activity, delivery, identity)
-      end
-    )
+    # Try NATS JetStream first (persistent, reliable)
+    domain = URI.parse(delivery.target_inbox).host || "unknown"
+
+    nats_payload = %{
+      delivery_id: delivery.id,
+      inbox_url: delivery.target_inbox,
+      body: Jason.encode!(activity),
+      actor_id: identity.id
+    }
+
+    case Hybridsocial.Nats.js_publish("federation.deliver.#{domain}", nats_payload) do
+      :ok ->
+        Logger.debug("Federation delivery queued via NATS for #{delivery.target_inbox}")
+        :ok
+
+      {:error, _} ->
+        # Fallback to Task.Supervisor (NATS unavailable)
+        Logger.debug("NATS unavailable, using Task.Supervisor for #{delivery.target_inbox}")
+
+        Task.Supervisor.start_child(
+          Hybridsocial.Federation.DeliveryTaskSupervisor,
+          fn ->
+            process_delivery(activity, delivery, identity)
+          end
+        )
+    end
   end
 
   defp process_delivery(activity, delivery, identity) do

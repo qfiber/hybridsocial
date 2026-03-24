@@ -13,7 +13,6 @@ defmodule Hybridsocial.Repo.Migrations.CreatePageBranding do
 
       add :theme_color, :string
       add :cover_image_url, :string
-      add :custom_css, :text
       add :logo_url, :string
       add :layout_preference, :map, default: %{}
 

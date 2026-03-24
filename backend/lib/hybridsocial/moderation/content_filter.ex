@@ -25,6 +25,8 @@ defmodule Hybridsocial.Moderation.ContentFilter do
     filter
     |> cast(attrs, [:type, :pattern, :action, :replacement, :context, :created_by])
     |> validate_required([:type, :pattern, :action])
+    |> validate_length(:pattern, max: 1000)
+    |> validate_length(:replacement, max: 500)
     |> validate_inclusion(:type, @types)
     |> validate_inclusion(:action, @actions)
     |> validate_inclusion(:context, @contexts)

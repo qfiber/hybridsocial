@@ -250,7 +250,6 @@
     display: grid;
     grid-template-columns: 340px 1fr;
     height: calc(100vh - var(--header-height));
-    margin: calc(-1 * var(--space-4));
     overflow: hidden;
   }
 

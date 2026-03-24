@@ -52,7 +52,25 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   end
 
   def lookup(conn, %{"handle" => handle}) do
-    case Accounts.get_identity_by_handle(handle) do
+    identity =
+      if String.contains?(handle, "@") do
+        # Remote user: user@domain — look up by AP actor URL
+        [username, domain] = String.split(handle, "@", parts: 2)
+
+        import Ecto.Query
+
+        Hybridsocial.Repo.one(
+          from(i in Hybridsocial.Accounts.Identity,
+            where: fragment("? LIKE ?", i.ap_actor_url, ^"%://#{domain}/%") and is_nil(i.deleted_at),
+            where: fragment("split_part(?, '/', -1) = ?", i.ap_actor_url, ^username),
+            limit: 1
+          )
+        ) || Accounts.get_identity_by_handle(handle)
+      else
+        Accounts.get_identity_by_handle(handle)
+      end
+
+    case identity do
       nil ->
         conn
         |> put_status(:not_found)
@@ -312,6 +330,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       is_locked: identity.is_locked,
       is_bot: identity.is_bot,
       is_admin: identity.is_admin,
+      badges: Hybridsocial.Badges.instance_badges(identity),
       created_at: identity.inserted_at
     }
   end

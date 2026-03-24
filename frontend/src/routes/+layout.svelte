@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
+	import Analytics from '$lib/components/ui/Analytics.svelte';
 	import { onMount } from 'svelte';
 	import { initAuth } from '$lib/stores/auth.js';
 	import { initializeI18n, isRtl } from '$lib/stores/i18n.js';
@@ -40,4 +41,5 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
+<Analytics />
 {@render children()}

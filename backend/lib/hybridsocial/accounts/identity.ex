@@ -25,6 +25,8 @@ defmodule Hybridsocial.Accounts.Identity do
     field :is_bot, :boolean, default: false
     field :is_admin, :boolean, default: false
     field :is_suspended, :boolean, default: false
+    field :show_badge, :boolean, default: true
+    field :verification_tier, :string, default: "free"
     field :suspended_at, :utc_datetime_usec
     field :also_known_as, {:array, :string}, default: []
     field :moved_to, :string
@@ -42,6 +44,8 @@ defmodule Hybridsocial.Accounts.Identity do
     |> validate_required([:type, :handle])
     |> validate_inclusion(:type, @valid_types)
     |> validate_handle()
+    |> validate_length(:display_name, max: 50)
+    |> validate_length(:bio, max: 500)
     |> unique_constraint(:handle)
     |> generate_ap_urls()
     |> generate_keys()
@@ -49,7 +53,11 @@ defmodule Hybridsocial.Accounts.Identity do
 
   def update_changeset(identity, attrs) do
     identity
-    |> cast(attrs, [:display_name, :bio, :avatar_url, :header_url, :metadata, :is_locked])
+    |> cast(attrs, [:display_name, :bio, :avatar_url, :header_url, :metadata, :is_locked, :show_badge])
+    |> validate_length(:display_name, max: 50)
+    |> validate_length(:bio, max: 500)
+    |> validate_length(:avatar_url, max: 2048)
+    |> validate_length(:header_url, max: 2048)
   end
 
   def suspend_changeset(identity) do
@@ -69,7 +77,7 @@ defmodule Hybridsocial.Accounts.Identity do
 
   defp validate_handle(changeset) do
     changeset
-    |> validate_length(:handle, min: 1, max: 30)
+    |> validate_length(:handle, min: 1, max: 20)
     |> validate_format(:handle, ~r/^[a-zA-Z0-9_]+$/,
       message: "only letters, numbers, and underscores allowed"
     )

@@ -11,6 +11,10 @@ defmodule Hybridsocial.Auth.OAuthToken do
     field :scopes, {:array, :string}, default: []
     field :expires_at, :utc_datetime_usec
     field :revoked_at, :utc_datetime_usec
+    field :ip_address, :string
+    field :user_agent, :string
+    field :device_name, :string
+    field :last_active_at, :utc_datetime_usec
 
     belongs_to :identity, Hybridsocial.Accounts.Identity
     belongs_to :application, Hybridsocial.Auth.OAuthApplication
@@ -26,7 +30,11 @@ defmodule Hybridsocial.Auth.OAuthToken do
       :token_hash,
       :refresh_token_hash,
       :scopes,
-      :expires_at
+      :expires_at,
+      :ip_address,
+      :user_agent,
+      :device_name,
+      :last_active_at
     ])
     |> validate_required([:identity_id, :token_hash, :scopes, :expires_at])
     |> unique_constraint(:token_hash)

@@ -55,12 +55,14 @@ defmodule Hybridsocial.Federation.ObjectResolver do
   # Private
 
   defp fetch_object(url) do
-    headers = [
-      {"Accept", "application/activity+json, application/ld+json"},
-      {"User-Agent", "HybridSocial/0.1.0"}
-    ]
+    # SSRF protection
+    with :ok <- Hybridsocial.Security.UrlValidator.validate(url) do
+      headers = [
+        {"Accept", "application/activity+json, application/ld+json"},
+        {"User-Agent", "HybridSocial/0.1.0"}
+      ]
 
-    case HTTPoison.get(url, headers, follow_redirect: true, max_redirect: 3) do
+      case HTTPoison.get(url, headers, follow_redirect: true, max_redirect: 3, recv_timeout: 15_000, timeout: 15_000) do
       {:ok, %HTTPoison.Response{status_code: status, body: body}}
       when status in 200..299 ->
         case Jason.decode(body) do
@@ -81,6 +83,9 @@ defmodule Hybridsocial.Federation.ObjectResolver do
       {:error, %HTTPoison.Error{reason: reason}} ->
         Logger.warning("Failed to fetch AP object #{url}: #{inspect(reason)}")
         {:error, {:fetch_failed, reason}}
+    end
+    else
+      {:error, reason} -> {:error, {:blocked_url, reason}}
     end
   end
 end

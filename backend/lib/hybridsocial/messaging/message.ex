@@ -31,6 +31,7 @@ defmodule Hybridsocial.Messaging.Message do
       :reply_to_id
     ])
     |> validate_required([:conversation_id, :sender_id, :content])
+    |> validate_length(:content, max: 5000)
     |> validate_inclusion(:content_type, @valid_content_types)
     |> foreign_key_constraint(:conversation_id)
     |> foreign_key_constraint(:sender_id)
@@ -42,6 +43,7 @@ defmodule Hybridsocial.Messaging.Message do
     message
     |> cast(attrs, [:content, :edited_at])
     |> validate_required([:content])
+    |> validate_length(:content, max: 5000)
   end
 
   def delete_changeset(message) do

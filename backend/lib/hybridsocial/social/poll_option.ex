@@ -17,6 +17,7 @@ defmodule Hybridsocial.Social.PollOption do
     option
     |> cast(attrs, [:poll_id, :text, :position])
     |> validate_required([:poll_id, :text, :position])
+    |> validate_length(:text, max: 200)
     |> foreign_key_constraint(:poll_id)
   end
 end

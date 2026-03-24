@@ -55,8 +55,31 @@
     function handleRefresh() {
       loadTimeline(true);
     }
+
+    // Listen for new posts from the composer
+    function handleNewPost(e: Event) {
+      const post = (e as CustomEvent).detail;
+      if (post) {
+        posts = [post, ...posts];
+      }
+    }
+
+    // Listen for deleted posts
+    function handlePostDeleted(e: Event) {
+      const { id } = (e as CustomEvent).detail;
+      if (id) {
+        posts = posts.filter(p => p.id !== id);
+      }
+    }
+
     window.addEventListener('feed-refresh', handleRefresh);
-    return () => window.removeEventListener('feed-refresh', handleRefresh);
+    window.addEventListener('new-post', handleNewPost);
+    window.addEventListener('post-deleted', handlePostDeleted);
+    return () => {
+      window.removeEventListener('feed-refresh', handleRefresh);
+      window.removeEventListener('new-post', handleNewPost);
+      window.removeEventListener('post-deleted', handlePostDeleted);
+    };
   });
 </script>
 

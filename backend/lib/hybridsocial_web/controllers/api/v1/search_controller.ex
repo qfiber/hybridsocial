@@ -4,14 +4,18 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
   alias Hybridsocial.Search
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
-  # GET /api/v1/search?q=...&type=...&limit=...&offset=...
+  alias Hybridsocial.Federation.WebFinger
+  alias Hybridsocial.Federation.Inbox
+
+  # GET /api/v1/search?q=...&type=...&limit=...&offset=...&resolve=...
   def index(conn, params) do
-    query = Map.get(params, "q", "")
+    query = Map.get(params, "q", "") |> String.slice(0, 500)
     type = Map.get(params, "type")
     limit = clamp_limit(Map.get(params, "limit"))
-    offset = parse_int(Map.get(params, "offset"), 0)
+    offset = parse_int(Map.get(params, "offset"), 0) |> min(10_000)
     viewer_id = get_viewer_id(conn)
     account_id = Map.get(params, "account_id")
+    resolve = Map.get(params, "resolve") == "true"
 
     results =
       Search.search(query,
@@ -22,14 +26,84 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
         account_id: account_id
       )
 
+    # If resolve=true and query looks like a remote handle, try WebFinger
+    accounts =
+      if resolve and looks_like_remote_handle?(query) and results.accounts == [] do
+        case resolve_remote_account(query) do
+          {:ok, identity} -> [identity]
+          _ -> []
+        end
+      else
+        results.accounts
+      end
+
     conn
     |> put_status(:ok)
     |> json(%{
-      accounts: Enum.map(results.accounts, &serialize_account/1),
+      accounts: Enum.map(accounts, &serialize_account/1),
       statuses: Enum.map(results.posts, &serialize_post/1),
       hashtags: Enum.map(results.hashtags, &serialize_hashtag/1),
       groups: Enum.map(results.groups, &serialize_group/1)
     })
+  end
+
+  # Check if query looks like @user@domain or user@domain
+  defp looks_like_remote_handle?(query) do
+    cleaned = String.trim(query) |> String.trim_leading("@")
+    Regex.match?(~r/^[\w.-]+@[\w.-]+\.\w+$/, cleaned)
+  end
+
+  defp resolve_remote_account(query) do
+    acct = String.trim(query) |> String.trim_leading("@")
+
+    # Try WebFinger first (standard), then fallback to Mastodon API lookup
+    with {:error, _} <- resolve_via_webfinger(acct) do
+      resolve_via_api_lookup(acct)
+    end
+  end
+
+  defp resolve_via_webfinger(acct) do
+    with {:ok, %{ap_id: ap_id}} when is_binary(ap_id) <- WebFinger.finger(acct),
+         {:ok, identity} <- Inbox.resolve_or_create_remote_identity(ap_id) do
+      {:ok, identity}
+    else
+      _ -> {:error, :webfinger_failed}
+    end
+  end
+
+  defp resolve_via_api_lookup(acct) do
+    [user, domain] = String.split(acct, "@", parts: 2)
+
+    # SSRF protection
+    with :ok <- Hybridsocial.Security.UrlValidator.validate_domain(domain) do
+      url = "https://#{domain}/api/v1/accounts/lookup?acct=#{URI.encode(user)}"
+
+      headers = [
+        {"Accept", "application/json"},
+        {"User-Agent", "HybridSocial/0.1.0"}
+      ]
+
+      case HTTPoison.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, %{"url" => actor_url}} when is_binary(actor_url) ->
+              # Validate the returned URL too
+              with :ok <- Hybridsocial.Security.UrlValidator.validate(actor_url) do
+                Inbox.resolve_or_create_remote_identity(actor_url)
+              else
+                _ -> {:error, :not_found}
+              end
+
+            _ ->
+              {:error, :not_found}
+          end
+
+        _ ->
+          {:error, :not_found}
+      end
+    else
+      _ -> {:error, :not_found}
+    end
   end
 
   defp get_viewer_id(conn) do
@@ -52,13 +126,42 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
   defp parse_int(_val, default), do: default
 
   defp serialize_account(identity) do
+    local_domain = HybridsocialWeb.Endpoint.host()
+    acct = build_acct(identity, local_domain)
+
     %{
       id: identity.id,
       handle: identity.handle,
+      acct: acct,
       display_name: identity.display_name,
       avatar_url: identity.avatar_url,
-      bio: identity.bio
+      header_url: identity.header_url,
+      bio: identity.bio,
+      url: identity.ap_actor_url
     }
+  end
+
+  defp build_acct(identity, local_domain) do
+    case identity.ap_actor_url do
+      nil ->
+        identity.handle
+
+      ap_url ->
+        domain = URI.parse(ap_url).host
+
+        if domain == local_domain do
+          identity.handle
+        else
+          # Extract the real username from the AP URL path
+          username =
+            case URI.parse(ap_url).path do
+              nil -> identity.handle
+              path -> path |> String.split("/") |> List.last()
+            end
+
+          "#{username}@#{domain}"
+        end
+    end
   end
 
   defp serialize_post(post) do

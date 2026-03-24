@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: hybridsocial_dev
       POSTGRES_DB: hybridsocial_dev
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,7 +20,7 @@ services:
     image: valkey/valkey:8-alpine
     container_name: hybridsocial_valkey
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - valkeydata:/data
     healthcheck:
@@ -33,13 +33,13 @@ services:
     image: nats:2-alpine
     container_name: hybridsocial_nats
     ports:
-      - "4222:4222"
-      - "8222:8222"  # monitoring
-    command: ["--jetstream", "--store_dir=/data"]
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
+    command: ["--jetstream", "--store_dir=/data", "--http_port=8222"]
     volumes:
       - natsdata:/data
     healthcheck:
-      test: ["CMD", "nats-server", "--signal", "ldm"]
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8222/healthz || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -53,7 +53,7 @@ services:
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=HybridS0cial!Dev
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     volumes:
       - searchdata:/usr/share/opensearch/data
     healthcheck:

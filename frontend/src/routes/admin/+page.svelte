@@ -2,24 +2,61 @@
   import { onMount } from 'svelte';
   import StatsCard from '$lib/components/admin/StatsCard.svelte';
   import { addToast } from '$lib/stores/toast.js';
-  import { getDashboardStats, getRecentReports } from '$lib/api/admin.js';
-  import type { AdminDashboardStats, AdminReport } from '$lib/api/types.js';
+  import { getDashboardStats, getRecentReports, getVerifications, approveVerification, rejectVerification } from '$lib/api/admin.js';
+  import type { AdminDashboardStats, AdminReport, ServiceHealth } from '$lib/api/types.js';
+  import type { VerificationRequest } from '$lib/api/admin.js';
 
   let stats: AdminDashboardStats | null = $state(null);
   let recentReports: AdminReport[] = $state([]);
+  let pendingVerifications: VerificationRequest[] = $state([]);
   let loading = $state(true);
+
+  function formatUptime(seconds: number | undefined): string {
+    if (!seconds) return '';
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  }
 
   onMount(async () => {
     try {
-      const [s, r] = await Promise.all([getDashboardStats(), getRecentReports()]);
+      const [s, r, v] = await Promise.all([
+        getDashboardStats(),
+        getRecentReports(),
+        getVerifications({ status: 'pending', limit: '10' }).catch(() => [])
+      ]);
       stats = s;
       recentReports = r;
+      pendingVerifications = v;
     } catch (e) {
       addToast('Failed to load dashboard data', 'error');
     } finally {
       loading = false;
     }
   });
+
+  async function handleApproveVerification(id: string) {
+    try {
+      await approveVerification(id);
+      pendingVerifications = pendingVerifications.filter(v => v.id !== id);
+      addToast('Verification approved', 'success');
+    } catch {
+      addToast('Failed to approve verification', 'error');
+    }
+  }
+
+  async function handleRejectVerification(id: string) {
+    try {
+      await rejectVerification(id);
+      pendingVerifications = pendingVerifications.filter(v => v.id !== id);
+      addToast('Verification rejected', 'success');
+    } catch {
+      addToast('Failed to reject verification', 'error');
+    }
+  }
 
   function formatDate(iso: string): string {
     return new Date(iso).toLocaleDateString(undefined, {
@@ -82,6 +119,139 @@
     {/if}
   </div>
 
+  {#if stats?.services}
+    <section class="services-section">
+      <h2 class="section-heading">Services</h2>
+      <div class="services-grid">
+        {#each [
+          { key: 'database', label: 'PostgreSQL', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4' },
+          { key: 'valkey', label: 'Valkey', icon: 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01' },
+          { key: 'opensearch', label: 'OpenSearch', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+          { key: 'nats', label: 'NATS JetStream', icon: 'M13 10V3L4 14h7v7l9-11h-7z' }
+        ] as svc (svc.key)}
+          {@const health = stats.services[svc.key as keyof typeof stats.services]}
+          <div class="service-card" class:service-up={health.status === 'up'} class:service-down={health.status === 'down'} class:service-degraded={health.status === 'degraded'}>
+            <div class="service-header">
+              <div class="service-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d={svc.icon} />
+                </svg>
+              </div>
+              <div class="service-status-dot"></div>
+            </div>
+            <div class="service-name">{svc.label}</div>
+            <div class="service-status-text">
+              {#if health.status === 'up'}
+                Operational
+              {:else if health.status === 'degraded'}
+                Degraded
+              {:else}
+                Offline
+              {/if}
+            </div>
+
+            <!-- Common fields -->
+            {#if health.version}
+              <div class="service-detail">v{health.version}</div>
+            {/if}
+            {#if health.uptime_seconds}
+              <div class="service-detail">Up {formatUptime(health.uptime_seconds)}</div>
+            {/if}
+
+            <!-- Valkey details -->
+            {#if svc.key === 'valkey' && health.status === 'up'}
+              <div class="service-details-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Memory</span>
+                  <span class="detail-value">{health.memory || '?'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Peak</span>
+                  <span class="detail-value">{health.memory_peak || '?'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Keys</span>
+                  <span class="detail-value">{health.total_keys?.toLocaleString() || '0'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Clients</span>
+                  <span class="detail-value">{health.connected_clients || '0'}</span>
+                </div>
+              </div>
+            {/if}
+
+            <!-- OpenSearch details -->
+            {#if svc.key === 'opensearch' && health.status !== 'down'}
+              <div class="service-details-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Cluster</span>
+                  <span class="detail-value">{health.cluster_name || '?'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Health</span>
+                  <span class="detail-value" class:text-success={health.cluster_health === 'green'} class:text-warning={health.cluster_health === 'yellow'} class:text-danger={health.cluster_health === 'red'}>{health.cluster_health || '?'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Nodes</span>
+                  <span class="detail-value">{health.node_count || '0'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Shards</span>
+                  <span class="detail-value">{health.active_shards || '0'}</span>
+                </div>
+              </div>
+              {#if health.indices && health.indices.length > 0}
+                <div class="service-indices">
+                  <div class="indices-title">Indices</div>
+                  {#each health.indices as idx}
+                    <div class="index-row">
+                      <span class="index-name">{idx.name}</span>
+                      <span class="index-docs">{idx.docs_count} docs</span>
+                      <span class="index-size">{idx.store_size}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
+            {/if}
+
+            <!-- NATS details -->
+            {#if svc.key === 'nats' && health.status === 'up'}
+              {#if health.integration === 'pending'}
+                <div class="service-detail integration-note">{health.note}</div>
+              {/if}
+              {#if health.connections !== undefined}
+                <div class="service-details-grid">
+                  <div class="detail-item">
+                    <span class="detail-label">Connections</span>
+                    <span class="detail-value">{health.connections}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="detail-label">Messages</span>
+                    <span class="detail-value">{health.total_messages?.toLocaleString() || '0'}</span>
+                  </div>
+                  {#if health.jetstream_enabled}
+                    <div class="detail-item">
+                      <span class="detail-label">JS Streams</span>
+                      <span class="detail-value">{health.js_streams || '0'}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">JS Consumers</span>
+                      <span class="detail-value">{health.js_consumers || '0'}</span>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            {/if}
+
+            {#if health.error}
+              <div class="service-error">{health.error}</div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
+
   <div class="dashboard-panels">
     <section class="panel card">
       <h2 class="panel-title">Recent Reports</h2>
@@ -124,6 +294,46 @@
       </div>
     </section>
   </div>
+
+  <!-- Pending Verification Requests -->
+  {#if pendingVerifications.length > 0}
+    <section class="panel card verification-panel">
+      <h2 class="panel-title">Pending Verification Requests</h2>
+      <div class="verification-list">
+        {#each pendingVerifications as req (req.id)}
+          <div class="verification-item">
+            <div class="verification-user">
+              <div class="verification-avatar">
+                {#if req.account?.avatar_url}
+                  <img src={req.account.avatar_url} alt="" class="verification-img" />
+                {:else}
+                  <span class="verification-initial">{(req.account?.display_name || req.account?.handle || '?').charAt(0).toUpperCase()}</span>
+                {/if}
+              </div>
+              <div class="verification-info">
+                <span class="verification-name">{req.account?.display_name || req.account?.handle}</span>
+                <span class="verification-handle">@{req.account?.handle}</span>
+              </div>
+            </div>
+            <div class="verification-details">
+              <span class="verification-type">{req.type}</span>
+              {#if req.metadata?.reason}
+                <p class="verification-reason">{req.metadata.reason}</p>
+              {/if}
+              {#if req.metadata?.domain}
+                <p class="verification-reason">Domain: {req.metadata.domain}</p>
+              {/if}
+              <span class="verification-date">{formatDate(req.created_at)}</span>
+            </div>
+            <div class="verification-actions">
+              <button class="btn btn-sm btn-primary" onclick={() => handleApproveVerification(req.id)}>Approve</button>
+              <button class="btn btn-sm btn-outline" onclick={() => handleRejectVerification(req.id)}>Reject</button>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </section>
+  {/if}
 </div>
 
 <style>
@@ -244,8 +454,297 @@
     gap: var(--space-2);
   }
 
+  /* Verification requests */
+  .verification-panel {
+    margin-block-start: var(--space-4);
+  }
+
+  .verification-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .verification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+  }
+
+  .verification-user {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .verification-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--color-primary-soft);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .verification-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .verification-initial {
+    font-weight: 600;
+    font-size: var(--text-sm);
+    color: var(--color-primary);
+  }
+
+  .verification-info {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .verification-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .verification-handle {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+  }
+
+  .verification-details {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .verification-type {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-primary);
+    background: var(--color-primary-soft);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+  }
+
+  .verification-reason {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    margin-block-start: var(--space-1);
+    line-height: 1.4;
+  }
+
+  .verification-date {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  .verification-actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  .btn-sm {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    border-radius: var(--radius-md);
+  }
+
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-text-on-primary);
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover {
+    background: var(--color-primary-hover);
+  }
+
   .quick-action-btn {
     text-align: center;
+  }
+
+  /* Services */
+  .services-section {
+    margin-block-end: var(--space-6);
+  }
+
+  .section-heading {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    margin-block-end: var(--space-4);
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--space-3);
+  }
+
+  .service-card {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-4);
+  }
+
+  .service-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-block-end: var(--space-3);
+  }
+
+  .service-icon {
+    color: var(--color-text-secondary);
+  }
+
+  .service-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+    background: var(--color-text-tertiary);
+  }
+
+  .service-up .service-status-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 6px var(--color-success);
+  }
+
+  .service-down .service-status-dot {
+    background: var(--color-danger);
+    box-shadow: 0 0 6px var(--color-danger);
+  }
+
+  .service-degraded .service-status-dot {
+    background: var(--color-warning);
+    box-shadow: 0 0 6px var(--color-warning);
+  }
+
+  .service-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text);
+    margin-block-end: 2px;
+  }
+
+  .service-status-text {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    margin-block-end: var(--space-2);
+  }
+
+  .service-up .service-status-text {
+    color: var(--color-success);
+  }
+
+  .service-down .service-status-text {
+    color: var(--color-danger);
+  }
+
+  .service-degraded .service-status-text {
+    color: var(--color-warning);
+  }
+
+  .service-detail {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    line-height: 1.5;
+  }
+
+  .service-error {
+    font-size: var(--text-xs);
+    color: var(--color-danger);
+    margin-block-start: var(--space-1);
+  }
+
+  .service-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px var(--space-3);
+    margin-block-start: var(--space-2);
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+  }
+
+  .detail-label {
+    font-size: 0.65rem;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .detail-value {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .text-success { color: var(--color-success); }
+  .text-warning { color: var(--color-warning); }
+  .text-danger { color: var(--color-danger); }
+
+  .service-indices {
+    margin-block-start: var(--space-2);
+    padding-block-start: var(--space-2);
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .indices-title {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-block-end: var(--space-1);
+  }
+
+  .index-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
+    padding: 2px 0;
+  }
+
+  .index-name {
+    font-weight: 500;
+    color: var(--color-text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .index-docs,
+  .index-size {
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+  }
+
+  .integration-note {
+    font-style: italic;
+    line-height: 1.4;
   }
 
   @media (max-width: 768px) {
@@ -254,6 +753,10 @@
     }
 
     .stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .services-grid {
       grid-template-columns: repeat(2, 1fr);
     }
   }

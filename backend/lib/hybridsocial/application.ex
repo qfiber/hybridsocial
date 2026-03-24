@@ -1,6 +1,4 @@
 defmodule Hybridsocial.Application do
-  # See https://hexdocs.pm/elixir/Application.html
-  # for more information on OTP Applications
   @moduledoc false
 
   use Application
@@ -15,11 +13,18 @@ defmodule Hybridsocial.Application do
         Hybridsocial.Config.Store,
         {DNSCluster, query: Application.get_env(:hybridsocial, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Hybridsocial.PubSub},
-        {Task.Supervisor, name: Hybridsocial.Federation.DeliveryTaskSupervisor}
+        {Task.Supervisor, name: Hybridsocial.Federation.DeliveryTaskSupervisor},
+        # NATS connection + JetStream setup
+        Hybridsocial.Nats,
+        Hybridsocial.Nats.Setup
       ] ++
         if(Application.get_env(:hybridsocial, :env) != :test,
           do: [
-            Hybridsocial.Federation.DeliveryWorker,
+            # NATS consumers
+            Hybridsocial.Federation.NatsDeliveryConsumer,
+            Hybridsocial.Streaming.NatsBridge,
+            Hybridsocial.Nats.JobConsumer,
+            # Legacy workers (kept as fallback + non-NATS jobs)
             Hybridsocial.Content.ScheduledPostWorker,
             Hybridsocial.Trending.Worker,
             Hybridsocial.Search.IndexWorker,
@@ -28,18 +33,13 @@ defmodule Hybridsocial.Application do
           else: []
         ) ++
         [
-          # Start to serve requests, typically the last entry
           HybridsocialWeb.Endpoint
         ]
 
-    # See https://hexdocs.pm/elixir/Supervisor.html
-    # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Hybridsocial.Supervisor]
     Supervisor.start_link(children, opts)
   end
 
-  # Tell Phoenix to update the endpoint configuration
-  # whenever the application is updated.
   @impl true
   def config_change(changed, _new, removed) do
     HybridsocialWeb.Endpoint.config_change(changed, removed)

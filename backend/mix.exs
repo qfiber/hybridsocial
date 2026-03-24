@@ -74,7 +74,9 @@ defmodule Hybridsocial.MixProject do
       # Valkey/Redis cache
       {:redix, "~> 1.5"},
       # CORS
-      {:cors_plug, "~> 3.0"}
+      {:cors_plug, "~> 3.0"},
+      # NATS JetStream
+      {:gnat, "~> 1.8"}
     ]
   end
 

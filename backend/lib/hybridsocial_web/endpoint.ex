@@ -58,7 +58,8 @@ defmodule HybridsocialWeb.Endpoint do
         "http://localhost:5173",
         "http://localhost:4000"
       ]),
-    expose: ["link"]
+    expose: ["link"],
+    credentials: true
 
   plug HybridsocialWeb.Router
 end

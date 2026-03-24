@@ -10,7 +10,11 @@ import Config
 config :hybridsocial,
   ecto_repos: [Hybridsocial.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
-  env: config_env()
+  env: config_env(),
+  nats_url: System.get_env("NATS_URL", "nats://localhost:4222"),
+  nats_host: System.get_env("NATS_HOST", "localhost"),
+  nats_port: String.to_integer(System.get_env("NATS_PORT", "4222")),
+  nats_monitoring_port: String.to_integer(System.get_env("NATS_MONITORING_PORT", "8222"))
 
 # Register event-stream MIME type for SSE
 config :mime, :types, %{

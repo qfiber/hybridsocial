@@ -3,6 +3,7 @@
   import { api } from '$lib/api/client.js';
   import { uploadMedia } from '$lib/api/media.js';
   import type { Post, MediaAttachment } from '$lib/api/types.js';
+  import { currentUser } from '$lib/stores/auth.js';
   import EmojiPicker from './EmojiPicker.svelte';
 
   let isOpen = $state(false);
@@ -13,7 +14,12 @@
   let loading = $state(false);
   let error = $state('');
   let replyTo = $state<Post | null>(null);
-  let charLimit = $state(5000);
+
+  // Tier-aware limits
+  let charLimit = $derived($currentUser?.limits?.char_limit ?? 5000);
+  let maxMedia = $derived($currentUser?.limits?.media_per_post ?? 4);
+  let maxPollOptions = $derived($currentUser?.limits?.poll_options ?? 4);
+  let canSchedule = $derived($currentUser?.limits?.scheduled_posts ?? false);
   let textareaEl: HTMLTextAreaElement | undefined = $state();
   let fileInputEl: HTMLInputElement | undefined = $state();
 
@@ -105,6 +111,11 @@
     if (!file) return;
     input.value = '';
 
+    if (uploadedMedia.length >= maxMedia) {
+      error = `Maximum ${maxMedia} media attachments allowed`;
+      return;
+    }
+
     mediaUploading = true;
     error = '';
     try {
@@ -123,7 +134,7 @@
 
   // Poll helpers
   function addPollOption() {
-    if (pollOptions.length < 4) {
+    if (pollOptions.length < maxPollOptions) {
       pollOptions = [...pollOptions, ''];
     }
   }
@@ -209,8 +220,10 @@
         }
       }
 
-      await api.post('/api/v1/posts', body);
+      const newPost = await api.post('/api/v1/statuses', body);
       resetComposer();
+      // Notify the timeline to prepend the new post
+      window.dispatchEvent(new CustomEvent('new-post', { detail: newPost }));
     } catch {
       error = 'Failed to publish post. Please try again.';
     } finally {
@@ -385,7 +398,7 @@
           {/each}
         </div>
 
-        {#if pollOptions.length < 4}
+        {#if pollOptions.length < maxPollOptions}
           <button type="button" class="poll-add-option" onclick={addPollOption}>
             + Add option
           </button>

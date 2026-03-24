@@ -37,13 +37,17 @@ defmodule Hybridsocial.Federation.WebFinger do
   """
   def finger(acct) do
     [_user, domain] = String.split(acct, "@", parts: 2)
-    url = "https://#{domain}/.well-known/webfinger?resource=acct:#{acct}"
 
-    headers = [
-      {"Accept", "application/jrd+json"}
-    ]
+    # SSRF protection: validate domain before making request
+    with :ok <- Hybridsocial.Security.UrlValidator.validate_domain(domain) do
+      url = "https://#{domain}/.well-known/webfinger?resource=acct:#{URI.encode(acct)}"
 
-    case HTTPoison.get(url, headers) do
+      headers = [
+        {"Accept", "application/jrd+json"},
+        {"User-Agent", "HybridSocial (+https://#{HybridsocialWeb.Endpoint.host()})"}
+      ]
+
+      case HTTPoison.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
       {:ok, %{status_code: 200, body: body}} ->
         case Jason.decode(body) do
           {:ok, data} ->
@@ -69,6 +73,9 @@ defmodule Hybridsocial.Federation.WebFinger do
 
       {:error, reason} ->
         {:error, reason}
+    end
+    else
+      {:error, reason} -> {:error, reason}
     end
   end
 

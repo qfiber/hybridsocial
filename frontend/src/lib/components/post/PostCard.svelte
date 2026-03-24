@@ -7,6 +7,7 @@
   import QuoteCard from './QuoteCard.svelte';
   import LinkPreview from './LinkPreview.svelte';
   import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
+  import RoleBadge from '$lib/components/ui/RoleBadge.svelte';
 
   let {
     post,
@@ -157,6 +158,11 @@
         <a href="/@{post.account.handle}" class="post-display-name">{displayName}</a>
         {#if (post.account as any).verified}
           <VerifiedBadge size="sm" />
+        {/if}
+        {#if (post.account as any).badges}
+          {#each (post.account as any).badges as badge (badge.type)}
+            <RoleBadge type={badge.type} label={badge.label} size="sm" />
+          {/each}
         {/if}
         <span class="post-handle">{handle}</span>
         <span class="post-separator" aria-hidden="true">&middot;</span>
@@ -341,12 +347,12 @@
     border-radius: var(--radius-xl);
     padding: var(--space-4);
     cursor: pointer;
-    transition: box-shadow var(--transition-base), transform var(--transition-base);
+    transition: box-shadow var(--transition-base), border-color var(--transition-base);
   }
 
   .post-card:hover {
     box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
+    border-color: var(--color-border);
   }
 
   .post-card:focus-visible {

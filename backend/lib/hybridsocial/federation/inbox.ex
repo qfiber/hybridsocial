@@ -434,26 +434,58 @@ defmodule Hybridsocial.Federation.Inbox do
       nil ->
         create_stub_identity_for_remote(ap_id)
 
+      %Identity{display_name: nil} = identity ->
+        # Existing stub with no profile data — try to enrich it
+        enrich_remote_identity(identity)
+
+      %Identity{display_name: ""} = identity ->
+        enrich_remote_identity(identity)
+
       identity ->
+        {:ok, identity}
+    end
+  end
+
+  defp enrich_remote_identity(identity) do
+    case fetch_remote_actor_profile(identity.ap_actor_url) do
+      %{display_name: name} = profile when is_binary(name) ->
+        identity
+        |> Ecto.Changeset.change(%{
+          display_name: profile[:display_name],
+          bio: profile[:bio],
+          avatar_url: profile[:avatar_url],
+          header_url: profile[:header_url],
+          inbox_url: profile[:inbox_url] || identity.inbox_url,
+          outbox_url: profile[:outbox_url] || identity.outbox_url,
+          followers_url: profile[:followers_url] || identity.followers_url
+        })
+        |> Repo.update()
+
+      _ ->
         {:ok, identity}
     end
   end
 
   defp create_stub_identity_for_remote(ap_id) do
     domain = ActivityMapper.extract_domain(ap_id)
-    # Extract a handle-like string from the AP ID
     handle = generate_remote_handle(ap_id, domain)
-
     id = Ecto.UUID.generate()
+
+    # Try to fetch the full actor profile for display name, avatar, bio
+    remote_profile = fetch_remote_actor_profile(ap_id)
 
     attrs = %{
       id: id,
       type: "user",
       handle: handle,
       ap_actor_url: ap_id,
-      inbox_url: "#{ap_id}/inbox",
-      outbox_url: "#{ap_id}/outbox",
-      followers_url: "#{ap_id}/followers"
+      display_name: remote_profile[:display_name],
+      bio: remote_profile[:bio],
+      avatar_url: remote_profile[:avatar_url],
+      header_url: remote_profile[:header_url],
+      inbox_url: remote_profile[:inbox_url] || "#{ap_id}/inbox",
+      outbox_url: remote_profile[:outbox_url] || "#{ap_id}/outbox",
+      followers_url: remote_profile[:followers_url] || "#{ap_id}/followers"
     }
 
     %Identity{}
@@ -462,6 +494,10 @@ defmodule Hybridsocial.Federation.Inbox do
       :type,
       :handle,
       :ap_actor_url,
+      :display_name,
+      :bio,
+      :avatar_url,
+      :header_url,
       :inbox_url,
       :outbox_url,
       :followers_url
@@ -469,6 +505,172 @@ defmodule Hybridsocial.Federation.Inbox do
     |> Ecto.Changeset.validate_required([:type, :handle])
     |> Ecto.Changeset.unique_constraint(:handle)
     |> Repo.insert()
+  end
+
+  defp fetch_remote_actor_profile(ap_id) do
+    # Try unsigned AP fetch, then signed, then Mastodon API lookup as last resort
+    case fetch_actor_json(ap_id, _signed = false) do
+      {:ok, actor} ->
+        parse_actor_profile(actor)
+
+      {:error, :unauthorized} ->
+        case fetch_actor_json(ap_id, _signed = true) do
+          {:ok, actor} ->
+            parse_actor_profile(actor)
+
+          _ ->
+            # Signed fetch also failed — try Mastodon API as fallback
+            fetch_profile_via_api(ap_id)
+        end
+
+      _ ->
+        # Network error — try API fallback
+        fetch_profile_via_api(ap_id)
+    end
+  end
+
+  defp fetch_profile_via_api(ap_id) do
+    # Extract domain and username from AP ID like "https://example.com/users/username"
+    parsed = URI.parse(ap_id)
+    domain = parsed.host
+
+    username =
+      case parsed.path do
+        nil -> nil
+        path -> path |> String.split("/") |> List.last()
+      end
+
+    if domain && username do
+      url = "https://#{domain}/api/v1/accounts/lookup?acct=#{username}"
+
+      headers = [
+        {"Accept", "application/json"},
+        {"User-Agent", "HybridSocial/0.1.0"}
+      ]
+
+      case HTTPoison.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, account} ->
+              %{
+                display_name: account["display_name"],
+                bio: account["note"],
+                avatar_url: account["avatar"],
+                header_url: account["header"],
+                inbox_url: nil,
+                outbox_url: nil,
+                followers_url: nil
+              }
+
+            _ ->
+              %{}
+          end
+
+        _ ->
+          %{}
+      end
+    else
+      %{}
+    end
+  end
+
+  defp fetch_actor_json(url, false) do
+    headers = [
+      {"Accept", "application/activity+json, application/ld+json"},
+      {"User-Agent", "HybridSocial/0.1.0"}
+    ]
+
+    case HTTPoison.get(url, headers, recv_timeout: 10_000, timeout: 10_000, follow_redirect: true) do
+      {:ok, %{status_code: 200, body: body}} ->
+        Jason.decode(body)
+
+      {:ok, %{status_code: status}} when status in [401, 403] ->
+        {:error, :unauthorized}
+
+      _ ->
+        {:error, :fetch_failed}
+    end
+  end
+
+  defp fetch_actor_json(url, true) do
+    # Find a local identity with a private key to sign the request
+    signing_identity =
+      Repo.one(
+        from(i in Identity,
+          where: not is_nil(i.private_key) and is_nil(i.deleted_at),
+          limit: 1
+        )
+      )
+
+    if is_nil(signing_identity) do
+      {:error, :no_signing_key}
+    else
+      domain = HybridsocialWeb.Endpoint.host()
+      key_id = signing_identity.ap_actor_url <> "#main-key"
+      parsed = URI.parse(url)
+      date = Calendar.strftime(DateTime.utc_now(), "%a, %d %b %Y %H:%M:%S GMT")
+
+      # Build signing string for GET (no digest needed)
+      signed_headers = ["(request-target)", "host", "date"]
+      request_data = %{
+        "(request-target)" => "get #{parsed.path}",
+        "host" => parsed.host,
+        "date" => date
+      }
+
+      signing_string =
+        signed_headers
+        |> Enum.map(fn h -> "#{h}: #{request_data[h]}" end)
+        |> Enum.join("\n")
+
+      signature =
+        signing_identity.private_key
+        |> :public_key.pem_decode()
+        |> hd()
+        |> :public_key.pem_entry_decode()
+        |> then(fn key ->
+          :public_key.sign(signing_string, :sha256, key)
+          |> Base.encode64()
+        end)
+
+      sig_header =
+        ~s(keyId="#{key_id}",algorithm="rsa-sha256",headers="#{Enum.join(signed_headers, " ")}",signature="#{signature}")
+
+      headers = [
+        {"Accept", "application/activity+json, application/ld+json"},
+        {"User-Agent", "HybridSocial/0.1.0 (+https://#{domain})"},
+        {"Signature", sig_header},
+        {"Date", date},
+        {"Host", parsed.host}
+      ]
+
+      case HTTPoison.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
+        {:ok, %{status_code: 200, body: body}} ->
+          Jason.decode(body)
+
+        {:ok, %{status_code: status}} ->
+          require Logger
+          Logger.warning("Signed fetch failed for #{url}: HTTP #{status}")
+          {:error, :signed_fetch_failed}
+
+        {:error, reason} ->
+          require Logger
+          Logger.warning("Signed fetch error for #{url}: #{inspect(reason)}")
+          {:error, :signed_fetch_failed}
+      end
+    end
+  end
+
+  defp parse_actor_profile(actor) do
+    %{
+      display_name: actor["name"],
+      bio: actor["summary"],
+      avatar_url: get_in(actor, ["icon", "url"]),
+      header_url: get_in(actor, ["image", "url"]),
+      inbox_url: actor["inbox"],
+      outbox_url: actor["outbox"],
+      followers_url: actor["followers"]
+    }
   end
 
   defp generate_remote_handle(ap_id, domain) do

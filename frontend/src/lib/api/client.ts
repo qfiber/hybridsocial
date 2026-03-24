@@ -71,11 +71,12 @@ class ApiClient {
     let response = await fetch(url.toString(), {
       method,
       headers,
+      credentials: 'include',
       body: options?.body !== undefined ? JSON.stringify(options.body) : undefined
     });
 
-    // Auto-refresh on 401
-    if (response.status === 401 && this.refreshToken) {
+    // Auto-refresh on 401 (cookie or in-memory token)
+    if (response.status === 401 && !path.startsWith('/api/v1/auth/')) {
       await this.doRefresh();
       // Retry with new token
       if (this.accessToken) {
@@ -84,6 +85,7 @@ class ApiClient {
       response = await fetch(url.toString(), {
         method,
         headers,
+        credentials: 'include',
         body: options?.body !== undefined ? JSON.stringify(options.body) : undefined
       });
     }
@@ -113,15 +115,28 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
+        // Send refresh token in body if available, otherwise rely on httpOnly cookie
+        const body: Record<string, string> = {};
+        if (this.refreshToken) {
+          body.refresh_token = this.refreshToken;
+        }
+
         const response = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: this.refreshToken })
+          credentials: 'include',
+          body: JSON.stringify(body)
         });
 
-        if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          // Refresh token is genuinely invalid — user must re-login
           this.clearTokens();
           this.onAuthFailure?.();
+          return;
+        }
+
+        if (!response.ok) {
+          // Server error (500, 502, etc.) — don't log out, just fail silently
           return;
         }
 
@@ -130,8 +145,9 @@ class ApiClient {
         this.refreshToken = data.refresh_token;
         this.onTokenRefresh?.(data.access_token, data.refresh_token);
       } catch {
-        this.clearTokens();
-        this.onAuthFailure?.();
+        // Network error (server down, DNS failure, etc.) — NOT an auth failure
+        // Don't clear tokens or log out — the server might just be restarting
+        console.warn('Token refresh failed due to network error, will retry later');
       } finally {
         this.refreshPromise = null;
       }
@@ -178,6 +194,7 @@ class ApiClient {
     const response = await fetch(url.toString(), {
       method: 'POST',
       headers,
+      credentials: 'include',
       body: formData
     });
 

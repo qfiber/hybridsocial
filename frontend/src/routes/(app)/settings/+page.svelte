@@ -12,6 +12,7 @@
   let handle = $state('');
   let avatarUrl: string | null = $state(null);
   let headerUrl: string | null = $state(null);
+  let showBadge = $state(true);
   let saving = $state(false);
   let saved = $state(false);
   let error: string | null = $state(null);
@@ -26,6 +27,7 @@
       handle = state.user.handle;
       avatarUrl = state.user.avatar_url;
       headerUrl = state.user.header_url;
+      showBadge = (state.user as any).show_badge !== false;
     }
   });
 
@@ -37,6 +39,7 @@
       const updated = await updateAccount({
         display_name: displayName,
         bio,
+        show_badge: showBadge,
       });
       setUser(updated);
       saved = true;
@@ -139,7 +142,17 @@
         value={handle}
         disabled
       />
-      <span class="form-hint form-warning">Handle changes are not yet supported. Your current handle will be reserved.</span>
+      <span class="form-hint">Your handle is permanent and cannot be changed. This ensures stable identity across the federation.</span>
+    </div>
+
+    <div class="form-group">
+      <label class="form-toggle-row">
+        <input type="checkbox" bind:checked={showBadge} class="form-checkbox" />
+        <div>
+          <span class="form-label">Show role badge</span>
+          <span class="form-hint">Display your instance role badge (Admin, Moderator, Owner) on your profile and posts. Group and page badges are always visible.</span>
+        </div>
+      </label>
     </div>
 
     {#if error}
@@ -261,6 +274,21 @@
     font-size: var(--text-sm);
     font-weight: 500;
     color: var(--color-text);
+  }
+
+  .form-toggle-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    cursor: pointer;
+  }
+
+  .form-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+    margin-top: 2px;
+    flex-shrink: 0;
   }
 
   .form-hint {

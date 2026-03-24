@@ -19,12 +19,12 @@
   onMount(async () => {
     try {
       const prefs = await getNotificationPreferences();
-      follows = prefs.follows;
-      reactions = prefs.favourites;
-      boosts = prefs.boosts;
-      mentions = prefs.mentions;
-      polls = prefs.polls;
-      groupInvites = prefs.group_invites;
+      follows = prefs.follows ?? true;
+      reactions = prefs.favourites ?? true;
+      boosts = prefs.boosts ?? true;
+      mentions = prefs.mentions ?? true;
+      polls = prefs.polls ?? true;
+      groupInvites = prefs.group_invites ?? true;
     } catch {
       // Use defaults
     } finally {

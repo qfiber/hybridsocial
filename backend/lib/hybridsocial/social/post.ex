@@ -46,7 +46,9 @@ defmodule Hybridsocial.Social.Post do
     timestamps(type: :utc_datetime_usec)
   end
 
-  def create_changeset(post, attrs) do
+  def create_changeset(post, attrs, opts \\ []) do
+    char_limit = Keyword.get(opts, :char_limit, 5000)
+
     post
     |> cast(attrs, [
       :content,
@@ -69,7 +71,7 @@ defmodule Hybridsocial.Social.Post do
     |> validate_inclusion(:visibility, @valid_visibilities)
     |> validate_inclusion(:post_type, @valid_post_types)
     |> validate_content_for_type()
-    |> validate_length(:content, max: 10_000)
+    |> validate_length(:content, max: char_limit)
     |> validate_length(:spoiler_text, max: 500)
     |> validate_length(:language, max: 5)
     |> generate_content_html()
@@ -80,12 +82,14 @@ defmodule Hybridsocial.Social.Post do
     |> unique_constraint(:ap_id)
   end
 
-  def edit_changeset(post, attrs) do
+  def edit_changeset(post, attrs, opts \\ []) do
+    char_limit = Keyword.get(opts, :char_limit, 5000)
+
     post
     |> cast(attrs, [:content, :spoiler_text, :sensitive, :language])
     |> validate_edit_window(post)
     |> validate_content_for_type()
-    |> validate_length(:content, max: 10_000)
+    |> validate_length(:content, max: char_limit)
     |> validate_length(:spoiler_text, max: 500)
     |> generate_content_html()
     |> put_change(:edited_at, DateTime.utc_now() |> DateTime.truncate(:microsecond))
@@ -121,22 +125,17 @@ defmodule Hybridsocial.Social.Post do
   end
 
   defp generate_content_html(changeset) do
-    case get_change(changeset, :content) do
+    # Only generate if content_html isn't already set (Posts.create_post sets it via Sanitizer)
+    case get_change(changeset, :content_html) do
       nil ->
-        changeset
+        case get_change(changeset, :content) do
+          nil -> changeset
+          content -> put_change(changeset, :content_html, Hybridsocial.Content.Sanitizer.sanitize_post_content(content))
+        end
 
-      content ->
-        html = escape_html(content)
-        put_change(changeset, :content_html, html)
+      _already_set ->
+        changeset
     end
   end
 
-  defp escape_html(text) do
-    text
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
-    |> String.replace("'", "&#39;")
-  end
 end

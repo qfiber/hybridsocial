@@ -38,6 +38,8 @@ defmodule Hybridsocial.Moderation.Report do
     ])
     |> validate_required([:reporter_id, :reported_id, :category])
     |> validate_inclusion(:category, @categories)
+    |> validate_length(:description, max: 2000)
+    |> validate_length(:target_type, max: 50)
     |> foreign_key_constraint(:reporter_id)
     |> foreign_key_constraint(:reported_id)
   end

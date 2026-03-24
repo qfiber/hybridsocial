@@ -2,23 +2,32 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Social.Posts
+  alias Hybridsocial.Premium.TierLimits
 
   # POST /api/v1/statuses
   def create(conn, params) do
     identity = conn.assigns.current_identity
+    limits = TierLimits.limits_for(identity)
 
-    case Posts.create_post(identity.id, params) do
-      {:ok, post} ->
-        post = Hybridsocial.Repo.preload(post, [:identity, :quote])
+    with :ok <- validate_tier_limits(params, limits) do
+      case Posts.create_post(identity.id, params, identity) do
+        {:ok, post} ->
+          post = Hybridsocial.Repo.preload(post, [:identity, :quote])
 
-        conn
-        |> put_status(:created)
-        |> json(serialize_post(post))
+          conn
+          |> put_status(:created)
+          |> json(serialize_post(post))
 
-      {:error, changeset} ->
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, error_key, max} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> json(%{error: "validation.failed", details: format_errors(changeset)})
+        |> json(%{error: error_key, max: max})
     end
   end
 
@@ -41,7 +50,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
   def update(conn, %{"id" => id} = params) do
     identity = conn.assigns.current_identity
 
-    case Posts.edit_post(id, identity.id, params) do
+    case Posts.edit_post(id, identity.id, params, identity) do
       {:ok, post} ->
         post = Hybridsocial.Repo.preload(post, [:identity, :quote])
 
@@ -105,12 +114,19 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
     end
   end
 
+  @valid_reaction_types ~w(like love care angry sad lol wow)
+
   # POST /api/v1/statuses/:id/react
   def react(conn, %{"id" => id} = params) do
     identity = conn.assigns.current_identity
     type = Map.get(params, "type", "like")
 
-    case Posts.react(id, identity.id, type) do
+    if type not in @valid_reaction_types do
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{error: "reaction.invalid_type", valid_types: @valid_reaction_types})
+    else
+      case Posts.react(id, identity.id, type) do
       {:ok, reaction} ->
         conn
         |> put_status(:ok)
@@ -125,6 +141,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: "validation.failed", details: format_errors(changeset)})
+    end
     end
   end
 
@@ -290,7 +307,13 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
   # --- Serialization ---
 
   defp serialize_post(post) do
-    account = serialize_account(post.identity)
+    badges = Hybridsocial.Badges.badges_for_post(
+      post.identity,
+      group_id: post.group_id,
+      page_id: post.page_id
+    )
+
+    account = serialize_account(post.identity, badges)
 
     quote_post =
       case post.quote do
@@ -323,16 +346,19 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
     }
   end
 
-  defp serialize_account(%Hybridsocial.Accounts.Identity{} = identity) do
+  defp serialize_account(identity, badges \\ [])
+
+  defp serialize_account(%Hybridsocial.Accounts.Identity{} = identity, badges) do
     %{
       id: identity.id,
       handle: identity.handle,
       display_name: identity.display_name,
-      avatar_url: identity.avatar_url
+      avatar_url: identity.avatar_url,
+      badges: badges
     }
   end
 
-  defp serialize_account(_), do: nil
+  defp serialize_account(_, _), do: nil
 
   defp serialize_revision(revision) do
     %{
@@ -342,6 +368,25 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       edited_at: revision.edited_at,
       revision_number: revision.revision_number
     }
+  end
+
+  defp validate_tier_limits(params, limits) do
+    media_ids = params["media_ids"] || []
+    poll_options = params["options"] || []
+
+    cond do
+      length(media_ids) > limits[:media_per_post] ->
+        {:error, "limits.media_per_post", limits[:media_per_post]}
+
+      poll_options != [] and length(poll_options) > limits[:poll_options] ->
+        {:error, "limits.poll_options", limits[:poll_options]}
+
+      params["scheduled_at"] && !limits[:scheduled_posts] ->
+        {:error, "limits.scheduled_posts_not_allowed", nil}
+
+      true ->
+        :ok
+    end
   end
 
   defp format_errors(changeset) do

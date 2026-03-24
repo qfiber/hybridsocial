@@ -4,9 +4,11 @@
   import { setTokens, setUser } from '$lib/stores/auth.js';
   import { getCurrentUser } from '$lib/api/auth.js';
   import { subscribeToPush } from '$lib/utils/push.js';
+  import { tError } from '$lib/utils/i18n.js';
 
   let email = $state('');
   let password = $state('');
+  let showPassword = $state(false);
   let otpCode = $state('');
   let error = $state('');
   let loading = $state(false);
@@ -42,7 +44,6 @@
 
     try {
       if (otpRequired && otpCode) {
-        // 2FA login — use the separate endpoint
         const result = await api.post<{
           access_token?: string;
           refresh_token?: string;
@@ -70,7 +71,6 @@
           await goto('/home');
         }
       } else {
-        // Normal login
         const result = await api.post<{
           access_token?: string;
           refresh_token?: string;
@@ -105,7 +105,7 @@
       }
     } catch (err) {
       if (err instanceof ApiError) {
-        error = err.body.error_description || err.body.error || 'Login failed';
+        error = err.body.error_description || tError(err.body.error);
       } else {
         error = 'An unexpected error occurred. Please try again.';
       }
@@ -132,12 +132,19 @@
 </script>
 
 <svelte:head>
-  <title>Log in - HybridSocial</title>
+  <title>Sign in - HybridSocial</title>
 </svelte:head>
 
-<div>
-  <h1 class="auth-title">Welcome back</h1>
-  <p class="auth-subtitle">Log in to your account</p>
+<div class="signin-card">
+  <div class="signin-logo">
+    <svg width="44" height="44" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+      <rect rx="6" width="28" height="28" fill="var(--color-primary)" />
+      <text x="14" y="19.5" text-anchor="middle" fill="white" font-size="15" font-weight="700">H</text>
+    </svg>
+  </div>
+
+  <h1 class="signin-title">Sign in to your server</h1>
+  <p class="signin-subtitle">Enter your credentials to continue</p>
 
   {#if error}
     <div class="auth-error" role="alert">
@@ -149,12 +156,11 @@
   <form onsubmit={handleSubmit} novalidate>
     {#if !otpRequired}
       <div class="form-field">
-        <label for="email" class="form-label">Email</label>
         <input
           id="email"
           type="email"
           class="form-input"
-          placeholder="you@example.com"
+          placeholder="Email or username"
           bind:value={email}
           required
           disabled={loading}
@@ -163,21 +169,39 @@
       </div>
 
       <div class="form-field">
-        <div class="form-label-row">
-          <label for="password" class="form-label">Password</label>
-          <a href="/reset-password" class="form-link">Forgot password?</a>
+        <div class="input-with-icon">
+          <input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            class="form-input"
+            placeholder="Password"
+            bind:value={password}
+            required
+            disabled={loading}
+            autocomplete="current-password"
+            onkeydown={handleKeydown}
+          />
+          <button
+            type="button"
+            class="password-toggle"
+            onclick={() => showPassword = !showPassword}
+            tabindex={-1}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+          >
+            {#if showPassword}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                <line x1="1" y1="1" x2="23" y2="23" />
+              </svg>
+            {:else}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            {/if}
+          </button>
         </div>
-        <input
-          id="password"
-          type="password"
-          class="form-input"
-          placeholder="Your password"
-          bind:value={password}
-          required
-          disabled={loading}
-          autocomplete="current-password"
-          onkeydown={handleKeydown}
-        />
       </div>
     {:else}
       {#if otpExpired}
@@ -219,11 +243,11 @@
       <button type="submit" class="auth-submit" disabled={loading || (otpRequired && otpExpired)}>
         {#if loading}
           <span class="spinner" aria-hidden="true"></span>
-          Logging in...
+          Signing in...
         {:else if otpRequired}
           Verify
         {:else}
-          Log in
+          Sign in
         {/if}
       </button>
     {/if}
@@ -235,16 +259,163 @@
       class="auth-back-btn"
       onclick={resetOtp}
     >
-      Back to login
+      Back to sign in
     </button>
   {/if}
 
-  <p class="auth-footer">
-    Don't have an account? <a href="/register">Create account</a>
-  </p>
+  {#if !otpRequired}
+    <div class="divider">
+      <span>or</span>
+    </div>
+
+    <a href="/register" class="create-account-btn">Create account</a>
+  {/if}
 </div>
 
+{#if !otpRequired}
+  <div class="new-to-hs">
+    <h3 class="new-to-hs-title">New to HybridSocial?</h3>
+    <p class="new-to-hs-desc">
+      Create your own server in minutes or join a community run by others.
+    </p>
+    <a href="/register" class="new-to-hs-link">Create a server &rarr;</a>
+    <a href="/explore" class="new-to-hs-link">Explore servers &rarr;</a>
+  </div>
+{/if}
+
 <style>
+  /* ---- Sign-in card ---- */
+  .signin-card {
+    background: white;
+    border-radius: var(--radius-xl);
+    padding: var(--space-8);
+    border: 1px solid var(--color-border);
+  }
+
+  .signin-logo {
+    display: flex;
+    justify-content: center;
+    margin-block-end: var(--space-6);
+  }
+
+  .signin-title {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--color-text);
+    text-align: center;
+    margin-block-end: var(--space-1);
+  }
+
+  .signin-subtitle {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    text-align: center;
+    margin-block-end: var(--space-6);
+  }
+
+  /* ---- Error ---- */
+  .auth-error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3);
+    margin-block-end: var(--space-4);
+    background: var(--color-danger-soft);
+    border: 1px solid var(--color-danger);
+    border-radius: var(--radius-md);
+    color: var(--color-danger);
+    font-size: var(--text-sm);
+  }
+
+  .auth-error-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: var(--radius-full);
+    background: var(--color-danger);
+    color: white;
+    font-size: var(--text-xs);
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* ---- Form ---- */
+  .form-field {
+    margin-block-end: var(--space-3);
+  }
+
+  .form-label {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text);
+    margin-block-end: var(--space-1);
+  }
+
+  .form-hint {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    margin-block-end: var(--space-2);
+  }
+
+  .form-input {
+    display: block;
+    width: 100%;
+    height: 44px;
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    background-color: var(--color-bg);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .form-input::placeholder {
+    color: var(--color-text-tertiary);
+  }
+
+  .form-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  .form-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .input-with-icon {
+    position: relative;
+  }
+
+  .input-with-icon .form-input {
+    padding-inline-end: 44px;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    height: 44px;
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+  }
+
+  .password-toggle:hover {
+    color: var(--color-text-secondary);
+  }
+
+  /* ---- OTP ---- */
   .otp-header {
     display: flex;
     justify-content: space-between;
@@ -282,111 +453,14 @@
     font-weight: 500;
   }
 
-  .auth-title {
-    font-size: var(--text-xl);
-    font-weight: var(--font-bold);
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
-  }
-
-  .auth-subtitle {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-6);
-  }
-
-  .auth-error {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3);
-    margin-block-end: var(--space-4);
-    background: var(--color-danger-light);
-    border: 1px solid var(--color-danger);
-    border-radius: var(--radius-md);
-    color: var(--color-danger);
-    font-size: var(--text-sm);
-  }
-
-  .auth-error-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: var(--radius-full);
-    background: var(--color-danger);
-    color: white;
-    font-size: var(--text-xs);
-    font-weight: var(--font-bold);
-    flex-shrink: 0;
-  }
-
-  .form-field {
-    margin-block-end: var(--space-4);
-  }
-
-  .form-label {
-    display: block;
-    font-size: var(--text-sm);
-    font-weight: var(--font-medium);
-    color: var(--color-text);
-    margin-block-end: var(--space-1);
-  }
-
-  .form-label-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-block-end: var(--space-1);
-  }
-
-  .form-link {
-    font-size: var(--text-sm);
-    color: var(--color-primary);
-  }
-
-  .form-hint {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-2);
-  }
-
-  .form-input {
-    display: block;
-    width: 100%;
-    height: 40px;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    font-size: var(--text-sm);
-    color: var(--color-text);
-    background-color: var(--color-bg);
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-  }
-
-  .form-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  .form-input:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-light);
-  }
-
-  .form-input:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
   .otp-input {
     text-align: center;
     letter-spacing: 0.5em;
     font-size: var(--text-lg);
-    font-weight: var(--font-semibold);
+    font-weight: 600;
   }
 
+  /* ---- Buttons ---- */
   .auth-submit {
     display: flex;
     align-items: center;
@@ -394,14 +468,14 @@
     gap: var(--space-2);
     width: 100%;
     height: 44px;
-    margin-block-start: var(--space-6);
+    margin-block-start: var(--space-4);
     padding: var(--space-2) var(--space-4);
     background: var(--color-primary);
-    color: var(--color-text-inverse);
+    color: var(--color-text-on-primary);
     border: none;
     border-radius: var(--radius-lg);
     font-size: var(--text-sm);
-    font-weight: var(--font-semibold);
+    font-weight: 600;
     cursor: pointer;
     transition: background-color var(--transition-fast);
   }
@@ -431,13 +505,196 @@
     color: var(--color-text);
   }
 
-  .auth-footer {
-    text-align: center;
-    margin-block-start: var(--space-6);
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
+  /* ---- Divider ---- */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin: var(--space-5) 0;
   }
 
+  .divider::before,
+  .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+  }
+
+  .divider span {
+    font-size: var(--text-sm);
+    color: var(--color-text-tertiary);
+  }
+
+  /* ---- Create account ---- */
+  .create-account-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 44px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: background-color var(--transition-fast), border-color var(--transition-fast);
+  }
+
+  .create-account-btn:hover {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+  }
+
+  /* ---- New to HS box ---- */
+  .new-to-hs {
+    margin-block-start: var(--space-4);
+    padding: var(--space-5);
+    background: white;
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--color-border);
+  }
+
+  .new-to-hs-title {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text);
+    margin-block-end: var(--space-1);
+  }
+
+  .new-to-hs-desc {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin-block-end: var(--space-3);
+  }
+
+  .new-to-hs-link {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-primary);
+    text-decoration: none;
+    margin-block-end: var(--space-1);
+  }
+
+  .new-to-hs-link:hover {
+    text-decoration: underline;
+  }
+
+  /* ---- Entrance animations ---- */
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .signin-logo {
+    animation: scaleIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  }
+
+  .signin-title {
+    animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  }
+
+  .signin-subtitle {
+    animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  }
+
+  .form-field:nth-child(1) {
+    animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+  }
+
+  .form-field:nth-child(2) {
+    animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  }
+
+  .auth-submit {
+    animation: fadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+  }
+
+  .divider {
+    animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
+  }
+
+  .create-account-btn {
+    animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 0.45s both;
+  }
+
+  .new-to-hs {
+    animation: fadeUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both;
+  }
+
+  /* Interactive hover lift on cards */
+  .signin-card {
+    transition: box-shadow 0.3s ease;
+  }
+
+  .signin-card:focus-within {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  }
+
+  .new-to-hs {
+    transition: box-shadow 0.3s ease;
+  }
+
+  .new-to-hs:hover {
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Smooth focus transitions on inputs */
+  .form-input {
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
+  }
+
+  .form-input:focus {
+    transform: translateY(-1px);
+  }
+
+  /* Button press effect */
+  .auth-submit:active:not(:disabled) {
+    transform: scale(0.985);
+  }
+
+  .create-account-btn:active {
+    transform: scale(0.985);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .signin-logo,
+    .signin-title,
+    .signin-subtitle,
+    .form-field,
+    .auth-submit,
+    .divider,
+    .create-account-btn,
+    .new-to-hs {
+      animation: none !important;
+    }
+
+    .form-input:focus {
+      transform: none;
+    }
+  }
+
+  /* ---- Spinner ---- */
   .spinner {
     display: inline-block;
     width: 16px;

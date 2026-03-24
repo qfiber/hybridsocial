@@ -15,6 +15,7 @@ defmodule HybridsocialWeb.Plugs.SecurityHeaders do
     |> put_resp_header("permissions-policy", "camera=(), microphone=(), geolocation=()")
     |> put_resp_header("content-security-policy", build_csp())
     |> put_resp_header("strict-transport-security", "max-age=31536000; includeSubDomains")
+    |> put_resp_header("vary", "Origin")
   end
 
   defp build_csp do

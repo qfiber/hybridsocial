@@ -180,10 +180,10 @@
           id="new-password"
           type="password"
           class="form-input"
-          placeholder="At least 8 characters"
+          placeholder="At least 16 characters"
           bind:value={newPassword}
           required
-          minlength={8}
+          minlength={16}
           disabled={loading}
           autocomplete="new-password"
         />

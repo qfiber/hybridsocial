@@ -30,7 +30,7 @@
   let formValid = $derived(
     handle.length > 0 &&
     email.length > 0 &&
-    password.length >= 8 &&
+    password.length >= 16 &&
     password === passwordConfirm &&
     agreedToTerms &&
     !powSolving
@@ -215,10 +215,10 @@
           type="password"
           class="form-input"
           class:form-input-error={!!fieldErrors.password}
-          placeholder="At least 8 characters"
+          placeholder="At least 16 characters"
           bind:value={password}
           required
-          minlength={8}
+          minlength={16}
           disabled={loading}
           autocomplete="new-password"
         />

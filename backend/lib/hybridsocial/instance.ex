@@ -141,7 +141,8 @@ defmodule Hybridsocial.Instance do
         android: Config.get("app_android_url", ""),
         fdroid: Config.get("app_fdroid_url", ""),
         banner_enabled: Config.get("app_banner_enabled", false)
-      }
+      },
+      analytics: analytics_config()
     }
   end
 
@@ -186,6 +187,20 @@ defmodule Hybridsocial.Instance do
       end
     rescue
       _ -> []
+    end
+  end
+
+  defp analytics_config do
+    provider = Config.get("analytics_provider", "none")
+
+    if provider == "none" do
+      nil
+    else
+      %{
+        provider: provider,
+        site_id: Config.get("analytics_site_id", ""),
+        host: Config.get("analytics_host", "")
+      }
     end
   end
 

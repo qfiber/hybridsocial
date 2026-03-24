@@ -364,20 +364,33 @@
   .delete-overlay {
     position: fixed;
     inset: 0;
-    background: var(--color-overlay, rgba(0,0,0,0.5));
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: var(--z-modal, 40);
+    z-index: 9999;
+    animation: overlay-in 0.15s ease;
+  }
+
+  @keyframes overlay-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes dialog-in {
+    from { opacity: 0; transform: scale(0.95) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
   }
 
   .delete-dialog {
     background: var(--color-surface-raised, #fff);
-    border-radius: var(--radius-lg, 0.75rem);
+    border-radius: var(--radius-xl, 1rem);
     padding: var(--space-6, 1.5rem);
     max-width: 400px;
     width: 90%;
-    box-shadow: var(--shadow-xl, 0 10px 15px rgba(0,0,0,0.1));
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    animation: dialog-in 0.2s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .delete-title {

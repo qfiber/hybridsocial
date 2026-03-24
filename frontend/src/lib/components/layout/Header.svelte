@@ -16,7 +16,9 @@
   function handleSearch(e: Event) {
     e.preventDefault();
     if (searchQuery.trim()) {
-      goto(`/explore?q=${encodeURIComponent(searchQuery.trim())}`);
+      const q = searchQuery.trim();
+      searchQuery = '';
+      goto(`/explore?q=${encodeURIComponent(q)}`);
     }
   }
 

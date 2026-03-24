@@ -12,62 +12,38 @@ interface AuthState {
   initialized: boolean;
 }
 
-const STORAGE_KEY = 'hybridsocial_auth';
+const USER_KEY = 'hybridsocial_user';
 
-function loadFromStorage(): Partial<AuthState> {
-  if (!browser) return {};
+function loadCachedUser(): Identity | null {
+  if (!browser) return null;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const data = JSON.parse(raw);
-    return {
-      user: data.user || null,
-      accessToken: data.accessToken || null,
-      refreshToken: data.refreshToken || null
-    };
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
-function saveToStorage(state: AuthState): void {
+function saveCachedUser(user: Identity | null): void {
   if (!browser) return;
   try {
-    sessionStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        user: state.user,
-        accessToken: state.accessToken,
-        refreshToken: state.refreshToken
-      })
-    );
-  } catch {
-    // Storage full or unavailable
-  }
+    if (user) {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(USER_KEY);
+    }
+  } catch {}
 }
-
-function clearStorage(): void {
-  if (!browser) return;
-  sessionStorage.removeItem(STORAGE_KEY);
-}
-
-const stored = loadFromStorage();
 
 const initialState: AuthState = {
-  user: stored.user ?? null,
-  accessToken: stored.accessToken ?? null,
-  refreshToken: stored.refreshToken ?? null,
+  user: loadCachedUser(),
+  accessToken: null,
+  refreshToken: null,
   loading: false,
   initialized: false
 };
 
-// Sync tokens to API client on init
-if (initialState.accessToken && initialState.refreshToken) {
-  api.setTokens(initialState.accessToken, initialState.refreshToken);
-}
-
 export const authStore = writable<AuthState>(initialState);
-
 export const currentUser = derived(authStore, ($s) => $s.user);
 export const isLoggedIn = derived(authStore, ($s) => !!$s.user);
 export const isAuthLoading = derived(authStore, ($s) => $s.loading);
@@ -88,66 +64,72 @@ export function isStaff(): boolean {
   return (state.user?.roles?.length ?? 0) > 0;
 }
 
+// ---- Token Refresh ----
+
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleRefresh(expiresIn: number): void {
   if (refreshTimer) clearTimeout(refreshTimer);
-  // Refresh 60 seconds before expiry, minimum 10s
-  const delay = Math.max((expiresIn - 60) * 1000, 10000);
-  refreshTimer = setTimeout(async () => {
-    const state = get(authStore);
-    if (!state.refreshToken) return;
-    try {
-      const { refreshTokens } = await import('$lib/api/auth.js');
-      const tokens = await refreshTokens(state.refreshToken);
-      setTokens(tokens);
-    } catch {
-      clearAuth();
-    }
-  }, delay);
+  // Refresh 2 minutes before expiry, minimum 30s
+  const delay = Math.max((expiresIn - 120) * 1000, 30_000);
+  refreshTimer = setTimeout(() => attemptRefresh(), delay);
 }
 
+async function attemptRefresh(retries = 2): Promise<void> {
+  const state = get(authStore);
+  // Need either in-memory token or a cached user (cookie will be sent automatically)
+  if (!state.refreshToken && !state.user) return;
+
+  try {
+    const { refreshTokens } = await import('$lib/api/auth.js');
+    // Send refresh token in body if we have it, otherwise rely on httpOnly cookie
+    const tokens = await refreshTokens(state.refreshToken || '');
+    setTokens(tokens);
+  } catch (err: unknown) {
+    const { ApiError } = await import('$lib/api/client.js');
+    const isAuthError = err instanceof ApiError && (err.status === 401 || err.status === 403);
+
+    if (isAuthError) {
+      clearAuth();
+    } else if (retries > 0) {
+      setTimeout(() => attemptRefresh(retries - 1), 5_000);
+    } else {
+      // Network issue — don't log out, try again later
+      scheduleRefresh(60);
+    }
+  }
+}
+
+// ---- Public API ----
+
 export function setTokens(tokens: AuthTokens): void {
+  // Store tokens in memory + API client (for Authorization header)
+  // Cookies are set by the backend response automatically
   api.setTokens(tokens.access_token, tokens.refresh_token);
-  authStore.update((s) => {
-    const next = {
-      ...s,
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token
-    };
-    saveToStorage(next);
-    return next;
-  });
+  authStore.update((s) => ({
+    ...s,
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token
+  }));
   if (tokens.expires_in) {
     scheduleRefresh(tokens.expires_in);
   }
 }
 
 export function setUser(user: Identity): void {
-  authStore.update((s) => {
-    const next = { ...s, user };
-    saveToStorage(next);
-    return next;
-  });
+  saveCachedUser(user);
+  authStore.update((s) => ({ ...s, user }));
 }
 
 export function clearAuth(): void {
   if (refreshTimer) clearTimeout(refreshTimer);
   api.clearTokens();
-  clearStorage();
+  saveCachedUser(null);
 
-  // Disconnect SSE notifications
   try {
     const { disconnectNotificationStream } = require('$lib/stores/notifications.js');
     disconnectNotificationStream();
   } catch {}
-
-  // Clear all session-related storage
-  if (browser) {
-    sessionStorage.clear();
-    // Clear any cached identity from Valkey (frontend side)
-    localStorage.removeItem('hybridsocial_preferences');
-  }
 
   authStore.set({
     user: null,
@@ -161,31 +143,74 @@ export function clearAuth(): void {
 export async function initAuth(): Promise<void> {
   const state = get(authStore);
   if (state.initialized) return;
-  if (!state.accessToken) {
+
+  // No cached user — nothing to restore
+  if (!state.user) {
     authStore.update((s) => ({ ...s, initialized: true }));
     return;
   }
 
+  // Have cached user — validate with server (cookies sent automatically)
   authStore.update((s) => ({ ...s, loading: true }));
   try {
     const user = await getCurrentUser();
-    authStore.update((s) => {
-      const next = { ...s, user, loading: false, initialized: true };
-      saveToStorage(next);
-      return next;
-    });
-  } catch {
-    clearAuth();
+    saveCachedUser(user);
+    authStore.update((s) => ({
+      ...s,
+      user,
+      loading: false,
+      initialized: true
+    }));
+    scheduleRefresh(900);
+  } catch (err: unknown) {
+    const { ApiError } = await import('$lib/api/client.js');
+    const isAuthError = err instanceof ApiError && (err.status === 401 || err.status === 403);
+
+    if (!isAuthError) {
+      // Network error — keep cached user, retry later
+      authStore.update((s) => ({ ...s, loading: false, initialized: true }));
+      scheduleRefresh(30);
+      return;
+    }
+
+    // 401 — access token expired, try refresh (cookie sent automatically)
+    try {
+      const { refreshTokens } = await import('$lib/api/auth.js');
+      const tokens = await refreshTokens('');
+      setTokens(tokens);
+
+      const user = await getCurrentUser();
+      saveCachedUser(user);
+      authStore.update((s) => ({
+        ...s,
+        user,
+        loading: false,
+        initialized: true
+      }));
+      scheduleRefresh(tokens.expires_in || 900);
+    } catch (refreshErr: unknown) {
+      const isRefreshAuthError = refreshErr instanceof (await import('$lib/api/client.js')).ApiError
+        && (refreshErr.status === 401 || refreshErr.status === 403);
+
+      if (isRefreshAuthError) {
+        // Both access and refresh tokens invalid — truly logged out
+        clearAuth();
+      } else {
+        // Network error on refresh — keep cached user
+        authStore.update((s) => ({ ...s, loading: false, initialized: true }));
+        scheduleRefresh(30);
+      }
+    }
   }
 }
 
-// Wire up token refresh callback on the API client
+// Wire up API client callbacks
 api.setOnTokenRefresh((access, refresh) => {
-  authStore.update((s) => {
-    const next = { ...s, accessToken: access, refreshToken: refresh };
-    saveToStorage(next);
-    return next;
-  });
+  authStore.update((s) => ({
+    ...s,
+    accessToken: access,
+    refreshToken: refresh
+  }));
 });
 
 api.setOnAuthFailure(() => {

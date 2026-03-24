@@ -7,6 +7,8 @@ defmodule Hybridsocial.Content.Sanitizer do
     "target" => "_blank"
   }
 
+  @allowed_schemes ["http://", "https://"]
+
   def sanitize_post_content(nil), do: nil
   def sanitize_post_content(""), do: ""
 
@@ -43,25 +45,45 @@ defmodule Hybridsocial.Content.Sanitizer do
 
   def sanitize_links(html) do
     Regex.replace(~r/<a\s[^>]*>/u, html, fn tag ->
-      # Extract href
       href =
         case Regex.run(~r/href="([^"]*)"/, tag) do
           [_, url] -> url
           _ -> "#"
         end
 
-      if String.starts_with?(href, ["http://", "https://"]) do
-        attrs = Enum.map_join(@link_attrs, " ", fn {k, v} -> ~s(#{k}="#{v}") end)
-        ~s(<a href="#{href}" #{attrs}>)
-      else
-        ~s(<a href="#">)
+      cond do
+        String.starts_with?(href, @allowed_schemes) ->
+          safe_href = escape_attr(href)
+          attrs = Enum.map_join(@link_attrs, " ", fn {k, v} -> ~s(#{k}="#{v}") end)
+          ~s(<a href="#{safe_href}" #{attrs}>)
+
+        String.starts_with?(href, "/") ->
+          # Internal links (hashtags, mentions) — no rel/target needed
+          safe_href = escape_attr(href)
+          ~s(<a href="#{safe_href}">)
+
+        true ->
+          ~s(<a href="#">)
       end
     end)
   end
 
+  # Escape HTML special characters in text content
   defp escape_html(text) do
     text
     |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
+    |> String.replace("\"", "&quot;")
+    |> String.replace("'", "&#39;")
+  end
+
+  # Escape for use inside HTML attribute values (double-quoted)
+  defp escape_attr(value) do
+    value
+    |> String.replace("&", "&amp;")
+    |> String.replace("\"", "&quot;")
+    |> String.replace("'", "&#39;")
     |> String.replace("<", "&lt;")
     |> String.replace(">", "&gt;")
   end
@@ -72,20 +94,31 @@ defmodule Hybridsocial.Content.Sanitizer do
 
   defp convert_links(text) do
     Regex.replace(~r/\[([^\]]+)\]\(([^)]+)\)/u, text, fn _, label, url ->
+      # Only allow http/https URLs — block javascript:, data:, etc.
+      safe_url =
+        if String.starts_with?(url, @allowed_schemes) do
+          escape_attr(url)
+        else
+          "#"
+        end
+
+      safe_label = escape_html_content(label)
       attrs = Enum.map_join(@link_attrs, " ", fn {k, v} -> ~s(#{k}="#{v}") end)
-      ~s(<a href="#{url}" #{attrs}>#{label}</a>)
+      ~s(<a href="#{safe_url}" #{attrs}>#{safe_label}</a>)
     end)
   end
 
   defp convert_mentions(text) do
     Regex.replace(~r/@([a-zA-Z0-9_]+)(@[a-zA-Z0-9._-]+)?/u, text, fn full, _user, _domain ->
+      # full is already HTML-escaped since escape_html ran first
       ~s(<span class="mention">#{full}</span>)
     end)
   end
 
   defp convert_hashtags(text) do
     Regex.replace(~r/#([a-zA-Z0-9_]+)/u, text, fn full, tag ->
-      ~s(<a href="/tags/#{String.downcase(tag)}" class="hashtag">#{full}</a>)
+      safe_tag = String.downcase(tag) |> URI.encode()
+      ~s(<a href="/tags/#{safe_tag}" class="hashtag">#{full}</a>)
     end)
   end
 
@@ -96,5 +129,13 @@ defmodule Hybridsocial.Content.Sanitizer do
       inner = String.replace(para, "\n", "<br>")
       "<p>#{inner}</p>"
     end)
+  end
+
+  # For content that was already HTML-escaped but needs extra safety in specific contexts
+  defp escape_html_content(text) do
+    text
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
   end
 end

@@ -93,5 +93,30 @@
   "settings.account": "Account",
   "settings.language": "Language",
   "settings.compact_mode": "Compact mode",
-  "settings.feed_algorithm": "Feed algorithm"
+  "settings.feed_algorithm": "Feed algorithm",
+
+  "error.auth.invalid_credentials": "Invalid email or password",
+  "error.auth.unauthorized": "You need to sign in to continue",
+  "error.auth.invalid_refresh_token": "Your session has expired. Please sign in again.",
+  "error.auth.invalid_confirmation_token": "This confirmation link is invalid or has expired",
+  "error.auth.reset_token_expired": "This password reset link has expired",
+  "error.auth.invalid_reset_token": "This password reset link is invalid",
+  "error.auth.pow_required": "Please complete the verification challenge",
+  "error.auth.captcha_failed": "Captcha verification failed. Please try again.",
+  "error.auth.email_domain_banned": "Registration from this email domain is not allowed",
+  "error.auth.handle_reserved": "This handle is reserved and cannot be used",
+
+  "error.2fa.invalid_code": "Invalid two-factor code. Please check and try again.",
+  "error.2fa.setup_failed": "Failed to set up two-factor authentication",
+  "error.2fa.verify_failed": "Failed to verify two-factor code",
+  "error.2fa.disable_failed": "Failed to disable two-factor authentication",
+
+  "error.validation.failed": "Please check your input and try again",
+  "error.account.confirmation_required": "Please check your email to confirm your account",
+
+  "error.promotions.disabled": "Profile promotions are not available at this time",
+  "error.promotions.already_active": "You already have an active promotion",
+
+  "error.page.not_found": "This page could not be found",
+  "error.unknown": "Something went wrong. Please try again."
 }

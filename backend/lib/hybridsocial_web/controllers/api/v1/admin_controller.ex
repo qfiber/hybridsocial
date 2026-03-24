@@ -24,6 +24,336 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     |> json(%{error: "permission.denied", required: permission})
   end
 
+  # ── Dashboard ─────────────────────────────────────────────────────────
+
+  def dashboard(conn, _params) do
+    import Ecto.Query
+    alias Hybridsocial.Repo
+    alias Hybridsocial.Accounts.Identity
+    alias Hybridsocial.Social.Post
+    alias Hybridsocial.Moderation.Report
+
+    # Core stats
+    total_users =
+      Identity
+      |> where([i], i.type == "user" and is_nil(i.deleted_at))
+      |> Repo.aggregate(:count)
+
+    total_posts =
+      Post
+      |> where([p], is_nil(p.deleted_at))
+      |> Repo.aggregate(:count)
+
+    known_instances =
+      Identity
+      |> where([i], not is_nil(i.ap_actor_url) and is_nil(i.deleted_at))
+      |> select([i], fragment("count(distinct split_part(?, '/', 3))", i.ap_actor_url))
+      |> Repo.one() || 0
+
+    open_reports =
+      Report
+      |> where([r], r.status == "pending")
+      |> Repo.aggregate(:count)
+
+    # Service health checks
+    services = check_services()
+
+    json(conn, %{
+      total_users: total_users,
+      total_posts: total_posts,
+      known_instances: known_instances,
+      open_reports: open_reports,
+      services: services
+    })
+  end
+
+  defp check_services do
+    %{
+      valkey: check_valkey(),
+      opensearch: check_opensearch(),
+      nats: check_nats(),
+      database: check_database()
+    }
+  end
+
+  defp check_valkey do
+    try do
+      case Redix.command(:valkey_0, ["PING"]) do
+        {:ok, "PONG"} ->
+          {:ok, server_info} = Redix.command(:valkey_0, ["INFO", "server"])
+          {:ok, memory_info} = Redix.command(:valkey_0, ["INFO", "memory"])
+          {:ok, keyspace_info} = Redix.command(:valkey_0, ["INFO", "keyspace"])
+          {:ok, clients_info} = Redix.command(:valkey_0, ["INFO", "clients"])
+          {:ok, db_size} = Redix.command(:valkey_0, ["DBSIZE"])
+
+          %{
+            status: "up",
+            version: parse_info_field(server_info, "redis_version"),
+            uptime_seconds: parse_info_int(server_info, "uptime_in_seconds"),
+            memory: parse_info_field(memory_info, "used_memory_human"),
+            memory_peak: parse_info_field(memory_info, "used_memory_peak_human"),
+            total_keys: db_size,
+            connected_clients: parse_info_int(clients_info, "connected_clients"),
+            keyspace: parse_keyspace(keyspace_info)
+          }
+
+        _ ->
+          %{status: "down", error: "Unexpected response"}
+      end
+    rescue
+      e -> %{status: "down", error: Exception.message(e)}
+    end
+  end
+
+  defp parse_info_field(info, field) do
+    info
+    |> String.split("\n")
+    |> Enum.find_value("unknown", fn line ->
+      if String.starts_with?(line, "#{field}:") do
+        line |> String.split(":", parts: 2) |> List.last() |> String.trim()
+      end
+    end)
+  end
+
+  defp parse_info_int(info, field) do
+    case parse_info_field(info, field) do
+      "unknown" -> 0
+      val -> String.to_integer(val)
+    end
+  end
+
+  defp parse_keyspace(info) do
+    # Parse lines like "db0:keys=42,expires=10,avg_ttl=300000"
+    info
+    |> String.split("\n")
+    |> Enum.filter(&String.starts_with?(&1, "db"))
+    |> Enum.map(fn line ->
+      [db, stats] = String.split(line, ":", parts: 2)
+      pairs = stats |> String.trim() |> String.split(",") |> Enum.map(fn pair ->
+        [k, v] = String.split(pair, "=")
+        {k, v}
+      end) |> Map.new()
+      %{db: String.trim(db), keys: pairs["keys"] || "0", expires: pairs["expires"] || "0"}
+    end)
+  end
+
+  defp check_opensearch do
+    url = Application.get_env(:hybridsocial, :opensearch_url, "http://localhost:9200")
+
+    try do
+      # Basic cluster info
+      cluster_info = case HTTPoison.get(url, [], recv_timeout: 5_000, timeout: 5_000) do
+        {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
+        _ -> nil
+      end
+
+      # Cluster health
+      health = case HTTPoison.get("#{url}/_cluster/health", [], recv_timeout: 5_000, timeout: 5_000) do
+        {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
+        _ -> nil
+      end
+
+      # Index stats
+      indices = case HTTPoison.get("#{url}/_cat/indices?format=json", [], recv_timeout: 5_000, timeout: 5_000) do
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, list} when is_list(list) ->
+              Enum.map(list, fn idx ->
+                %{
+                  name: idx["index"],
+                  health: idx["health"],
+                  docs_count: idx["docs.count"],
+                  store_size: idx["store.size"],
+                  status: idx["status"]
+                }
+              end)
+            _ -> []
+          end
+        _ -> []
+      end
+
+      if cluster_info do
+        %{
+          status: if(health && health["status"] == "green", do: "up", else: "degraded"),
+          version: get_in(cluster_info, ["version", "number"]) || "unknown",
+          cluster_name: cluster_info["cluster_name"] || "unknown",
+          cluster_health: health["status"] || "unknown",
+          node_count: health["number_of_nodes"] || 0,
+          active_shards: health["active_shards"] || 0,
+          indices: indices
+        }
+      else
+        %{status: "down", error: "Cannot reach OpenSearch"}
+      end
+    rescue
+      e -> %{status: "down", error: Exception.message(e)}
+    end
+  end
+
+  defp check_nats do
+    nats_host = Application.get_env(:hybridsocial, :nats_host, "localhost")
+    nats_port = Application.get_env(:hybridsocial, :nats_port, 4222)
+    # NATS monitoring port is typically 8222
+    monitoring_port = Application.get_env(:hybridsocial, :nats_monitoring_port, 8222)
+
+    try do
+      # Check if NATS client port is reachable
+      port_status = case :gen_tcp.connect(to_charlist(nats_host), nats_port, [], 3_000) do
+        {:ok, socket} ->
+          :gen_tcp.close(socket)
+          :up
+        {:error, _} ->
+          :down
+      end
+
+      # Try to get NATS server info from monitoring endpoint
+      server_info = case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/varz", [], recv_timeout: 3_000, timeout: 3_000) do
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, data} -> data
+            _ -> nil
+          end
+        _ -> nil
+      end
+
+      # Try to get JetStream info
+      jetstream_info = case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/jsz", [], recv_timeout: 3_000, timeout: 3_000) do
+        {:ok, %{status_code: 200, body: body}} ->
+          case Jason.decode(body) do
+            {:ok, data} -> data
+            _ -> nil
+          end
+        _ -> nil
+      end
+
+      if port_status == :up do
+        app_connected = Hybridsocial.Nats.connected?()
+
+        result = %{
+          status: "up",
+          integration: if(app_connected, do: "active", else: "connecting"),
+          app_connected: app_connected,
+          note: if(app_connected,
+            do: "NATS connected. JetStream handling federation delivery, real-time streaming, and background jobs.",
+            else: "NATS server running. Application connecting..."
+          )
+        }
+
+        result = if server_info do
+          Map.merge(result, %{
+            version: server_info["version"] || "unknown",
+            uptime_seconds: server_info["uptime"] || 0,
+            connections: server_info["connections"] || 0,
+            total_messages: server_info["in_msgs"] || 0,
+            total_bytes: server_info["in_bytes"] || 0
+          })
+        else
+          result
+        end
+
+        result = if jetstream_info do
+          Map.merge(result, %{
+            jetstream_enabled: true,
+            js_streams: jetstream_info["streams"] || 0,
+            js_consumers: jetstream_info["consumers"] || 0,
+            js_memory: jetstream_info["memory"] || 0,
+            js_storage: jetstream_info["storage"] || 0
+          })
+        else
+          Map.put(result, :jetstream_enabled, false)
+        end
+
+        result
+      else
+        %{status: "down", error: "Cannot connect to NATS on port #{nats_port}"}
+      end
+    rescue
+      e -> %{status: "down", error: Exception.message(e)}
+    end
+  end
+
+  defp check_database do
+    try do
+      case Hybridsocial.Repo.query("SELECT 1") do
+        {:ok, _} -> %{status: "up"}
+        {:error, e} -> %{status: "down", error: Exception.message(e)}
+      end
+    rescue
+      e -> %{status: "down", error: Exception.message(e)}
+    end
+  end
+
+  # ── Verifications ────────────────────────────────────────────────────
+
+  def list_verifications(conn, params) do
+    with :ok <- require_permission(conn, "users.view") do
+      opts = [
+        status: params["status"],
+        limit: clamp_limit(params["limit"]),
+        offset: parse_int(params["offset"], 0)
+      ]
+
+      verifications = Hybridsocial.Premium.list_verifications(opts)
+
+      json(conn, %{
+        data: Enum.map(verifications, &serialize_verification/1)
+      })
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def approve_verification(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.view") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Hybridsocial.Premium.approve_verification(id, admin_id) do
+        {:ok, verification} ->
+          json(conn, %{data: serialize_verification(verification)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "verification.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def reject_verification(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.view") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Hybridsocial.Premium.reject_verification(id, admin_id) do
+        {:ok, verification} ->
+          json(conn, %{data: serialize_verification(verification)})
+
+        {:error, :not_found} ->
+          conn |> put_status(:not_found) |> json(%{error: "verification.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp serialize_verification(verification) do
+    identity = verification.identity
+
+    %{
+      id: verification.id,
+      type: verification.type,
+      status: verification.status,
+      metadata: verification.metadata,
+      verified_at: verification.verified_at,
+      created_at: verification.inserted_at,
+      account: if(identity, do: %{
+        id: identity.id,
+        handle: identity.handle,
+        display_name: identity.display_name,
+        avatar_url: identity.avatar_url
+      })
+    }
+  end
+
   # ── Reports ──────────────────────────────────────────────────────────
 
   def list_reports(conn, params) do

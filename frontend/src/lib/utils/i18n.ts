@@ -16,6 +16,16 @@ export function t(key: string, params?: Record<string, string>): string {
   return value;
 }
 
+/**
+ * Translate a backend error key (e.g. "auth.invalid_credentials")
+ * into a user-friendly message. Falls back to the raw key.
+ */
+export function tError(errorKey: string): string {
+  return t(`error.${errorKey}`) !== `error.${errorKey}`
+    ? t(`error.${errorKey}`)
+    : t('error.unknown');
+}
+
 export async function setLocale(locale: string): Promise<void> {
   if (!SUPPORTED_LOCALES.includes(locale)) {
     console.warn(`Locale "${locale}" is not supported, falling back to "en".`);

@@ -34,11 +34,14 @@
     { id: 'media', label: 'Media' },
   ];
 
+  let retryCount = 0;
+
   async function loadProfile() {
     loading = true;
     error = null;
     try {
       account = await lookupAccount(handle);
+      retryCount = 0;
       const auth = get(authStore);
       isOwnProfile = auth.user?.id === account.id;
 
@@ -48,7 +51,14 @@
 
       await loadPosts(true);
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to load profile';
+      const msg = e instanceof Error ? e.message : 'Failed to load profile';
+      // Auto-retry on network errors (server might be restarting)
+      if (msg === 'Failed to fetch' && retryCount < 3) {
+        retryCount++;
+        setTimeout(() => loadProfile(), 2000);
+        return;
+      }
+      error = msg === 'Failed to fetch' ? 'Could not reach the server. Please try again.' : msg;
     } finally {
       loading = false;
     }

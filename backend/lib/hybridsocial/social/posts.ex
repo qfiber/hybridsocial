@@ -5,18 +5,33 @@ defmodule Hybridsocial.Social.Posts do
   import Ecto.Query
   alias Hybridsocial.Repo
   alias Hybridsocial.Social.{Post, PostRevision, Reaction, Boost, Hashtag, Polls}
+  alias Hybridsocial.Premium.TierLimits
 
-  @edit_window_seconds 24 * 60 * 60
   @default_page_size 20
 
   # --- Post CRUD ---
 
-  def create_post(identity_id, attrs) do
+  def create_post(identity_id, attrs, identity \\ nil) do
     now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
+    # Resolve tier limits
+    limits =
+      if identity do
+        TierLimits.limits_for(identity)
+      else
+        TierLimits.limits_for_tier("verified_pro")
+      end
+
+    edit_window = limits[:edit_window] || 900
+
     edit_expires_at =
-      DateTime.add(now, @edit_window_seconds, :second)
-      |> DateTime.truncate(:microsecond)
+      if edit_window == 0 do
+        # Unlimited editing
+        nil
+      else
+        DateTime.add(now, edit_window, :second)
+        |> DateTime.truncate(:microsecond)
+      end
 
     # Generate HTML from markdown content
     content_html =
@@ -33,9 +48,15 @@ defmodule Hybridsocial.Social.Posts do
 
     changeset =
       %Post{}
-      |> Post.create_changeset(post_attrs)
+      |> Post.create_changeset(post_attrs, char_limit: limits[:char_limit] || 5000)
       |> Ecto.Changeset.put_change(:published_at, now)
-      |> Ecto.Changeset.put_change(:edit_expires_at, edit_expires_at)
+
+    changeset =
+      if edit_expires_at do
+        Ecto.Changeset.put_change(changeset, :edit_expires_at, edit_expires_at)
+      else
+        changeset
+      end
 
     case Repo.insert(changeset) do
       {:ok, post} ->
@@ -53,8 +74,15 @@ defmodule Hybridsocial.Social.Posts do
     end
   end
 
-  def edit_post(post_id, identity_id, attrs) do
+  def edit_post(post_id, identity_id, attrs, identity \\ nil) do
     with {:ok, post} <- get_owned_post(post_id, identity_id) do
+      limits =
+        if identity do
+          TierLimits.limits_for(identity)
+        else
+          TierLimits.limits_for_tier("verified_pro")
+        end
+
       revision_number = get_next_revision_number(post_id)
 
       Ecto.Multi.new()
@@ -69,7 +97,7 @@ defmodule Hybridsocial.Social.Posts do
         })
       end)
       |> Ecto.Multi.update(:post, fn _ ->
-        Post.edit_changeset(post, attrs)
+        Post.edit_changeset(post, attrs, char_limit: limits[:char_limit] || 5000)
       end)
       |> Repo.transaction()
       |> case do

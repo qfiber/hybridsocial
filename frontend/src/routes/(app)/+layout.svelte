@@ -5,13 +5,17 @@
   import AppLayout from '$lib/components/layout/AppLayout.svelte';
   import { authStore, isLoggedIn } from '$lib/stores/auth.js';
   import { connectNotificationStream, disconnectNotificationStream } from '$lib/stores/notifications.js';
+  import { cookieConsent, hasConsented } from '$lib/stores/consent.js';
+  import CookieBanner from '$lib/components/ui/CookieBanner.svelte';
   import { api } from '$lib/api/client.js';
   import { subscribeToPush } from '$lib/utils/push.js';
   import { onMount } from 'svelte';
 
   let { children } = $props();
   let loggedIn = $state(false);
+  let consented = $state(hasConsented());
 
+  cookieConsent.subscribe((v) => (consented = v));
   const unsub = isLoggedIn.subscribe((v) => (loggedIn = v));
 
   onMount(() => {
@@ -50,6 +54,10 @@
   });
 </script>
 
-<AppLayout>
-  {@render children()}
-</AppLayout>
+{#if !consented}
+  <CookieBanner onaccept={() => consented = true} />
+{:else}
+  <AppLayout>
+    {@render children()}
+  </AppLayout>
+{/if}

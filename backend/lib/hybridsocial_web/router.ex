@@ -50,6 +50,11 @@ defmodule HybridsocialWeb.Router do
 
     post "/logout", AuthController, :logout
     get "/me", AuthController, :me
+
+    # Active sessions
+    get "/sessions", SessionController, :index
+    delete "/sessions/:id", SessionController, :delete
+    post "/sessions/revoke_others", SessionController, :delete_others
     post "/2fa/setup", AuthController, :setup_2fa
     post "/2fa/verify", AuthController, :verify_2fa
     delete "/2fa", AuthController, :disable_2fa
@@ -362,6 +367,36 @@ defmodule HybridsocialWeb.Router do
     post "/:id/dismiss", AnnouncementController, :dismiss
   end
 
+  # Promotions (public)
+  scope "/api/v1/promotions", HybridsocialWeb.Api.V1 do
+    pipe_through :api
+
+    get "/pricing", PromotionController, :pricing
+  end
+
+  # Promotions (optional auth — promoted users for sidebar)
+  scope "/api/v1/promotions", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :optional_auth]
+
+    get "/promoted", PromotionController, :promoted
+  end
+
+  # Promotions (authenticated)
+  scope "/api/v1/promotions", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :authenticated]
+
+    post "/", PromotionController, :create
+    get "/me", PromotionController, :status
+    get "/history", PromotionController, :history
+  end
+
+  # Site Pages (public — privacy, terms, about)
+  scope "/api/v1/pages/site", HybridsocialWeb.Api.V1 do
+    pipe_through :api
+
+    get "/:slug", SitePageController, :show
+  end
+
   # Custom Emojis (public)
   scope "/api/v1/custom_emojis", HybridsocialWeb.Api.V1 do
     pipe_through :api
@@ -400,6 +435,7 @@ defmodule HybridsocialWeb.Router do
     pipe_through [:api, :rate_limited, :authenticated]
 
     post "/apply", SubscriptionController, :apply_verification
+    post "/domain", SubscriptionController, :verify_domain
     get "/status", SubscriptionController, :verification_status
   end
 
@@ -423,6 +459,9 @@ defmodule HybridsocialWeb.Router do
   # Admin routes (authenticated + admin)
   scope "/api/v1/admin", HybridsocialWeb.Api.V1 do
     pipe_through [:api, :admin]
+
+    # Dashboard
+    get "/dashboard", AdminController, :dashboard
 
     # Reports
     get "/reports", AdminController, :list_reports
@@ -470,6 +509,17 @@ defmodule HybridsocialWeb.Router do
     # User role assignment
     post "/users/:user_id/roles", Admin.RolesController, :assign_role
     delete "/users/:user_id/roles/:role_id", Admin.RolesController, :revoke_role
+
+    # Verifications
+    get "/verifications", AdminController, :list_verifications
+    post "/verifications/:id/approve", AdminController, :approve_verification
+    post "/verifications/:id/reject", AdminController, :reject_verification
+
+    # Site Pages (legal / about)
+    get "/site_pages", Admin.SitePagesController, :index
+    get "/site_pages/:id", Admin.SitePagesController, :show
+    put "/site_pages/:id", Admin.SitePagesController, :update
+    post "/site_pages/seed", Admin.SitePagesController, :seed
   end
 
   # --- Federation / ActivityPub ---

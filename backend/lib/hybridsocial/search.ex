@@ -409,13 +409,13 @@ defmodule Hybridsocial.Search do
   end
 
   defp apply_visibility_filter(query, viewer_id) do
-    where(query, [p], p.visibility == "public" or p.identity_id == ^viewer_id)
+    where(query, [p], p.visibility == "public" or p.identity_id == type(^viewer_id, Ecto.UUID))
   end
 
   defp apply_account_filter(query, nil), do: query
 
   defp apply_account_filter(query, account_id) do
-    where(query, [p], p.identity_id == ^account_id)
+    where(query, [p], p.identity_id == type(^account_id, Ecto.UUID))
   end
 
   defp apply_group_visibility_filter(query, nil) do
@@ -429,7 +429,7 @@ defmodule Hybridsocial.Search do
       g.visibility in [:public, :private] or
         g.id in subquery(
           from(gm in "group_members",
-            where: gm.identity_id == ^viewer_id and gm.status == "approved",
+            where: gm.identity_id == type(^viewer_id, Ecto.UUID) and gm.status == "approved",
             select: gm.group_id
           )
         )

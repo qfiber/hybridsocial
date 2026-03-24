@@ -5,7 +5,7 @@ defmodule Hybridsocial.Premium.Subscription do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @valid_plans ~w(free premium)
+  @valid_plans ~w(free premium verified_starter verified_creator verified_pro)
   @valid_statuses ~w(active cancelled expired past_due)
   @valid_providers ~w(stripe paypal crypto)
 

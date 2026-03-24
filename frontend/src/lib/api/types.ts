@@ -1,5 +1,22 @@
 // HybridSocial API type definitions
 
+export interface TierLimits {
+  char_limit: number;
+  markdown: 'none' | 'basic' | 'full' | 'full_embeds';
+  video_resolution: number;
+  video_duration: number;
+  image_size_mb: number;
+  video_size_mb: number;
+  media_per_post: number;
+  poll_options: number;
+  edit_window: number;
+  pinned_posts: number;
+  profile_fields: number;
+  scheduled_posts: boolean;
+  custom_emoji: boolean;
+  follows_limit: number;
+}
+
 export interface Identity {
   id: string;
   type: 'user' | 'organization';
@@ -14,6 +31,8 @@ export interface Identity {
   roles: string[];
   permissions: string[];
   two_factor_enabled: boolean;
+  verification_tier?: string;
+  limits?: TierLimits;
   followers_count: number;
   following_count: number;
   post_count: number;
@@ -311,11 +330,41 @@ export interface AdminSetting {
   description: string;
 }
 
+export interface ServiceHealth {
+  status: 'up' | 'down' | 'degraded';
+  version?: string;
+  error?: string;
+  uptime_seconds?: number;
+  memory?: string;
+  memory_peak?: string;
+  total_keys?: number;
+  connected_clients?: number;
+  keyspace?: { db: string; keys: string; expires: string }[];
+  cluster_name?: string;
+  cluster_health?: string;
+  node_count?: number;
+  active_shards?: number;
+  indices?: { name: string; health: string; docs_count: string; store_size: string; status: string }[];
+  note?: string;
+  integration?: string;
+  connections?: number;
+  total_messages?: number;
+  jetstream_enabled?: boolean;
+  js_streams?: number;
+  js_consumers?: number;
+}
+
 export interface AdminDashboardStats {
   total_users: number;
   total_posts: number;
   known_instances: number;
   open_reports: number;
+  services: {
+    valkey: ServiceHealth;
+    opensearch: ServiceHealth;
+    nats: ServiceHealth;
+    database: ServiceHealth;
+  };
 }
 
 export interface Backup {

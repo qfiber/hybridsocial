@@ -3,45 +3,46 @@
   import { browser } from '$app/environment';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
-  import { authStore, currentUser, isStaff } from '$lib/stores/auth.js';
+  import { authStore, currentUser, isStaff, initAuth } from '$lib/stores/auth.js';
   import { addToast } from '$lib/stores/toast.js';
   import AdminSidebar from '$lib/components/admin/AdminSidebar.svelte';
   import Toast from '$lib/components/ui/Toast.svelte';
-  import type { Identity } from '$lib/api/types.js';
 
   let { children } = $props();
   let authorized = $state(false);
-  let user: Identity | null = $state(null);
+  let checking = $state(true);
 
-  currentUser.subscribe((v) => (user = v));
+  onMount(async () => {
+    // Ensure auth is fully initialized (handles page refresh with cookie-based session)
+    let state = get(authStore);
+    if (!state.initialized) {
+      await initAuth();
+      state = get(authStore);
+    }
 
-  onMount(() => {
-    const state = get(authStore);
-
-    if (!state.user || !state.initialized) {
-      goto('/login');
+    // Not logged in
+    if (!state.user) {
+      goto('/login', { replaceState: true });
       return;
     }
 
-    if (!isStaff()) {
-      addToast('You do not have admin access', 'error');
-      goto('/home');
-      return;
-    }
-
-    if (!state.user.two_factor_enabled) {
-      addToast('2FA required for admin access', 'info');
-      goto('/settings/security');
+    // Not staff — don't reveal that admin exists
+    if (!isStaff() && !state.user.is_admin) {
+      goto('/home', { replaceState: true });
       return;
     }
 
     authorized = true;
+    checking = false;
   });
 
+  // Watch for logout or role changes while on admin pages
   $effect(() => {
-    if (browser && user !== null && !isStaff()) {
-      addToast('You do not have admin access', 'error');
-      goto('/home');
+    if (!browser || checking) return;
+
+    const state = get(authStore);
+    if (state.initialized && !state.user) {
+      goto('/login', { replaceState: true });
     }
   });
 </script>

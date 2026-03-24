@@ -202,16 +202,23 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
           id: boost.id,
           type: "boost",
           created_at: boost.inserted_at,
-          account: serialize_account(boost.identity),
+          account: serialize_account(boost.identity, Hybridsocial.Badges.instance_badges(boost.identity)),
           post: serialize_post(boost.post)
         }
     end)
   end
 
   defp serialize_post(post) do
+    badges = Hybridsocial.Badges.badges_for_post(
+      post.identity,
+      group_id: post.group_id,
+      page_id: post.page_id
+    )
+
     %{
       id: post.id,
       content: post.content,
+      content_html: post.content_html,
       visibility: post.visibility,
       sensitive: post.sensitive,
       spoiler_text: post.spoiler_text,
@@ -221,13 +228,14 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
       is_pinned: post.is_pinned,
       created_at: post.inserted_at,
       edited_at: post.edited_at,
-      account: serialize_account(post.identity)
+      parent_id: post.parent_id,
+      account: serialize_account(post.identity, badges)
     }
   end
 
-  defp serialize_account(nil), do: nil
+  defp serialize_account(nil, _badges), do: nil
 
-  defp serialize_account(identity) do
+  defp serialize_account(identity, badges) do
     %{
       id: identity.id,
       handle: identity.handle,
@@ -237,6 +245,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
       bio: identity.bio,
       is_bot: identity.is_bot,
       is_locked: identity.is_locked,
+      badges: badges,
       created_at: identity.inserted_at
     }
   end

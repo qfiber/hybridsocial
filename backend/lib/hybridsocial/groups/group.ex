@@ -44,7 +44,9 @@ defmodule Hybridsocial.Groups.Group do
     ])
     |> validate_required([:name, :created_by])
     |> validate_length(:name, min: 1, max: 100)
-    |> validate_length(:description, max: 5000)
+    |> validate_length(:description, max: 1200)
+    |> validate_length(:avatar_url, max: 2048)
+    |> validate_length(:header_url, max: 2048)
     |> foreign_key_constraint(:created_by)
   end
 
@@ -52,7 +54,9 @@ defmodule Hybridsocial.Groups.Group do
     group
     |> cast(attrs, [:name, :description, :visibility, :join_policy, :avatar_url, :header_url])
     |> validate_length(:name, min: 1, max: 100)
-    |> validate_length(:description, max: 5000)
+    |> validate_length(:description, max: 1200)
+    |> validate_length(:avatar_url, max: 2048)
+    |> validate_length(:header_url, max: 2048)
   end
 
   def soft_delete_changeset(group) do
