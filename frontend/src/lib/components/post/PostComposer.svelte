@@ -699,41 +699,29 @@
   /* ---- Composer Card ---- */
   .composer-panel {
     position: fixed;
-    inset-block-end: 0;
-    inset-inline-start: 0;
-    inset-inline-end: 0;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% - 32px);
+    max-width: 560px;
     max-height: 80vh;
     background: var(--color-surface-container-lowest);
-    border-start-start-radius: 18px;
-    border-start-end-radius: 18px;
+    border-radius: 14px;
     padding: 24px;
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
     z-index: var(--z-modal);
-    overflow-y: auto;
-    animation: slide-up 0.25s ease;
+    overflow: visible;
+    animation: pop-in 0.2s ease;
   }
 
-  @keyframes slide-up {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
   }
 
   @media (min-width: 640px) {
     .composer-panel {
-      inset-inline-start: 50%;
-      inset-inline-end: auto;
-      transform: translateX(-50%);
-      inset-block-end: var(--space-8);
-      max-width: 560px;
-      width: 100%;
-      border-radius: 14px;
-      border: 1px solid var(--color-border);
-      animation: pop-in 0.2s ease;
-    }
-
-    @keyframes pop-in {
-      from { opacity: 0; transform: translateX(-50%) scale(0.95); }
-      to { opacity: 1; transform: translateX(-50%) scale(1); }
+      border: 1px solid rgba(188, 201, 200, 0.15);
     }
   }
 
@@ -1154,14 +1142,14 @@
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 100%;
-    margin-bottom: 4px;
+    top: 100%;
+    margin-top: 4px;
     background: var(--color-surface-container-lowest, #fff);
     border: 1px solid rgba(188, 201, 200, 0.25);
     border-radius: 12px;
     box-shadow: 0 4px 16px rgba(25, 28, 29, 0.1);
     overflow: hidden;
-    z-index: 20;
+    z-index: 50;
   }
 
   .mention-item {
