@@ -51,22 +51,48 @@ defmodule Hybridsocial.Accounts.Identity do
     |> generate_keys()
   end
 
+  @update_fields [
+    :display_name,
+    :bio,
+    :avatar_url,
+    :header_url,
+    :metadata,
+    :is_locked,
+    :show_badge
+  ]
+
   def update_changeset(identity, attrs) do
     identity
-    |> cast(attrs, [
-      :display_name,
-      :bio,
-      :avatar_url,
-      :header_url,
-      :metadata,
-      :is_locked,
-      :show_badge
-    ])
+    |> cast(attrs, @update_fields)
+    |> validate_length(:display_name, max: 50)
+    |> validate_length(:bio, max: 500)
+    |> validate_length(:avatar_url, max: 2048)
+    |> validate_length(:header_url, max: 2048)
+    |> reject_display_name_change_if_verified()
+  end
+
+  def admin_update_changeset(identity, attrs) do
+    identity
+    |> cast(attrs, @update_fields ++ [:verification_tier])
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
     |> validate_length(:avatar_url, max: 2048)
     |> validate_length(:header_url, max: 2048)
   end
+
+  defp reject_display_name_change_if_verified(changeset) do
+    if get_change(changeset, :display_name) && verified_tier?(changeset.data) do
+      add_error(changeset, :display_name, "cannot be changed for verified accounts")
+    else
+      changeset
+    end
+  end
+
+  defp verified_tier?(%{verification_tier: tier})
+       when tier in ~w(verified_starter verified_creator verified_pro),
+       do: true
+
+  defp verified_tier?(_), do: false
 
   def suspend_changeset(identity) do
     identity

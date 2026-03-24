@@ -492,6 +492,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
         "suspend" -> "users.suspend"
         "unsuspend" -> "users.suspend"
         "warn" -> "users.warn"
+        "update" -> "users.edit"
         _ -> "users.view"
       end
 
@@ -544,6 +545,22 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     conn
     |> put_status(:ok)
     |> json(%{data: serialize_account(identity), message: "account.warned"})
+  end
+
+  defp handle_account_action(conn, identity, "update", admin_id, params) do
+    update_attrs =
+      Map.take(params, ["display_name", "bio", "avatar_url", "header_url", "verification_tier"])
+
+    case Accounts.admin_update_identity(identity, update_attrs) do
+      {:ok, updated} ->
+        Moderation.log(admin_id, "account.updated", "identity", identity.id, update_attrs)
+        conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
+    end
   end
 
   defp handle_account_action(conn, _identity, _action, _admin_id, _params) do

@@ -207,6 +207,12 @@ defmodule Hybridsocial.Accounts do
     |> Repo.update()
   end
 
+  def admin_update_identity(identity, attrs) do
+    identity
+    |> Identity.admin_update_changeset(attrs)
+    |> Repo.update()
+  end
+
   def change_handle(identity, new_handle) do
     old_handle = identity.handle
 
