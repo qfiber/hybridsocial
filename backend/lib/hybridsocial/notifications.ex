@@ -31,7 +31,7 @@ defmodule Hybridsocial.Notifications do
 
         case result do
           {:ok, notification} ->
-            maybe_send_push(notification, attrs, actor_id)
+            maybe_deliver(notification, attrs, actor_id)
             {:ok, notification}
 
           error ->
@@ -148,6 +148,9 @@ defmodule Hybridsocial.Notifications do
     end
   end
 
+  # For channels not stored in preferences (e.g. :sms, :noop), default to true.
+  def should_notify?(_identity_id, _type, _channel), do: true
+
   # ---------------------------------------------------------------------------
   # Convenience functions
   # ---------------------------------------------------------------------------
@@ -260,27 +263,31 @@ defmodule Hybridsocial.Notifications do
     where(query, [n], n.type not in ^exclude_types)
   end
 
-  defp maybe_send_push(notification, attrs, actor_id) do
+  defp maybe_deliver(notification, attrs, actor_id) do
     recipient_id = attrs[:recipient_id] || attrs["recipient_id"]
     type = attrs[:type] || attrs["type"]
 
-    if should_notify?(recipient_id, type, :push) do
-      Task.start(fn ->
-        actor = Repo.get(Hybridsocial.Accounts.Identity, actor_id)
-        actor_name = if actor, do: actor.display_name || actor.handle, else: "Someone"
+    actor = Repo.get(Hybridsocial.Accounts.Identity, actor_id)
+    actor_name = if actor, do: actor.display_name || actor.handle, else: "Someone"
 
-        Hybridsocial.Push.Delivery.send_to_user(recipient_id, %{
-          title: push_title(type, actor_name),
-          body: push_body(type),
-          tag: "notification-#{notification.id}",
-          data: %{
-            type: type,
-            target_type: attrs[:target_type] || attrs["target_type"],
-            target_id: attrs[:target_id] || attrs["target_id"],
-            url: "/notifications"
-          }
-        })
-      end)
+    payload = %{
+      title: push_title(type, actor_name),
+      body: push_body(type),
+      tag: "notification-#{notification.id}",
+      data: %{
+        type: type,
+        target_type: attrs[:target_type] || attrs["target_type"],
+        target_id: attrs[:target_id] || attrs["target_id"],
+        url: "/notifications"
+      }
+    }
+
+    for channel <- Hybridsocial.Notifications.DeliveryResolver.enabled_channels() do
+      channel_atom = channel.channel_name()
+
+      if should_notify?(recipient_id, type, channel_atom) do
+        Task.start(fn -> channel.deliver(recipient_id, payload, %{}) end)
+      end
     end
   end
 

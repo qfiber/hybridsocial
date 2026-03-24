@@ -8,6 +8,7 @@ defmodule Hybridsocial.Feeds do
   alias Hybridsocial.Repo
   alias Hybridsocial.Social.{Post, Follow, Block, Boost, List, ListMember}
   alias Hybridsocial.Feeds.Visibility
+  alias Hybridsocial.Feeds.AlgorithmResolver
   alias Hybridsocial.Cache.FeedCache
 
   @default_limit 20
@@ -31,63 +32,21 @@ defmodule Hybridsocial.Feeds do
     * `:since_id` - return posts with id greater than this value (newest first)
   """
   def home_timeline(identity_id, opts \\ []) do
-    if Keyword.get(opts, :algorithm, false) do
-      Hybridsocial.Feeds.Algorithm.algorithmic_timeline(identity_id, opts)
-    else
-      if cacheable?(opts) do
-        case safe_cache_get(fn -> FeedCache.get_home_timeline(identity_id) end) do
-          nil ->
-            result = fetch_home_timeline(identity_id, opts)
-            safe_cache_set(fn -> FeedCache.set_home_timeline(identity_id, result) end)
-            result
+    algorithm = AlgorithmResolver.impl(opts)
 
-          cached ->
-            cached
-        end
-      else
-        fetch_home_timeline(identity_id, opts)
+    if cacheable?(opts) do
+      case safe_cache_get(fn -> FeedCache.get_home_timeline(identity_id) end) do
+        nil ->
+          result = algorithm.home_feed(identity_id, opts)
+          safe_cache_set(fn -> FeedCache.set_home_timeline(identity_id, result) end)
+          result
+
+        cached ->
+          cached
       end
+    else
+      algorithm.home_feed(identity_id, opts)
     end
-  end
-
-  defp fetch_home_timeline(identity_id, opts) do
-    limit = parse_limit(opts)
-
-    # Subquery: IDs of accounts the viewer follows
-    followed_ids =
-      Follow
-      |> where([f], f.follower_id == ^identity_id and f.status == :accepted)
-      |> select([f], f.followee_id)
-
-    # Original posts from followed accounts + own posts
-    posts_query =
-      Post
-      |> where([p], p.identity_id in subquery(followed_ids) or p.identity_id == ^identity_id)
-      |> where([p], is_nil(p.deleted_at))
-      |> apply_cursor_filters(opts)
-      |> Visibility.apply_block_filter(identity_id)
-      |> Visibility.apply_mute_filter(identity_id)
-      |> order_by([p], desc: p.inserted_at)
-      |> limit(^limit)
-      |> preload(:identity)
-      |> Repo.all()
-
-    # Boosts from followed accounts
-    boosts =
-      Boost
-      |> where([b], b.identity_id in subquery(followed_ids) or b.identity_id == ^identity_id)
-      |> where([b], is_nil(b.deleted_at))
-      |> join(:inner, [b], p in Post, on: b.post_id == p.id and is_nil(p.deleted_at))
-      |> apply_boost_cursor_filters(opts)
-      |> order_by([b], desc: b.inserted_at)
-      |> limit(^limit)
-      |> preload([b, p], post: {p, :identity})
-      |> preload(:identity)
-      |> Repo.all()
-
-    # Merge posts and boosts, sort by inserted_at descending, take limit
-    merge_timeline_entries(posts_query, boosts)
-    |> Enum.take(limit)
   end
 
   # ---------------------------------------------------------------------------
@@ -480,7 +439,13 @@ defmodule Hybridsocial.Feeds do
     end
   end
 
-  @doc false
+  @doc """
+  Merges posts and boosts into a single timeline, sorted by timestamp descending.
+
+  Returns a list of maps with `:type` (`:post` or `:boost`), `:data`, and
+  `:timestamp` keys. Used by timeline algorithm implementations to combine
+  different entry types into a unified feed.
+  """
   def merge_timeline_entries(posts, boosts) do
     post_entries = Enum.map(posts, fn p -> %{type: :post, data: p, timestamp: p.inserted_at} end)
 
