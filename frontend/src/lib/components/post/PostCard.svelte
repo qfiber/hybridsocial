@@ -805,7 +805,7 @@
 
   .post-actions-divider {
     height: 1px;
-    background: rgba(188, 201, 200, 0.15);
+    background: rgba(188, 201, 200, 0.35);
     margin-top: 20px;
     margin-bottom: 12px;
   }
