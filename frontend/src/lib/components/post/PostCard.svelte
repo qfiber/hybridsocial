@@ -368,7 +368,7 @@
     border-radius: var(--radius-xl);
     padding: 24px;
     cursor: pointer;
-    box-shadow: 0 1px 3px rgba(25, 28, 29, 0.04);
+    box-shadow: 0 2px 8px rgba(25, 28, 29, 0.08);
     transition: background-color 300ms ease, box-shadow 300ms ease;
     user-select: text;
   }
