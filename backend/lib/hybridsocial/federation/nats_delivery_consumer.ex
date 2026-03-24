@@ -69,7 +69,7 @@ defmodule Hybridsocial.Federation.NatsDeliveryConsumer do
 
         result =
           if identity do
-            Publisher.deliver_to_inbox(inbox_url, activity_body, identity)
+            Publisher.deliver(activity_body, inbox_url, identity)
           else
             {:error, "Actor not found: #{actor_id}"}
           end

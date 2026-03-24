@@ -95,18 +95,20 @@ defmodule Hybridsocial.Nats.JobConsumer do
 
   def handle_search_index(%{"action" => action, "type" => type} = data) do
     try do
+      alias Hybridsocial.Search.Indexer
+
       case {action, type} do
         {"index", "post"} ->
-          if data["id"], do: Hybridsocial.Search.IndexWorker.index_post(data["id"])
+          if data["id"], do: Indexer.index_post(Hybridsocial.Social.Posts.get_post(data["id"]))
 
         {"delete", "post"} ->
-          if data["id"], do: Hybridsocial.Search.IndexWorker.delete_post(data["id"])
+          if data["id"], do: Indexer.remove_post(data["id"])
 
         {"index", "identity"} ->
-          if data["id"], do: Hybridsocial.Search.IndexWorker.index_identity(data["id"])
+          if data["id"], do: Indexer.index_identity(Hybridsocial.Accounts.get_identity(data["id"]))
 
         {"index", "group"} ->
-          if data["id"], do: Hybridsocial.Search.IndexWorker.index_group(data["id"])
+          if data["id"], do: Indexer.index_group(Hybridsocial.Groups.get_group(data["id"]))
 
         _ ->
           Logger.debug("Unknown search index job: #{action}/#{type}")

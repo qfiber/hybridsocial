@@ -346,8 +346,6 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
     }
   end
 
-  defp serialize_account(identity, badges \\ [])
-
   defp serialize_account(%Hybridsocial.Accounts.Identity{} = identity, badges) do
     %{
       id: identity.id,

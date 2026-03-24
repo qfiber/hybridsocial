@@ -85,7 +85,7 @@ defmodule Hybridsocial.Nats do
   end
 
   @impl true
-  def handle_info(:connect, state) do
+  def handle_info(:connect, _state) do
     nats_url = Application.get_env(:hybridsocial, :nats_url, "nats://localhost:4222")
     uri = URI.parse(nats_url)
     host = uri.host || "localhost"
