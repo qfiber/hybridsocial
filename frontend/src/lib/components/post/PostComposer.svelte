@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { uploadMedia } from '$lib/api/media.js';
-  import type { Post, MediaAttachment } from '$lib/api/types.js';
+  import { search } from '$lib/api/search.js';
+  import type { Post, MediaAttachment, Identity } from '$lib/api/types.js';
   import { currentUser } from '$lib/stores/auth.js';
   import EmojiPicker from './EmojiPicker.svelte';
 
@@ -176,6 +177,102 @@
     }
   }
 
+  // --- Mention autocomplete ---
+  let mentionSuggestions = $state<Identity[]>([]);
+  let mentionActive = $state(false);
+  let mentionIndex = $state(0);
+  let mentionQuery = $state('');
+  let mentionAtPos = $state(0);
+  let mentionDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  function handleTextareaInput() {
+    autoGrow();
+    detectMention();
+  }
+
+  function detectMention() {
+    if (!textareaEl) return;
+    const cursor = textareaEl.selectionStart;
+    const text = content.substring(0, cursor);
+
+    // Find the last @ that isn't preceded by a word char
+    const match = text.match(/(^|[\s\n])@([a-zA-Z0-9_@.]*)$/);
+    if (match) {
+      const query = match[2];
+      mentionAtPos = cursor - query.length;
+      mentionQuery = query;
+
+      if (query.length >= 1) {
+        if (mentionDebounce) clearTimeout(mentionDebounce);
+        mentionDebounce = setTimeout(() => fetchMentionSuggestions(query), 200);
+      } else {
+        mentionSuggestions = [];
+        mentionActive = false;
+      }
+    } else {
+      closeMentions();
+    }
+  }
+
+  async function fetchMentionSuggestions(query: string) {
+    try {
+      const results = await search(query, { type: 'accounts', limit: 4, resolve: true });
+      mentionSuggestions = results.accounts || [];
+      mentionActive = mentionSuggestions.length > 0;
+      mentionIndex = 0;
+    } catch {
+      mentionSuggestions = [];
+      mentionActive = false;
+    }
+  }
+
+  function selectMention(account: Identity) {
+    if (!textareaEl) return;
+    const cursor = textareaEl.selectionStart;
+    // Replace from @ to current cursor with the full mention
+    const before = content.substring(0, mentionAtPos);
+    const after = content.substring(cursor);
+    const mentionText = account.handle.includes('@')
+      ? `${account.handle} `
+      : `${account.handle} `;
+    content = before + mentionText + after;
+    closeMentions();
+    setTimeout(() => {
+      if (textareaEl) {
+        const newPos = mentionAtPos + mentionText.length;
+        textareaEl.selectionStart = newPos;
+        textareaEl.selectionEnd = newPos;
+        textareaEl.focus();
+      }
+    }, 0);
+  }
+
+  function handleMentionKeydown(e: KeyboardEvent) {
+    if (!mentionActive) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mentionIndex = (mentionIndex + 1) % mentionSuggestions.length;
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mentionIndex = (mentionIndex - 1 + mentionSuggestions.length) % mentionSuggestions.length;
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (mentionSuggestions.length > 0) {
+        e.preventDefault();
+        selectMention(mentionSuggestions[mentionIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      closeMentions();
+    }
+  }
+
+  function closeMentions() {
+    mentionActive = false;
+    mentionSuggestions = [];
+    mentionQuery = '';
+    if (mentionDebounce) clearTimeout(mentionDebounce);
+  }
+
   function togglePoll() {
     showPoll = !showPoll;
     if (showPoll) {
@@ -307,15 +404,44 @@
           />
         {/if}
 
-        <textarea
-          bind:this={textareaEl}
-          bind:value={content}
-          oninput={autoGrow}
-          class="composer-textarea"
-          placeholder="What's on your mind?"
-          aria-label="Post content"
-          rows={3}
-        ></textarea>
+        <div class="textarea-wrapper">
+          <textarea
+            bind:this={textareaEl}
+            bind:value={content}
+            oninput={handleTextareaInput}
+            onkeydown={handleMentionKeydown}
+            class="composer-textarea"
+            placeholder="What's on your mind?"
+            aria-label="Post content"
+            rows={3}
+          ></textarea>
+
+          {#if mentionActive && mentionSuggestions.length > 0}
+            <div class="mention-dropdown" role="listbox" aria-label="Mention suggestions">
+              {#each mentionSuggestions as account, i (account.id)}
+                <button
+                  type="button"
+                  class="mention-item"
+                  class:mention-item-active={i === mentionIndex}
+                  role="option"
+                  aria-selected={i === mentionIndex}
+                  onclick={() => selectMention(account)}
+                  onmouseenter={() => mentionIndex = i}
+                >
+                  {#if account.avatar_url}
+                    <img src={account.avatar_url} alt="" class="mention-avatar" loading="lazy" />
+                  {:else}
+                    <div class="mention-avatar-placeholder">{(account.display_name || account.handle).charAt(0).toUpperCase()}</div>
+                  {/if}
+                  <div class="mention-info">
+                    <span class="mention-name">{account.display_name || account.handle}</span>
+                    <span class="mention-handle">@{account.handle}</span>
+                  </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
       </div>
     </div>
 
@@ -1016,5 +1142,88 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  /* --- Mention autocomplete --- */
+  .textarea-wrapper {
+    position: relative;
+    flex: 1;
+  }
+
+  .mention-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    margin-bottom: 4px;
+    background: var(--color-surface-container-lowest, #fff);
+    border: 1px solid rgba(188, 201, 200, 0.25);
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(25, 28, 29, 0.1);
+    overflow: hidden;
+    z-index: 20;
+  }
+
+  .mention-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    text-align: start;
+    transition: background 100ms ease;
+  }
+
+  .mention-item:hover,
+  .mention-item-active {
+    background: var(--color-surface-container-low, #f2f4f5);
+  }
+
+  .mention-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .mention-avatar-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    background: var(--color-primary, #006a69);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  .mention-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .mention-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--color-text, #191c1d);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mention-handle {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary, #3d4949);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>
