@@ -3,14 +3,14 @@
   import type { Post } from '$lib/api/types.js';
   import { getHomeTimeline } from '$lib/api/timelines.js';
   import FeedList from '$lib/components/feed/FeedList.svelte';
-  import FeedToggle from '$lib/components/feed/FeedToggle.svelte';
+  import FeedToggle, { type FeedTab } from '$lib/components/feed/FeedToggle.svelte';
   import PostComposer from '$lib/components/post/PostComposer.svelte';
 
   let posts: Post[] = $state([]);
   let loading = $state(true);
   let hasMore = $state(true);
   let cursor: string | null = $state(null);
-  let feedType: 'latest' | 'foryou' = $state('latest');
+  let feedType: FeedTab = $state('latest');
 
   async function loadTimeline(reset = false) {
     if (reset) {
@@ -24,6 +24,7 @@
       const params: Record<string, string> = {};
       if (cursor) params.max_id = cursor;
       if (feedType === 'foryou') params.algorithm = 'true';
+      if (feedType === 'trending') params.algorithm = 'trending';
 
       const result = await getHomeTimeline(params);
       // Backend returns array directly, not paginated response
@@ -43,7 +44,7 @@
     }
   }
 
-  function handleFeedChange(tab: 'latest' | 'foryou') {
+  function handleFeedChange(tab: FeedTab) {
     feedType = tab;
     loadTimeline(true);
   }

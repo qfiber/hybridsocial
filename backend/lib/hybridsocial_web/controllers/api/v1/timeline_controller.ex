@@ -10,16 +10,17 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
     opts = parse_pagination_params(params)
 
     opts =
-      if params["algorithm"] == "true" do
-        Keyword.put(opts, :algorithm, true)
-      else
-        opts
+      case params["algorithm"] do
+        "true" -> Keyword.put(opts, :algorithm, "algorithmic")
+        "trending" -> Keyword.put(opts, :algorithm, "trending")
+        "algorithmic" -> Keyword.put(opts, :algorithm, "algorithmic")
+        _ -> opts
       end
 
     entries = Feeds.home_timeline(identity.id, opts)
 
     posts =
-      if Keyword.get(opts, :algorithm, false) do
+      if Keyword.get(opts, :algorithm) do
         Enum.map(entries, &serialize_post/1)
       else
         serialize_timeline_entries(entries)

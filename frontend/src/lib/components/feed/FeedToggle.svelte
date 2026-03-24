@@ -1,15 +1,23 @@
 <script lang="ts">
+  export type FeedTab = 'latest' | 'foryou' | 'trending';
+
   let {
     active = 'latest',
     onchange,
   }: {
-    active?: 'latest' | 'foryou';
-    onchange?: (tab: 'latest' | 'foryou') => void;
+    active?: FeedTab;
+    onchange?: (tab: FeedTab) => void;
   } = $props();
 
-  let isLatest = $derived(active === 'latest');
+  const tabs: { id: FeedTab; label: string }[] = [
+    { id: 'latest', label: 'Latest' },
+    { id: 'foryou', label: 'For You' },
+    { id: 'trending', label: 'Trending' },
+  ];
 
-  function handleTabClick(tab: 'latest' | 'foryou') {
+  let activeIndex = $derived(tabs.findIndex(t => t.id === active));
+
+  function handleTabClick(tab: FeedTab) {
     if (tab !== active) {
       onchange?.(tab);
     }
@@ -19,29 +27,21 @@
 <div class="feed-toggle" role="tablist" aria-label="Feed type">
   <div
     class="toggle-slider"
-    class:slider-right={!isLatest}
+    style="left: calc({activeIndex} * (100% / {tabs.length}) + 3px); width: calc(100% / {tabs.length} - 6px);"
     aria-hidden="true"
   ></div>
-  <button
-    type="button"
-    role="tab"
-    class="toggle-tab"
-    class:toggle-active={isLatest}
-    aria-selected={isLatest}
-    onclick={() => handleTabClick('latest')}
-  >
-    Latest
-  </button>
-  <button
-    type="button"
-    role="tab"
-    class="toggle-tab"
-    class:toggle-active={!isLatest}
-    aria-selected={!isLatest}
-    onclick={() => handleTabClick('foryou')}
-  >
-    For You
-  </button>
+  {#each tabs as tab}
+    <button
+      type="button"
+      role="tab"
+      class="toggle-tab"
+      class:toggle-active={active === tab.id}
+      aria-selected={active === tab.id}
+      onclick={() => handleTabClick(tab.id)}
+    >
+      {tab.label}
+    </button>
+  {/each}
 </div>
 
 <style>
@@ -52,14 +52,14 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-full);
     padding: 3px;
-    max-width: 360px;
+    max-width: 420px;
     width: 100%;
     margin: 0 auto;
   }
 
   .toggle-tab {
     flex: 1;
-    padding: var(--space-2) var(--space-6);
+    padding: var(--space-2) var(--space-4);
     white-space: nowrap;
     background: transparent;
     border: none;
@@ -90,14 +90,8 @@
     position: absolute;
     top: 3px;
     bottom: 3px;
-    left: 3px;
-    width: calc(50% - 3px);
     background: var(--color-primary);
     border-radius: var(--radius-full);
-    transition: left 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  .slider-right {
-    left: calc(50%);
+    transition: left 0.25s cubic-bezier(0.22, 1, 0.36, 1), width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
 </style>
