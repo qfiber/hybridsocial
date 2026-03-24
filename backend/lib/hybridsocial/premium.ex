@@ -104,7 +104,7 @@ defmodule Hybridsocial.Premium do
       dns_verified = check_dns_txt(domain, expected_proof)
 
       # Check rel=me link on the domain's homepage
-      rel_me_verified = if !dns_verified, do: check_rel_me(domain, identity), else: false
+      rel_me_verified = if dns_verified, do: false, else: check_rel_me(domain, identity)
 
       if dns_verified or rel_me_verified do
         apply_for_verification(identity_id, "domain", %{

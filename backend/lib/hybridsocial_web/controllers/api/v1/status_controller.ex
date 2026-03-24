@@ -121,11 +121,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
     identity = conn.assigns.current_identity
     type = Map.get(params, "type", "like")
 
-    if type not in @valid_reaction_types do
-      conn
-      |> put_status(:unprocessable_entity)
-      |> json(%{error: "reaction.invalid_type", valid_types: @valid_reaction_types})
-    else
+    if type in @valid_reaction_types do
       case Posts.react(id, identity.id, type) do
         {:ok, reaction} ->
           conn
@@ -142,6 +138,10 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
           |> put_status(:unprocessable_entity)
           |> json(%{error: "validation.failed", details: format_errors(changeset)})
       end
+    else
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{error: "reaction.invalid_type", valid_types: @valid_reaction_types})
     end
   end
 

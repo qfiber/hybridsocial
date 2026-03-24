@@ -148,46 +148,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     url = Application.get_env(:hybridsocial, :opensearch_url, "http://localhost:9200")
 
     try do
-      # Basic cluster info
-      cluster_info =
-        case HTTPoison.get(url, [], recv_timeout: 5_000, timeout: 5_000) do
-          {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
-          _ -> nil
-        end
-
-      # Cluster health
-      health =
-        case HTTPoison.get("#{url}/_cluster/health", [], recv_timeout: 5_000, timeout: 5_000) do
-          {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
-          _ -> nil
-        end
-
-      # Index stats
-      indices =
-        case HTTPoison.get("#{url}/_cat/indices?format=json", [],
-               recv_timeout: 5_000,
-               timeout: 5_000
-             ) do
-          {:ok, %{status_code: 200, body: body}} ->
-            case Jason.decode(body) do
-              {:ok, list} when is_list(list) ->
-                Enum.map(list, fn idx ->
-                  %{
-                    name: idx["index"],
-                    health: idx["health"],
-                    docs_count: idx["docs.count"],
-                    store_size: idx["store.size"],
-                    status: idx["status"]
-                  }
-                end)
-
-              _ ->
-                []
-            end
-
-          _ ->
-            []
-        end
+      cluster_info = os_fetch_json(url)
+      health = os_fetch_json("#{url}/_cluster/health")
+      indices = os_fetch_indices(url)
 
       if cluster_info do
         %{
@@ -207,104 +170,127 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     end
   end
 
+  defp os_fetch_json(url) do
+    case HTTPoison.get(url, [], recv_timeout: 5_000, timeout: 5_000) do
+      {:ok, %{status_code: 200, body: body}} -> Jason.decode!(body)
+      _ -> nil
+    end
+  end
+
+  defp os_fetch_indices(url) do
+    case HTTPoison.get("#{url}/_cat/indices?format=json", [],
+           recv_timeout: 5_000,
+           timeout: 5_000
+         ) do
+      {:ok, %{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, list} when is_list(list) ->
+            Enum.map(list, fn idx ->
+              %{
+                name: idx["index"],
+                health: idx["health"],
+                docs_count: idx["docs.count"],
+                store_size: idx["store.size"],
+                status: idx["status"]
+              }
+            end)
+
+          _ ->
+            []
+        end
+
+      _ ->
+        []
+    end
+  end
+
   defp check_nats do
     nats_host = Application.get_env(:hybridsocial, :nats_host, "localhost")
     nats_port = Application.get_env(:hybridsocial, :nats_port, 4222)
-    # NATS monitoring port is typically 8222
     monitoring_port = Application.get_env(:hybridsocial, :nats_monitoring_port, 8222)
 
     try do
-      # Check if NATS client port is reachable
-      port_status =
-        case :gen_tcp.connect(to_charlist(nats_host), nats_port, [], 3_000) do
-          {:ok, socket} ->
-            :gen_tcp.close(socket)
-            :up
-
-          {:error, _} ->
-            :down
-        end
-
-      # Try to get NATS server info from monitoring endpoint
-      server_info =
-        case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/varz", [],
-               recv_timeout: 3_000,
-               timeout: 3_000
-             ) do
-          {:ok, %{status_code: 200, body: body}} ->
-            case Jason.decode(body) do
-              {:ok, data} -> data
-              _ -> nil
-            end
-
-          _ ->
-            nil
-        end
-
-      # Try to get JetStream info
-      jetstream_info =
-        case HTTPoison.get("http://#{nats_host}:#{monitoring_port}/jsz", [],
-               recv_timeout: 3_000,
-               timeout: 3_000
-             ) do
-          {:ok, %{status_code: 200, body: body}} ->
-            case Jason.decode(body) do
-              {:ok, data} -> data
-              _ -> nil
-            end
-
-          _ ->
-            nil
-        end
+      port_status = nats_check_port(nats_host, nats_port)
 
       if port_status == :up do
-        app_connected = Hybridsocial.Nats.connected?()
-
-        result = %{
-          status: "up",
-          integration: if(app_connected, do: "active", else: "connecting"),
-          app_connected: app_connected,
-          note:
-            if(app_connected,
-              do:
-                "NATS connected. JetStream handling federation delivery, real-time streaming, and background jobs.",
-              else: "NATS server running. Application connecting..."
-            )
-        }
-
-        result =
-          if server_info do
-            Map.merge(result, %{
-              version: server_info["version"] || "unknown",
-              uptime_seconds: server_info["uptime"] || 0,
-              connections: server_info["connections"] || 0,
-              total_messages: server_info["in_msgs"] || 0,
-              total_bytes: server_info["in_bytes"] || 0
-            })
-          else
-            result
-          end
-
-        result =
-          if jetstream_info do
-            Map.merge(result, %{
-              jetstream_enabled: true,
-              js_streams: jetstream_info["streams"] || 0,
-              js_consumers: jetstream_info["consumers"] || 0,
-              js_memory: jetstream_info["memory"] || 0,
-              js_storage: jetstream_info["storage"] || 0
-            })
-          else
-            Map.put(result, :jetstream_enabled, false)
-          end
-
-        result
+        server_info = nats_monitoring_fetch(nats_host, monitoring_port, "/varz")
+        jetstream_info = nats_monitoring_fetch(nats_host, monitoring_port, "/jsz")
+        nats_build_status(server_info, jetstream_info)
       else
         %{status: "down", error: "Cannot connect to NATS on port #{nats_port}"}
       end
     rescue
       e -> %{status: "down", error: Exception.message(e)}
     end
+  end
+
+  defp nats_check_port(host, port) do
+    case :gen_tcp.connect(to_charlist(host), port, [], 3_000) do
+      {:ok, socket} ->
+        :gen_tcp.close(socket)
+        :up
+
+      {:error, _} ->
+        :down
+    end
+  end
+
+  defp nats_monitoring_fetch(host, port, path) do
+    case HTTPoison.get("http://#{host}:#{port}#{path}", [],
+           recv_timeout: 3_000,
+           timeout: 3_000
+         ) do
+      {:ok, %{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, data} -> data
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp nats_build_status(server_info, jetstream_info) do
+    app_connected = Hybridsocial.Nats.connected?()
+
+    %{
+      status: "up",
+      integration: if(app_connected, do: "active", else: "connecting"),
+      app_connected: app_connected,
+      note:
+        if(app_connected,
+          do:
+            "NATS connected. JetStream handling federation delivery, real-time streaming, and background jobs.",
+          else: "NATS server running. Application connecting..."
+        )
+    }
+    |> maybe_merge_server_info(server_info)
+    |> maybe_merge_jetstream_info(jetstream_info)
+  end
+
+  defp maybe_merge_server_info(result, nil), do: result
+
+  defp maybe_merge_server_info(result, info) do
+    Map.merge(result, %{
+      version: info["version"] || "unknown",
+      uptime_seconds: info["uptime"] || 0,
+      connections: info["connections"] || 0,
+      total_messages: info["in_msgs"] || 0,
+      total_bytes: info["in_bytes"] || 0
+    })
+  end
+
+  defp maybe_merge_jetstream_info(result, nil), do: Map.put(result, :jetstream_enabled, false)
+
+  defp maybe_merge_jetstream_info(result, info) do
+    Map.merge(result, %{
+      jetstream_enabled: true,
+      js_streams: info["streams"] || 0,
+      js_consumers: info["consumers"] || 0,
+      js_memory: info["memory"] || 0,
+      js_storage: info["storage"] || 0
+    })
   end
 
   defp check_database do

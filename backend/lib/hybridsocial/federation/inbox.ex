@@ -22,28 +22,27 @@ defmodule Hybridsocial.Federation.Inbox do
   """
   def process(%{"type" => type} = activity) do
     Logger.info("Processing #{type} activity: #{activity["id"]}")
-
-    case type do
-      "Follow" -> handle_follow(activity)
-      "Accept" -> handle_accept(activity)
-      "Reject" -> handle_reject(activity)
-      "Create" -> handle_create(activity)
-      "Like" -> handle_like(activity)
-      "EmojiReact" -> handle_emoji_react(activity)
-      "Announce" -> handle_announce(activity)
-      "Delete" -> handle_delete(activity)
-      "Update" -> handle_update(activity)
-      "Block" -> handle_block(activity)
-      "Undo" -> handle_undo(activity)
-      "Move" -> handle_move(activity)
-      "Flag" -> handle_flag(activity)
-      "Add" -> handle_add(activity)
-      "Remove" -> handle_remove(activity)
-      _ -> {:error, :unsupported_activity_type}
-    end
+    dispatch(type, activity)
   end
 
   def process(_), do: {:error, :invalid_activity}
+
+  defp dispatch("Follow", activity), do: handle_follow(activity)
+  defp dispatch("Accept", activity), do: handle_accept(activity)
+  defp dispatch("Reject", activity), do: handle_reject(activity)
+  defp dispatch("Create", activity), do: handle_create(activity)
+  defp dispatch("Like", activity), do: handle_like(activity)
+  defp dispatch("EmojiReact", activity), do: handle_emoji_react(activity)
+  defp dispatch("Announce", activity), do: handle_announce(activity)
+  defp dispatch("Delete", activity), do: handle_delete(activity)
+  defp dispatch("Update", activity), do: handle_update(activity)
+  defp dispatch("Block", activity), do: handle_block(activity)
+  defp dispatch("Undo", activity), do: handle_undo(activity)
+  defp dispatch("Move", activity), do: handle_move(activity)
+  defp dispatch("Flag", activity), do: handle_flag(activity)
+  defp dispatch("Add", activity), do: handle_add(activity)
+  defp dispatch("Remove", activity), do: handle_remove(activity)
+  defp dispatch(_, _activity), do: {:error, :unsupported_activity_type}
 
   # --- Follow ---
   # A remote actor wants to follow a local actor.

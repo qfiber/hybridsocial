@@ -47,29 +47,33 @@ defmodule Hybridsocial.Nats.JobConsumer do
 
     case Gnat.request(conn, subject, payload, receive_timeout: 3_000) do
       {:ok, %{body: body, headers: headers}} ->
-        status = get_status(headers)
-
-        if status != 404 and body != "" do
-          case Jason.decode(body) do
-            {:ok, data} ->
-              result = apply(__MODULE__, handler, [data])
-              reply_to = get_reply_to(headers)
-
-              case result do
-                :ok -> if reply_to, do: Gnat.pub(conn, reply_to, "+ACK")
-                {:error, _} -> if reply_to, do: Gnat.pub(conn, reply_to, "-NAK")
-              end
-
-            _ ->
-              Logger.warning("JobConsumer: invalid JSON on #{name}")
-          end
-        end
+        process_pulled_message(conn, body, headers, name, handler)
 
       {:error, :timeout} ->
         :ok
 
       {:error, reason} ->
         Logger.debug("JobConsumer pull error for #{name}: #{inspect(reason)}")
+    end
+  end
+
+  defp process_pulled_message(conn, body, headers, name, handler) do
+    status = get_status(headers)
+
+    if status != 404 and body != "" do
+      case Jason.decode(body) do
+        {:ok, data} ->
+          result = apply(__MODULE__, handler, [data])
+          reply_to = get_reply_to(headers)
+
+          case result do
+            :ok -> if reply_to, do: Gnat.pub(conn, reply_to, "+ACK")
+            {:error, _} -> if reply_to, do: Gnat.pub(conn, reply_to, "-NAK")
+          end
+
+        _ ->
+          Logger.warning("JobConsumer: invalid JSON on #{name}")
+      end
     end
   end
 

@@ -31,28 +31,7 @@ defmodule Hybridsocial.Notifications do
 
         case result do
           {:ok, notification} ->
-            recipient_id = attrs[:recipient_id] || attrs["recipient_id"]
-            type = attrs[:type] || attrs["type"]
-
-            if should_notify?(recipient_id, type, :push) do
-              Task.start(fn ->
-                actor = Repo.get(Hybridsocial.Accounts.Identity, actor_id)
-                actor_name = if actor, do: actor.display_name || actor.handle, else: "Someone"
-
-                Hybridsocial.Push.Delivery.send_to_user(recipient_id, %{
-                  title: push_title(type, actor_name),
-                  body: push_body(type),
-                  tag: "notification-#{notification.id}",
-                  data: %{
-                    type: type,
-                    target_type: attrs[:target_type] || attrs["target_type"],
-                    target_id: attrs[:target_id] || attrs["target_id"],
-                    url: "/notifications"
-                  }
-                })
-              end)
-            end
-
+            maybe_send_push(notification, attrs, actor_id)
             {:ok, notification}
 
           error ->
@@ -279,6 +258,30 @@ defmodule Hybridsocial.Notifications do
 
   defp filter_exclude_types(query, exclude_types) do
     where(query, [n], n.type not in ^exclude_types)
+  end
+
+  defp maybe_send_push(notification, attrs, actor_id) do
+    recipient_id = attrs[:recipient_id] || attrs["recipient_id"]
+    type = attrs[:type] || attrs["type"]
+
+    if should_notify?(recipient_id, type, :push) do
+      Task.start(fn ->
+        actor = Repo.get(Hybridsocial.Accounts.Identity, actor_id)
+        actor_name = if actor, do: actor.display_name || actor.handle, else: "Someone"
+
+        Hybridsocial.Push.Delivery.send_to_user(recipient_id, %{
+          title: push_title(type, actor_name),
+          body: push_body(type),
+          tag: "notification-#{notification.id}",
+          data: %{
+            type: type,
+            target_type: attrs[:target_type] || attrs["target_type"],
+            target_id: attrs[:target_id] || attrs["target_id"],
+            url: "/notifications"
+          }
+        })
+      end)
+    end
   end
 
   defp push_title(type, actor_name) do
