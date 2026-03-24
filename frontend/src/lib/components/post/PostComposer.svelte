@@ -686,7 +686,7 @@
   .composer-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.55);
     z-index: var(--z-modal-backdrop);
     animation: fade-in 0.15s ease;
   }

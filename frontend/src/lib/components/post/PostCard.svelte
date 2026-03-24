@@ -222,7 +222,9 @@
           </div>
         {/if}
 
-        {#if !post.sensitive || showSensitive || !post.spoiler_text}
+        <div class="cw-reveal" class:cw-revealed={!post.sensitive || showSensitive || !post.spoiler_text}>
+          <div class="cw-reveal-inner">
+          {#if !post.sensitive || showSensitive || !post.spoiler_text}
           {#if editing}
             <div class="edit-form">
               <textarea
@@ -351,6 +353,8 @@
             <QuoteCard post={post.quote} />
           {/if}
         {/if}
+          </div>
+        </div>
       </div>
 
       {#if !compact}
@@ -840,6 +844,21 @@
   .poll-info {
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
+  }
+
+  /* CW reveal animation */
+  .cw-reveal {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.35s ease;
+  }
+
+  .cw-revealed {
+    grid-template-rows: 1fr;
+  }
+
+  .cw-reveal-inner {
+    overflow: hidden;
   }
 
   .post-actions-divider {
