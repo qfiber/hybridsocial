@@ -178,6 +178,9 @@
             {/if}
           </span>
         </div>
+        {#if $isStaffMember}
+          <AdminPostActions {post} />
+        {/if}
       </div>
 
       {#if post.parent_id}
@@ -336,12 +339,7 @@
       </div>
 
       {#if !compact}
-        <div class="post-actions-row">
-          <PostActions {post} onedit={startEditing} />
-          {#if $isStaffMember}
-            <AdminPostActions {post} />
-          {/if}
-        </div>
+        <PostActions {post} onedit={startEditing} />
       {/if}
     </div>
   </div>
@@ -354,7 +352,8 @@
     border-radius: var(--radius-xl);
     padding: 24px;
     cursor: pointer;
-    transition: background-color 300ms ease;
+    box-shadow: 0 1px 3px rgba(25, 28, 29, 0.04);
+    transition: background-color 300ms ease, box-shadow 300ms ease;
   }
 
   .post-card:hover {
@@ -803,16 +802,4 @@
     color: var(--color-text-tertiary);
   }
 
-  /* Actions row */
-  .post-actions-row {
-    display: flex;
-    align-items: center;
-    padding-block-start: 8px;
-  }
-
-  .post-actions-row :global(.post-actions) {
-    flex: 1;
-    margin-block-start: 0;
-    padding-inline-start: 0;
-  }
 </style>
