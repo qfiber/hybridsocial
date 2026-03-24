@@ -20,6 +20,8 @@ defmodule Hybridsocial.Config.Store do
       [{^key, value}] -> value
       [] -> nil
     end
+  rescue
+    ArgumentError -> nil
   end
 
   @doc "Get a setting value by key, returns default if not found."
@@ -28,6 +30,8 @@ defmodule Hybridsocial.Config.Store do
       [{^key, value}] -> value
       [] -> default
     end
+  rescue
+    ArgumentError -> default
   end
 
   @doc "Set a setting value. Writes to DB and updates ETS."

@@ -26,6 +26,8 @@ defmodule Hybridsocial.Nats do
       :connected -> true
       _ -> false
     end
+  catch
+    :exit, _ -> false
   end
 
   @doc "Publish a message to a NATS subject (core NATS, no persistence)."

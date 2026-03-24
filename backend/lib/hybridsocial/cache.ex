@@ -70,6 +70,8 @@ defmodule Hybridsocial.Cache do
   defp command(cmd) do
     idx = :erlang.phash2(self(), @pool_size)
     Redix.command(:"valkey_#{idx}", cmd)
+  rescue
+    ArgumentError -> {:error, :not_connected}
   end
 
   defp prefix(key), do: "hs:#{key}"

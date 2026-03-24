@@ -5,21 +5,25 @@ defmodule Hybridsocial.Application do
 
   @impl true
   def start(_type, _args) do
+    env = Application.get_env(:hybridsocial, :env)
+
     children =
       [
         HybridsocialWeb.Telemetry,
         Hybridsocial.Repo,
-        Hybridsocial.Cache,
-        Hybridsocial.Config.Store,
         {DNSCluster, query: Application.get_env(:hybridsocial, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Hybridsocial.PubSub},
-        {Task.Supervisor, name: Hybridsocial.Federation.DeliveryTaskSupervisor},
-        # NATS connection + JetStream setup
-        Hybridsocial.Nats,
-        Hybridsocial.Nats.Setup
+        {Task.Supervisor, name: Hybridsocial.Federation.DeliveryTaskSupervisor}
       ] ++
-        if(Application.get_env(:hybridsocial, :env) != :test,
+        if(env != :test,
           do: [
+            # Valkey cache pool (requires Redis/Valkey)
+            Hybridsocial.Cache,
+            # Runtime config from DB
+            Hybridsocial.Config.Store,
+            # NATS connection + JetStream setup
+            Hybridsocial.Nats,
+            Hybridsocial.Nats.Setup,
             # NATS consumers
             Hybridsocial.Federation.NatsDeliveryConsumer,
             Hybridsocial.Streaming.NatsBridge,
