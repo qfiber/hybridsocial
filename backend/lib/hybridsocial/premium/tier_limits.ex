@@ -55,7 +55,7 @@ defmodule Hybridsocial.Premium.TierLimits do
       pinned_posts: 5,
       profile_fields: 5,
       scheduled_posts: true,
-      custom_emoji: false,
+      custom_emoji: true,
       follows_limit: 0
     },
     "verified_pro" => %{

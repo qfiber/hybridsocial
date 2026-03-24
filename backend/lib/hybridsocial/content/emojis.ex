@@ -79,6 +79,64 @@ defmodule Hybridsocial.Content.Emojis do
   end
 
   @doc """
+  Returns the set of premium emoji shortcodes used in text.
+  """
+  def premium_shortcodes_in_text(text) when is_binary(text) do
+    shortcodes =
+      Regex.scan(~r/:([a-zA-Z0-9_]+):/, text, capture: :all_but_first)
+      |> List.flatten()
+      |> Enum.uniq()
+
+    if shortcodes == [] do
+      []
+    else
+      CustomEmoji
+      |> where([e], e.shortcode in ^shortcodes and e.premium == true and e.enabled == true)
+      |> select([e], e.shortcode)
+      |> Repo.all()
+    end
+  end
+
+  def premium_shortcodes_in_text(_), do: []
+
+  @doc """
+  Checks if an identity can use premium emojis.
+  Access granted if their tier includes custom_emoji OR they have an active emoji subscription.
+  """
+  def can_use_premium_emojis?(identity) do
+    tier_allows = Hybridsocial.Premium.TierLimits.limit(identity, :custom_emoji) == true
+    tier_allows || has_emoji_subscription?(identity.id)
+  end
+
+  defp has_emoji_subscription?(identity_id) do
+    now = DateTime.utc_now()
+
+    Hybridsocial.Premium.Subscription
+    |> where(
+      [s],
+      s.identity_id == ^identity_id and
+        s.plan == "emoji" and
+        s.status == "active" and
+        (is_nil(s.expires_at) or s.expires_at > ^now)
+    )
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Validates that the user can use any premium emojis in the given text.
+  Returns :ok or {:error, shortcodes} with the list of disallowed shortcodes.
+  """
+  def validate_premium_emoji_access(text, identity) do
+    premium_used = premium_shortcodes_in_text(text)
+
+    if premium_used == [] || can_use_premium_emojis?(identity) do
+      :ok
+    else
+      {:error, premium_used}
+    end
+  end
+
+  @doc """
   Replaces `:shortcode:` patterns in text with image tags for HTML rendering.
   """
   def render_emojis_in_text(text) when is_binary(text) do

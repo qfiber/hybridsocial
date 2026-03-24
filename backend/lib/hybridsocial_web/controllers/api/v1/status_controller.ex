@@ -18,6 +18,11 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
           |> put_status(:created)
           |> json(serialize_post(post))
 
+        {:error, :premium_emojis_required, shortcodes} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "premium_emojis_required", shortcodes: shortcodes})
+
         {:error, changeset} ->
           conn
           |> put_status(:unprocessable_entity)
@@ -67,6 +72,11 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "status.forbidden"})
+
+      {:error, :premium_emojis_required, shortcodes} ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "premium_emojis_required", shortcodes: shortcodes})
 
       {:error, changeset} ->
         conn

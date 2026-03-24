@@ -10,13 +10,14 @@ defmodule Hybridsocial.Content.CustomEmoji do
     field :image_url, :string
     field :category, :string
     field :enabled, :boolean, default: true
+    field :premium, :boolean, default: false
 
     timestamps(type: :utc_datetime_usec)
   end
 
   def changeset(emoji, attrs) do
     emoji
-    |> cast(attrs, [:shortcode, :image_url, :category, :enabled])
+    |> cast(attrs, [:shortcode, :image_url, :category, :enabled, :premium])
     |> validate_required([:shortcode, :image_url])
     |> validate_format(:shortcode, ~r/\A[a-zA-Z0-9_]+\z/,
       message: "must only contain alphanumeric characters and underscores"

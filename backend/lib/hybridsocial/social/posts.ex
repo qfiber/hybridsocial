@@ -6,6 +6,7 @@ defmodule Hybridsocial.Social.Posts do
   alias Hybridsocial.Repo
   alias Hybridsocial.Social.{Post, PostRevision, Reaction, Boost, Hashtag, Polls}
   alias Hybridsocial.Premium.TierLimits
+  alias Hybridsocial.Content.Emojis
 
   @default_page_size 20
 
@@ -58,6 +59,22 @@ defmodule Hybridsocial.Social.Posts do
         changeset
       end
 
+    with :ok <- validate_premium_emojis(attrs["content"], identity) do
+      insert_post(changeset, attrs)
+    end
+  end
+
+  defp validate_premium_emojis(nil, _identity), do: :ok
+  defp validate_premium_emojis(_content, nil), do: :ok
+
+  defp validate_premium_emojis(content, identity) do
+    case Emojis.validate_premium_emoji_access(content, identity) do
+      :ok -> :ok
+      {:error, shortcodes} -> {:error, :premium_emojis_required, shortcodes}
+    end
+  end
+
+  defp insert_post(changeset, attrs) do
     case Repo.insert(changeset) do
       {:ok, post} ->
         if post.content, do: extract_and_link_hashtags(post)
@@ -75,7 +92,8 @@ defmodule Hybridsocial.Social.Posts do
   end
 
   def edit_post(post_id, identity_id, attrs, identity \\ nil) do
-    with {:ok, post} <- get_owned_post(post_id, identity_id) do
+    with {:ok, post} <- get_owned_post(post_id, identity_id),
+         :ok <- validate_premium_emojis(attrs["content"], identity) do
       limits =
         if identity do
           TierLimits.limits_for(identity)

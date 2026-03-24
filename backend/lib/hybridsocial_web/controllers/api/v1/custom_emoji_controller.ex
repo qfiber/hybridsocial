@@ -24,7 +24,8 @@ defmodule HybridsocialWeb.Api.V1.CustomEmojiController do
       shortcode: emoji.shortcode,
       image_url: emoji.image_url,
       category: emoji.category,
-      enabled: emoji.enabled
+      enabled: emoji.enabled,
+      premium: emoji.premium
     }
   end
 end
