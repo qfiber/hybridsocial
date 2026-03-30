@@ -22,6 +22,8 @@ defmodule Hybridsocial.Media.MediaFile do
     field :processing_status, :string, default: "pending"
     field :metadata, :map, default: %{}
     field :deleted_at, :utc_datetime_usec
+    field :folder_id, :binary_id
+    field :content_hash, :string
 
     belongs_to :identity, Hybridsocial.Accounts.Identity
     has_many :variants, Hybridsocial.Media.MediaVariant, foreign_key: :media_id

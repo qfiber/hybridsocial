@@ -458,4 +458,59 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       end)
     end)
   end
+
+  # --- WebAuthn / Security Keys ---
+
+  alias Hybridsocial.Auth.Webauthn
+
+  def webauthn_register_challenge(conn, _params) do
+    identity = conn.assigns.current_identity
+    challenge = Webauthn.registration_challenge(identity.id)
+    json(conn, challenge)
+  end
+
+  def webauthn_register_verify(conn, params) do
+    identity = conn.assigns.current_identity
+    case Webauthn.verify_registration(identity.id, params) do
+      {:ok, cred} ->
+        conn |> put_status(:created) |> json(%{id: cred.id, name: cred.name, credential_id: cred.credential_id, created_at: cred.inserted_at})
+      {:error, :challenge_expired} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "webauthn.challenge_expired"})
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "webauthn.registration_failed", details: format_errors(changeset)})
+    end
+  end
+
+  def webauthn_auth_challenge(conn, _params) do
+    identity = conn.assigns.current_identity
+    challenge = Webauthn.authentication_challenge(identity.id)
+    json(conn, challenge)
+  end
+
+  def webauthn_auth_verify(conn, params) do
+    identity = conn.assigns.current_identity
+    case Webauthn.verify_authentication(identity.id, params) do
+      {:ok, _cred} -> json(conn, %{status: "ok", verified: true})
+      {:error, :challenge_expired} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "webauthn.challenge_expired"})
+      {:error, :credential_not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "webauthn.credential_not_found"})
+    end
+  end
+
+  def webauthn_list(conn, _params) do
+    identity = conn.assigns.current_identity
+    creds = Webauthn.list_credentials(identity.id)
+    json(conn, Enum.map(creds, fn c ->
+      %{id: c.id, name: c.name, credential_id: c.credential_id, sign_count: c.sign_count, last_used_at: c.last_used_at, created_at: c.inserted_at}
+    end))
+  end
+
+  def webauthn_delete(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+    case Webauthn.delete_credential(id, identity.id) do
+      {:ok, _} -> json(conn, %{status: "ok"})
+      {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "webauthn.not_found"})
+    end
+  end
 end

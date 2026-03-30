@@ -395,6 +395,140 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
     json(conn, %{status: "ok"})
   end
 
+  # --- Drive ---
+
+  def drive_folders(conn, params) do
+    identity = conn.assigns.current_identity
+    folders = Hybridsocial.Media.Drive.list_folders(identity.id, params["parent_id"])
+    json(conn, Enum.map(folders, fn f -> %{id: f.id, name: f.name, parent_id: f.parent_id, created_at: f.inserted_at} end))
+  end
+
+  def create_drive_folder(conn, params) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Media.Drive.create_folder(identity.id, params) do
+      {:ok, f} -> conn |> put_status(:created) |> json(%{id: f.id, name: f.name, parent_id: f.parent_id})
+      {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "folder.failed", details: format_errors(changeset)})
+    end
+  end
+
+  def rename_drive_folder(conn, %{"id" => id, "name" => name}) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Media.Drive.rename_folder(id, identity.id, name) do
+      {:ok, f} -> json(conn, %{id: f.id, name: f.name})
+      {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "folder.not_found"})
+    end
+  end
+
+  def delete_drive_folder(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Media.Drive.delete_folder(id, identity.id) do
+      {:ok, _} -> json(conn, %{status: "ok"})
+      {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "folder.not_found"})
+    end
+  end
+
+  def drive_files(conn, params) do
+    identity = conn.assigns.current_identity
+    files = Hybridsocial.Media.Drive.list_files(identity.id, folder_id: params["folder_id"], max_id: params["max_id"])
+    json(conn, Enum.map(files, fn f ->
+      %{id: f.id, content_type: f.content_type, file_size: f.file_size, storage_path: f.storage_path, folder_id: f.folder_id, content_hash: f.content_hash, alt_text: f.alt_text, created_at: f.inserted_at}
+    end))
+  end
+
+  def move_drive_files(conn, %{"file_ids" => file_ids, "folder_id" => folder_id}) do
+    identity = conn.assigns.current_identity
+    Hybridsocial.Media.Drive.move_files(identity.id, file_ids, folder_id)
+    json(conn, %{status: "ok"})
+  end
+
+  def delete_drive_files(conn, %{"file_ids" => file_ids}) do
+    identity = conn.assigns.current_identity
+    {:ok, count} = Hybridsocial.Media.Drive.delete_files(identity.id, file_ids)
+    json(conn, %{deleted: count})
+  end
+
+  def find_by_hash(conn, %{"hash" => hash}) do
+    identity = conn.assigns.current_identity
+    files = Hybridsocial.Media.Drive.find_by_hash(identity.id, hash)
+    json(conn, Enum.map(files, fn f -> %{id: f.id, storage_path: f.storage_path, content_type: f.content_type} end))
+  end
+
+  def drive_usage(conn, _params) do
+    identity = conn.assigns.current_identity
+    usage = Hybridsocial.Media.Drive.storage_usage(identity.id)
+    json(conn, usage)
+  end
+
+  # --- Excerpts ---
+
+  def list_excerpts(conn, _params) do
+    identity = conn.assigns.current_identity
+    excerpts = Hybridsocial.Social.Excerpts.list_excerpts(identity.id)
+    json(conn, Enum.map(excerpts, &serialize_excerpt/1))
+  end
+
+  def create_excerpt(conn, params) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Social.Excerpts.create_excerpt(identity.id, params) do
+      {:ok, e} -> conn |> put_status(:created) |> json(serialize_excerpt(e))
+      {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "excerpt.failed", details: format_errors(changeset)})
+    end
+  end
+
+  def show_excerpt(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Social.Excerpts.get_excerpt(id, identity.id) do
+      nil -> conn |> put_status(:not_found) |> json(%{error: "excerpt.not_found"})
+      e -> json(conn, serialize_excerpt(e))
+    end
+  end
+
+  def excerpt_feed(conn, %{"id" => id} = params) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Social.Excerpts.get_excerpt(id, identity.id) do
+      nil -> conn |> put_status(:not_found) |> json(%{error: "excerpt.not_found"})
+      excerpt ->
+        posts = Hybridsocial.Social.Excerpts.excerpt_feed(excerpt, max_id: params["max_id"])
+        serialized = HybridsocialWeb.Serializers.PostSerializer.serialize_many(posts, current_identity_id: identity.id)
+        json(conn, serialized)
+    end
+  end
+
+  def update_excerpt(conn, %{"id" => id} = params) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Social.Excerpts.update_excerpt(id, identity.id, params) do
+      {:ok, e} -> json(conn, serialize_excerpt(e))
+      {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "excerpt.not_found"})
+      {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "excerpt.failed", details: format_errors(changeset)})
+    end
+  end
+
+  def delete_excerpt(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+    case Hybridsocial.Social.Excerpts.delete_excerpt(id, identity.id) do
+      {:ok, _} -> json(conn, %{status: "ok"})
+      {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "excerpt.not_found"})
+    end
+  end
+
+  defp serialize_excerpt(e) do
+    %{id: e.id, name: e.name, keywords: e.keywords, exclude_keywords: e.exclude_keywords, sources: e.sources, with_media_only: e.with_media_only, notify: e.notify, created_at: e.inserted_at}
+  end
+
+  # --- Boost Muting ---
+
+  def mute_boosts(conn, %{"id" => target_id}) do
+    identity = conn.assigns.current_identity
+    Social.mute_boosts(identity.id, target_id)
+    json(conn, %{id: target_id, muting_boosts: true})
+  end
+
+  def unmute_boosts(conn, %{"id" => target_id}) do
+    identity = conn.assigns.current_identity
+    Social.unmute_boosts(identity.id, target_id)
+    json(conn, %{id: target_id, muting_boosts: false})
+  end
+
   # --- Crypto Addresses ---
 
   def list_crypto_addresses(conn, _params) do

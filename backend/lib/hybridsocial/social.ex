@@ -506,4 +506,46 @@ defmodule Hybridsocial.Social do
     |> select([ft, h], h.name)
     |> Repo.all()
   end
+
+  # --- Boost Muting (mute someone's boosts without muting them) ---
+
+  def mute_boosts(muter_id, target_id) do
+    Repo.insert_all("boost_mutes",
+      [%{id: Ecto.UUID.generate(), muter_id: Ecto.UUID.dump!(muter_id), target_id: Ecto.UUID.dump!(target_id), inserted_at: DateTime.utc_now(), updated_at: DateTime.utc_now()}],
+      on_conflict: :nothing
+    )
+    :ok
+  end
+
+  def unmute_boosts(muter_id, target_id) do
+    {:ok, muter_uuid} = Ecto.UUID.dump(muter_id)
+    {:ok, target_uuid} = Ecto.UUID.dump(target_id)
+
+    from(bm in "boost_mutes",
+      where: bm.muter_id == ^muter_uuid and bm.target_id == ^target_uuid
+    )
+    |> Repo.delete_all()
+    :ok
+  end
+
+  def boost_muted?(muter_id, target_id) do
+    {:ok, muter_uuid} = Ecto.UUID.dump(muter_id)
+    {:ok, target_uuid} = Ecto.UUID.dump(target_id)
+
+    from(bm in "boost_mutes",
+      where: bm.muter_id == ^muter_uuid and bm.target_id == ^target_uuid
+    )
+    |> Repo.exists?()
+  end
+
+  def boost_muted_ids(muter_id) do
+    {:ok, muter_uuid} = Ecto.UUID.dump(muter_id)
+
+    from(bm in "boost_mutes",
+      where: bm.muter_id == ^muter_uuid,
+      select: bm.target_id
+    )
+    |> Repo.all()
+    |> Enum.map(fn uuid -> Ecto.UUID.load!(uuid) end)
+  end
 end

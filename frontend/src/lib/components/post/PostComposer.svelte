@@ -81,8 +81,64 @@
     }
 
     window.addEventListener('open-composer', handleOpenComposer);
+
+    // Check for saved draft
+    hasDraft = !!localStorage.getItem('hs_post_draft');
+
     return () => window.removeEventListener('open-composer', handleOpenComposer);
   });
+
+  function resumeDraft() {
+    loadDraft();
+    hasDraft = false;
+    openComposer();
+  }
+
+  function discardDraft() {
+    clearDraft();
+    hasDraft = false;
+  }
+
+  // --- Drafts ---
+  const DRAFT_KEY = 'hs_post_draft';
+
+  function saveDraft() {
+    if (!content.trim() && !spoilerText.trim()) return;
+    const draft = {
+      content,
+      spoilerText,
+      showCW,
+      visibility,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }
+
+  function loadDraft(): boolean {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return false;
+      const draft = JSON.parse(raw);
+      // Discard drafts older than 7 days
+      if (Date.now() - draft.savedAt > 7 * 86400 * 1000) {
+        localStorage.removeItem(DRAFT_KEY);
+        return false;
+      }
+      content = draft.content || '';
+      spoilerText = draft.spoilerText || '';
+      showCW = draft.showCW || false;
+      visibility = draft.visibility || 'public';
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+  }
+
+  let hasDraft = $state(false);
 
   function openComposer() {
     isOpen = true;
@@ -91,7 +147,9 @@
   }
 
   function closeComposer() {
-    if (content.trim() && !confirm('Discard your post?')) return;
+    if (content.trim()) {
+      saveDraft();
+    }
     resetComposer();
   }
 
@@ -449,6 +507,7 @@
 
       // Show optimistic post immediately
       window.dispatchEvent(new CustomEvent('new-post', { detail: optimisticPost }));
+      clearDraft();
       resetComposer();
 
       // Send to server, then replace optimistic with real
@@ -490,6 +549,18 @@
   >
     <span class="material-symbols-outlined fab-icon">edit</span>
   </button>
+{/if}
+
+<!-- Draft banner -->
+{#if hasDraft && !isOpen}
+  <div class="draft-banner">
+    <span class="material-symbols-outlined draft-icon">edit_note</span>
+    <span class="draft-text">You have an unsaved draft</span>
+    <button type="button" class="draft-resume" onclick={resumeDraft}>Resume</button>
+    <button type="button" class="draft-discard" onclick={discardDraft}>
+      <span class="material-symbols-outlined" style="font-size: 16px">close</span>
+    </button>
+  </div>
 {/if}
 
 <!-- Composer panel -->
@@ -822,6 +893,56 @@
   }
 
   /* ---- FAB ---- */
+  /* Draft banner */
+  .draft-banner {
+    position: fixed;
+    inset-block-end: 88px;
+    inset-inline-end: 24px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--color-surface-container-lowest);
+    border: 1px solid var(--color-primary);
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    z-index: var(--z-sticky, 40);
+    animation: draft-in 0.3s ease;
+  }
+
+  @keyframes draft-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .draft-icon { font-size: 20px; color: var(--color-primary); }
+  .draft-text { font-size: 0.8125rem; font-weight: 500; color: var(--color-text); }
+
+  .draft-resume {
+    padding: 4px 14px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .draft-resume:hover { opacity: 0.9; }
+
+  .draft-discard {
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 50%;
+    display: flex;
+  }
+
+  .draft-discard:hover { color: var(--color-text); background: var(--color-surface); }
+
   .fab {
     position: fixed;
     inset-block-end: 24px;

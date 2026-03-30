@@ -127,6 +127,33 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
   @valid_reaction_types ~w(like love care angry sad lol wow)
 
+  # POST /api/v1/statuses/:id/translate
+  def translate(conn, %{"id" => id} = params) do
+    target_lang = params["target_lang"] || "en"
+
+    case Posts.get_post(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "status.not_found"})
+
+      post ->
+        text = post.content || ""
+        case Hybridsocial.Content.Translation.translate(text, target_lang) do
+          {:ok, translated} ->
+            json(conn, %{
+              content: translated,
+              detected_source_language: post.language,
+              provider: Hybridsocial.Config.get("translation_backend", "none")
+            })
+
+          {:error, :translation_disabled} ->
+            conn |> put_status(:service_unavailable) |> json(%{error: "translation.disabled"})
+
+          {:error, reason} ->
+            conn |> put_status(:bad_gateway) |> json(%{error: "translation.failed", detail: inspect(reason)})
+        end
+    end
+  end
+
   # GET /api/v1/statuses/:id/reactions
   def reactions(conn, %{"id" => id}) do
     import Ecto.Query

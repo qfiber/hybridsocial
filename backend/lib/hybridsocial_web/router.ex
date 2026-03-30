@@ -59,6 +59,14 @@ defmodule HybridsocialWeb.Router do
     post "/2fa/setup", AuthController, :setup_2fa
     post "/2fa/verify", AuthController, :verify_2fa
     delete "/2fa", AuthController, :disable_2fa
+
+    # WebAuthn / Security Keys
+    post "/webauthn/register/challenge", AuthController, :webauthn_register_challenge
+    post "/webauthn/register/verify", AuthController, :webauthn_register_verify
+    post "/webauthn/authenticate/challenge", AuthController, :webauthn_auth_challenge
+    post "/webauthn/authenticate/verify", AuthController, :webauthn_auth_verify
+    get "/webauthn/credentials", AuthController, :webauthn_list
+    delete "/webauthn/credentials/:id", AuthController, :webauthn_delete
   end
 
   # Authenticated account endpoints
@@ -78,6 +86,8 @@ defmodule HybridsocialWeb.Router do
     post "/:id/unblock", AccountController, :unblock
     post "/:id/mute", AccountController, :mute
     post "/:id/unmute", AccountController, :unmute
+    post "/:id/mute_boosts", AccountController, :mute_boosts
+    post "/:id/unmute_boosts", AccountController, :unmute_boosts
 
     # Actor migration
     post "/migrate", AccountController, :migrate
@@ -111,10 +121,29 @@ defmodule HybridsocialWeb.Router do
     # Suggested users
     get "/suggestions", AccountController, :suggestions
 
+    # Drive (media file management)
+    get "/drive/folders", AccountController, :drive_folders
+    post "/drive/folders", AccountController, :create_drive_folder
+    put "/drive/folders/:id", AccountController, :rename_drive_folder
+    delete "/drive/folders/:id", AccountController, :delete_drive_folder
+    get "/drive/files", AccountController, :drive_files
+    post "/drive/files/move", AccountController, :move_drive_files
+    post "/drive/files/delete", AccountController, :delete_drive_files
+    get "/drive/files/find", AccountController, :find_by_hash
+    get "/drive/usage", AccountController, :drive_usage
+
     # Crypto donation addresses
     get "/crypto_addresses", AccountController, :list_crypto_addresses
     post "/crypto_addresses", AccountController, :set_crypto_address
     delete "/crypto_addresses/:coin", AccountController, :remove_crypto_address
+
+    # Excerpts (keyword-filtered feeds)
+    get "/excerpts", AccountController, :list_excerpts
+    post "/excerpts", AccountController, :create_excerpt
+    get "/excerpts/:id", AccountController, :show_excerpt
+    get "/excerpts/:id/feed", AccountController, :excerpt_feed
+    put "/excerpts/:id", AccountController, :update_excerpt
+    delete "/excerpts/:id", AccountController, :delete_excerpt
 
     # Followed hashtags
     get "/followed_tags", AccountController, :followed_tags
@@ -182,6 +211,7 @@ defmodule HybridsocialWeb.Router do
     put "/:id", StatusController, :update
     delete "/:id", StatusController, :delete
 
+    post "/:id/translate", StatusController, :translate
     get "/:id/reactions", StatusController, :reactions
     post "/:id/react", StatusController, :react
     delete "/:id/react", StatusController, :unreact
@@ -393,6 +423,14 @@ defmodule HybridsocialWeb.Router do
     get "/search", SearchController, :index
   end
 
+  # Ads (public serving)
+  scope "/api/v1/ads", HybridsocialWeb.Api.V1 do
+    pipe_through :api
+
+    get "/", AdController, :index
+    post "/:id/click", AdController, :click
+  end
+
   # Directory (public)
   scope "/api/v1/directory", HybridsocialWeb.Api.V1 do
     pipe_through [:api, :optional_auth]
@@ -413,6 +451,7 @@ defmodule HybridsocialWeb.Router do
   scope "/api/v1/instance", HybridsocialWeb.Api.V1 do
     pipe_through :api
 
+    get "/online", InstanceController, :online_count
     get "/funding", FundingController, :index
   end
 
@@ -553,8 +592,26 @@ defmodule HybridsocialWeb.Router do
     post "/users/:id/unforce_sensitive", AdminController, :unforce_sensitive_account
     post "/users/:id/revoke_sessions", AdminController, :revoke_sessions
     post "/users/:id/trust_level", AdminController, :set_trust_level
+
+    # Ads management
+    get "/ads", AdminController, :list_ads
+    post "/ads", AdminController, :create_ad
+    put "/ads/:id", AdminController, :update_ad
+    delete "/ads/:id", AdminController, :delete_ad
+    post "/ads/:id/toggle", AdminController, :toggle_ad
     get "/users/:id/notes", AdminController, :list_notes
     post "/users/:id/notes", AdminController, :create_note
+
+    # Analytics
+    get "/analytics/summary", AdminController, :analytics_summary
+    get "/analytics/user_growth", AdminController, :analytics_user_growth
+    get "/analytics/post_volume", AdminController, :analytics_post_volume
+    get "/analytics/active_users", AdminController, :analytics_active_users
+    get "/analytics/reactions", AdminController, :analytics_reactions
+    get "/analytics/follows", AdminController, :analytics_follows
+
+    # Job queue
+    get "/queue_stats", AdminController, :queue_stats
 
     # Promotions management
     get "/promotions", AdminController, :list_promotions

@@ -2281,4 +2281,128 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     }
   end
 
+  # --- Analytics ---
+
+  def analytics_summary(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      json(conn, Hybridsocial.Analytics.summary())
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def analytics_user_growth(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      days = parse_int(params["days"], 30)
+      json(conn, %{data: Hybridsocial.Analytics.user_growth(days)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def analytics_post_volume(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      days = parse_int(params["days"], 30)
+      json(conn, %{data: Hybridsocial.Analytics.post_volume(days)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def analytics_active_users(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      days = parse_int(params["days"], 30)
+      json(conn, %{data: Hybridsocial.Analytics.active_users(days)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def analytics_reactions(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      days = parse_int(params["days"], 30)
+      json(conn, %{data: Hybridsocial.Analytics.reactions_per_day(days)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def analytics_follows(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      days = parse_int(params["days"], 30)
+      json(conn, %{data: Hybridsocial.Analytics.follows_per_day(days)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Queue Stats ---
+
+  def queue_stats(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      json(conn, Hybridsocial.Admin.QueueStats.get_stats())
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Ads Management ---
+
+  def list_ads(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      ads = Hybridsocial.Ads.list_ads(placement: params["placement"])
+      json(conn, %{data: Enum.map(ads, fn a ->
+        %{id: a.id, title: a.title, description: a.description, image_url: a.image_url, link_url: a.link_url, placement: a.placement, priority: a.priority, starts_at: a.starts_at, expires_at: a.expires_at, is_active: a.is_active, impressions: a.impressions, clicks: a.clicks, created_at: a.inserted_at}
+      end)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_ad(conn, params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      attrs = Map.put(params, "created_by_id", conn.assigns.current_identity.id)
+      case Hybridsocial.Ads.create_ad(attrs) do
+        {:ok, ad} -> conn |> put_status(:created) |> json(%{id: ad.id, title: ad.title})
+        {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "ad.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_ad(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Hybridsocial.Ads.update_ad(id, params) do
+        {:ok, _} -> json(conn, %{status: "ok"})
+        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "ad.not_found"})
+        {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "ad.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_ad(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Hybridsocial.Ads.delete_ad(id) do
+        {:ok, _} -> json(conn, %{status: "ok"})
+        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "ad.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def toggle_ad(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Hybridsocial.Ads.toggle_ad(id) do
+        {:ok, ad} -> json(conn, %{id: ad.id, is_active: ad.is_active})
+        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "ad.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
 end
