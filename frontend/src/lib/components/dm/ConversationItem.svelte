@@ -65,9 +65,19 @@
   />
   <div class="conversation-content">
     <div class="conversation-header">
-      <span class="conversation-name">{displayName}</span>
+      <span class="conversation-name">
+        {displayName}
+        {#if conversation.is_encrypted}
+          <span class="material-symbols-outlined encryption-icon encrypted" title="End-to-end encrypted">lock</span>
+        {:else if !conversation.is_local}
+          <span class="material-symbols-outlined encryption-icon unencrypted" title="Not encrypted — federated message">lock_open</span>
+        {/if}
+      </span>
       <span class="conversation-time">{timeAgo}</span>
     </div>
+    {#if !conversation.accepted}
+      <div class="conversation-pending">Message request</div>
+    {:else}
     <div class="conversation-preview">
       <span class="conversation-message">{lastMessagePreview}</span>
       {#if conversation.unread_count > 0}
@@ -76,6 +86,7 @@
         </span>
       {/if}
     </div>
+    {/if}
   </div>
 </button>
 
@@ -171,5 +182,26 @@
     font-weight: 700;
     line-height: 1;
     flex-shrink: 0;
+  }
+
+  .encryption-icon {
+    font-size: 14px;
+    vertical-align: middle;
+    margin-inline-start: 4px;
+  }
+
+  .encrypted {
+    color: var(--color-success, #22c55e);
+  }
+
+  .unencrypted {
+    color: var(--color-warning, #f59e0b);
+  }
+
+  .conversation-pending {
+    font-size: var(--text-xs);
+    color: var(--color-warning, #f59e0b);
+    font-weight: 600;
+    margin-block-start: 2px;
   }
 </style>

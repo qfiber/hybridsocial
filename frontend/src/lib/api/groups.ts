@@ -8,6 +8,8 @@ export interface GroupDetail extends Group {
 }
 
 export interface GroupMember {
+  id?: string;
+  identity_id?: string;
   account: Identity;
   role: 'owner' | 'admin' | 'moderator' | 'member';
   joined_at: string;

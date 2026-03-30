@@ -85,10 +85,16 @@ export function getAccountStatuses(accountId: string, params?: {
   only_media?: boolean;
   pinned?: boolean;
   cursor?: string;
-}): Promise<PaginatedResponse<Post>> {
+  exclude_replies?: boolean;
+  only_direct?: boolean;
+  max_id?: string;
+}): Promise<Post[]> {
   const query: Record<string, string> = {};
   if (params?.only_media) query.only_media = 'true';
   if (params?.pinned) query.pinned = 'true';
-  if (params?.cursor) query.cursor = params.cursor;
+  if (params?.exclude_replies) query.exclude_replies = 'true';
+  if (params?.only_direct) query.only_direct = 'true';
+  if (params?.cursor) query.max_id = params.cursor;
+  if (params?.max_id) query.max_id = params.max_id;
   return api.get(`/api/v1/accounts/${accountId}/statuses`, query);
 }

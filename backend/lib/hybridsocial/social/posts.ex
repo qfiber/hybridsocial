@@ -46,6 +46,7 @@ defmodule Hybridsocial.Social.Posts do
       |> Map.put("identity_id", identity_id)
       |> Map.put("published_at", now)
       |> Map.put("content_html", content_html)
+      |> maybe_resolve_root_id()
 
     changeset =
       %Post{}
@@ -84,12 +85,46 @@ defmodule Hybridsocial.Social.Posts do
           Polls.create_poll(post.id, poll_attrs)
         end
 
-        {:ok, Repo.preload(post, poll: :options)}
+        # Increment parent's reply count
+        if post.parent_id do
+          Post
+          |> where([p], p.id == ^post.parent_id)
+          |> Repo.update_all(inc: [reply_count: 1])
+        end
+
+        post = Repo.preload(post, poll: :options)
+
+        # Broadcast for OpenSearch indexing
+        Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "posts", {:post_created, post})
+
+        {:ok, post}
 
       {:error, changeset} ->
         {:error, changeset}
     end
   end
+
+  @doc """
+  Resolves root_id from parent chain. If the post has a parent_id but no root_id,
+  walks up the parent chain to find the root post.
+  """
+  def maybe_resolve_root_id(%{"parent_id" => parent_id} = attrs)
+      when is_binary(parent_id) and parent_id != "" do
+    if Map.get(attrs, "root_id") do
+      attrs
+    else
+      case Repo.get(Post, parent_id) do
+        nil ->
+          attrs
+
+        parent ->
+          root_id = parent.root_id || parent.id
+          Map.put(attrs, "root_id", root_id)
+      end
+    end
+  end
+
+  def maybe_resolve_root_id(attrs), do: attrs
 
   def edit_post(post_id, identity_id, attrs, identity \\ nil) do
     with {:ok, post} <- get_owned_post(post_id, identity_id),
@@ -121,6 +156,7 @@ defmodule Hybridsocial.Social.Posts do
       |> case do
         {:ok, %{post: post}} ->
           if post.content, do: extract_and_link_hashtags(post)
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "posts", {:post_updated, post})
           {:ok, post}
 
         {:error, :post, changeset, _} ->
@@ -134,9 +170,14 @@ defmodule Hybridsocial.Social.Posts do
 
   def delete_post(post_id, identity_id) do
     with {:ok, post} <- get_owned_post(post_id, identity_id) do
-      post
-      |> Post.soft_delete_changeset()
-      |> Repo.update()
+      case post |> Post.soft_delete_changeset() |> Repo.update() do
+        {:ok, deleted} ->
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "posts", {:post_deleted, post_id})
+          {:ok, deleted}
+
+        error ->
+          error
+      end
     end
   end
 
@@ -170,23 +211,14 @@ defmodule Hybridsocial.Social.Posts do
         {:error, :not_found}
 
       post ->
-        root_id = post.root_id || post.id
+        # Walk up the parent chain to get true ancestors
+        ancestors = collect_ancestors(post, [])
 
-        ancestors =
-          Post
-          |> where([p], is_nil(p.deleted_at))
-          |> where([p], p.id == ^root_id or p.root_id == ^root_id)
-          |> where([p], p.published_at < ^post.published_at or p.id == ^root_id)
-          |> where([p], p.id != ^post.id)
-          |> order_by([p], asc: p.published_at)
-          |> Repo.all()
-          |> Repo.preload(:identity)
-
+        # Descendants: direct replies to this post, and their children
         descendants =
           Post
           |> where([p], is_nil(p.deleted_at))
-          |> where([p], p.root_id == ^root_id or p.parent_id == ^post_id)
-          |> where([p], p.published_at > ^post.published_at)
+          |> where([p], p.parent_id == ^post_id or p.root_id == ^post_id)
           |> where([p], p.id != ^post.id)
           |> order_by([p], asc: p.published_at)
           |> Repo.all()
@@ -195,6 +227,24 @@ defmodule Hybridsocial.Social.Posts do
         {:ok, %{ancestors: ancestors, descendants: descendants}}
     end
   end
+
+  # Walk up parent chain to collect true ancestors (max 20 to prevent loops)
+  # Includes soft-deleted posts so they render as tombstones
+  defp collect_ancestors(%{parent_id: nil}, acc), do: Enum.reverse(acc)
+  defp collect_ancestors(_, acc) when length(acc) >= 20, do: Enum.reverse(acc)
+
+  defp collect_ancestors(%{parent_id: parent_id}, acc) when is_binary(parent_id) do
+    case Repo.get(Post, parent_id) do
+      nil ->
+        Enum.reverse(acc)
+
+      parent ->
+        parent = Repo.preload(parent, :identity)
+        collect_ancestors(parent, [parent | acc])
+    end
+  end
+
+  defp collect_ancestors(_, acc), do: Enum.reverse(acc)
 
   def get_revisions(post_id) do
     PostRevision
@@ -205,12 +255,12 @@ defmodule Hybridsocial.Social.Posts do
 
   # --- Reactions ---
 
-  def react(post_id, identity_id, type) do
+  def react(post_id, identity_id, type, opts \\ []) do
     with {:ok, _post} <- get_existing_post(post_id) do
       case get_existing_reaction(post_id, identity_id) do
         nil ->
           %Reaction{}
-          |> Reaction.changeset(%{post_id: post_id, identity_id: identity_id, type: type})
+          |> Reaction.changeset(%{post_id: post_id, identity_id: identity_id, type: type}, opts)
           |> Repo.insert()
           |> case do
             {:ok, reaction} ->
@@ -223,7 +273,7 @@ defmodule Hybridsocial.Social.Posts do
 
         existing ->
           existing
-          |> Reaction.changeset(%{type: type})
+          |> Reaction.changeset(%{type: type}, opts)
           |> Repo.update()
       end
     end
@@ -301,6 +351,29 @@ defmodule Hybridsocial.Social.Posts do
 
   # --- Pin/Unpin ---
 
+  def reacted_posts(identity_id, opts \\ []) do
+    max_id = Keyword.get(opts, :max_id)
+
+    query =
+      Reaction
+      |> where([r], r.identity_id == ^identity_id)
+      |> join(:inner, [r], p in Post, on: p.id == r.post_id and is_nil(p.deleted_at))
+      |> order_by([r], desc: r.inserted_at)
+      |> select([r, p], p)
+      |> limit(20)
+      |> preload([r, p], [:identity, :quote])
+
+    query = if max_id, do: where(query, [r], r.id < ^max_id), else: query
+
+    Repo.all(query)
+  end
+
+  def pinned_count(identity_id) do
+    Post
+    |> where([p], p.identity_id == ^identity_id and p.is_pinned == true and is_nil(p.deleted_at))
+    |> Repo.aggregate(:count)
+  end
+
   def pin_post(post_id, identity_id) do
     with {:ok, post} <- get_owned_post(post_id, identity_id) do
       post
@@ -332,7 +405,10 @@ defmodule Hybridsocial.Social.Posts do
 
   def posts_by_identity(identity_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_page_size)
-    cursor = Keyword.get(opts, :cursor)
+    max_id = Keyword.get(opts, :max_id)
+    exclude_replies = Keyword.get(opts, :exclude_replies, false)
+    only_media = Keyword.get(opts, :only_media, false)
+    only_direct = Keyword.get(opts, :only_direct, false)
 
     query =
       Post
@@ -341,22 +417,13 @@ defmodule Hybridsocial.Social.Posts do
       |> order_by([p], desc: p.published_at)
       |> limit(^limit)
 
-    query =
-      if cursor do
-        where(query, [p], p.published_at < ^cursor)
-      else
-        query
-      end
+    query = if max_id, do: where(query, [p], p.id < ^max_id), else: query
+    query = if exclude_replies, do: where(query, [p], is_nil(p.parent_id)), else: query
+    query = if only_direct, do: where(query, [p], p.visibility == "direct"), else: query
 
-    posts = Repo.all(query) |> Repo.preload([:identity, :quote])
+    query = if only_media, do: where(query, [p], p.post_type == "media"), else: query
 
-    next_cursor =
-      case List.last(posts) do
-        nil -> nil
-        last -> last.published_at
-      end
-
-    %{posts: posts, next_cursor: next_cursor}
+    Repo.all(query) |> Repo.preload([:identity, :quote])
   end
 
   # --- Admin operations ---

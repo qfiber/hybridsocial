@@ -47,7 +47,9 @@ defmodule Hybridsocial.Search.Backends.PostgresqlBackend do
     offset = parse_offset(opts)
     account_id = Keyword.get(opts, :account_id)
     tsquery = prefix_tsquery(query)
+    ilike_pattern = "%#{escape_like(query)}%"
 
+    # Try full-text search first, fall back to ILIKE for stop words
     results =
       Post
       |> where([p], is_nil(p.deleted_at))
@@ -58,9 +60,23 @@ defmodule Hybridsocial.Search.Backends.PostgresqlBackend do
       |> limit(^limit)
       |> offset(^offset)
       |> Repo.all()
-      |> Repo.preload(:identity)
 
-    {:ok, results}
+    results =
+      if results == [] do
+        Post
+        |> where([p], is_nil(p.deleted_at))
+        |> where([p], ilike(p.content, ^ilike_pattern))
+        |> apply_visibility_filter(viewer_id)
+        |> apply_account_filter(account_id)
+        |> order_by([p], desc: p.published_at)
+        |> limit(^limit)
+        |> offset(^offset)
+        |> Repo.all()
+      else
+        results
+      end
+
+    {:ok, Repo.preload(results, :identity)}
   end
 
   @impl true

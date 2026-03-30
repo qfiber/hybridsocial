@@ -2,6 +2,7 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Search
+  alias HybridsocialWeb.Serializers.PostSerializer
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   alias Hybridsocial.Federation.WebFinger
@@ -37,11 +38,14 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
         results.accounts
       end
 
+    serialized_posts = PostSerializer.serialize_many(results.posts, current_identity_id: viewer_id)
+
     conn
     |> put_status(:ok)
     |> json(%{
       accounts: Enum.map(accounts, &serialize_account/1),
-      statuses: Enum.map(results.posts, &serialize_post/1),
+      posts: serialized_posts,
+      statuses: serialized_posts,
       hashtags: Enum.map(results.hashtags, &serialize_hashtag/1),
       groups: Enum.map(results.groups, &serialize_group/1)
     })
@@ -126,58 +130,15 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
   defp parse_int(_val, default), do: default
 
   defp serialize_account(identity) do
-    local_domain = HybridsocialWeb.Endpoint.host()
-    acct = build_acct(identity, local_domain)
-
     %{
       id: identity.id,
       handle: identity.handle,
-      acct: acct,
+      acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
       display_name: identity.display_name,
       avatar_url: identity.avatar_url,
       header_url: identity.header_url,
       bio: identity.bio,
       url: identity.ap_actor_url
-    }
-  end
-
-  defp build_acct(identity, local_domain) do
-    case identity.ap_actor_url do
-      nil ->
-        identity.handle
-
-      ap_url ->
-        domain = URI.parse(ap_url).host
-
-        if domain == local_domain do
-          identity.handle
-        else
-          # Extract the real username from the AP URL path
-          username =
-            case URI.parse(ap_url).path do
-              nil -> identity.handle
-              path -> path |> String.split("/") |> List.last()
-            end
-
-          "#{username}@#{domain}"
-        end
-    end
-  end
-
-  defp serialize_post(post) do
-    account =
-      case post.identity do
-        %Hybridsocial.Accounts.Identity{} = i -> serialize_account(i)
-        _ -> nil
-      end
-
-    %{
-      id: post.id,
-      content: post.content,
-      content_html: post.content_html,
-      visibility: post.visibility,
-      created_at: post.inserted_at,
-      account: account
     }
   end
 

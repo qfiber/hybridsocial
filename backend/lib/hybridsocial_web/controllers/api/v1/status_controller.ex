@@ -3,6 +3,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
   alias Hybridsocial.Social.Posts
   alias Hybridsocial.Premium.TierLimits
+  alias HybridsocialWeb.Serializers.PostSerializer
 
   # POST /api/v1/statuses
   def create(conn, params) do
@@ -16,7 +17,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
           conn
           |> put_status(:created)
-          |> json(serialize_post(post))
+          |> json(serialize_post(conn, post))
 
         {:error, :premium_emojis_required, shortcodes} ->
           conn
@@ -47,7 +48,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       post ->
         conn
         |> put_status(:ok)
-        |> json(serialize_post(post))
+        |> json(serialize_post(conn, post))
     end
   end
 
@@ -61,7 +62,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
         conn
         |> put_status(:ok)
-        |> json(serialize_post(post))
+        |> json(serialize_post(conn, post))
 
       {:error, :not_found} ->
         conn
@@ -126,32 +127,86 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
   @valid_reaction_types ~w(like love care angry sad lol wow)
 
+  # GET /api/v1/statuses/:id/reactions
+  def reactions(conn, %{"id" => id}) do
+    import Ecto.Query
+
+    reactions =
+      Hybridsocial.Social.Reaction
+      |> where([r], r.post_id == ^id)
+      |> preload(:identity)
+      |> Hybridsocial.Repo.all()
+
+    grouped =
+      reactions
+      |> Enum.group_by(& &1.type)
+      |> Enum.map(fn {type, entries} ->
+        %{
+          type: type,
+          count: length(entries),
+          accounts: Enum.map(entries, fn r ->
+            %{
+              id: r.identity.id,
+              handle: r.identity.handle,
+              display_name: r.identity.display_name,
+              avatar_url: r.identity.avatar_url
+            }
+          end)
+        }
+      end)
+      |> Enum.sort_by(& &1.count, :desc)
+
+    json(conn, grouped)
+  end
+
   # POST /api/v1/statuses/:id/react
   def react(conn, %{"id" => id} = params) do
     identity = conn.assigns.current_identity
     type = Map.get(params, "type", "like")
+    custom_emoji_allowed = Hybridsocial.Premium.TierLimits.limit(identity, :custom_emoji) == true
 
-    if type in @valid_reaction_types do
-      case Posts.react(id, identity.id, type) do
-        {:ok, reaction} ->
-          conn
-          |> put_status(:ok)
-          |> json(%{id: reaction.id, type: reaction.type, post_id: reaction.post_id})
+    is_custom_emoji = String.starts_with?(type, ":") and String.ends_with?(type, ":")
+    is_valid = type in @valid_reaction_types or (is_custom_emoji and custom_emoji_allowed)
 
-        {:error, :not_found} ->
-          conn
-          |> put_status(:not_found)
-          |> json(%{error: "status.not_found"})
+    if is_valid do
+      # Verify custom emoji exists
+      if is_custom_emoji do
+        shortcode = String.trim(type, ":")
+        case Hybridsocial.Repo.get_by(Hybridsocial.Content.CustomEmoji, shortcode: shortcode, enabled: true) do
+          nil ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "reaction.emoji_not_found"})
 
-        {:error, changeset} ->
-          conn
-          |> put_status(:unprocessable_entity)
-          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+          _emoji ->
+            do_react(conn, id, identity.id, type, custom_emoji_allowed)
+        end
+      else
+        do_react(conn, id, identity.id, type, custom_emoji_allowed)
       end
     else
       conn
       |> put_status(:unprocessable_entity)
       |> json(%{error: "reaction.invalid_type", valid_types: @valid_reaction_types})
+    end
+  end
+
+  defp do_react(conn, post_id, identity_id, type, custom_emoji_allowed) do
+    case Posts.react(post_id, identity_id, type, custom_emoji_allowed: custom_emoji_allowed) do
+      {:ok, reaction} ->
+        conn
+        |> put_status(:ok)
+        |> json(%{id: reaction.id, type: reaction.type, post_id: reaction.post_id})
+
+      {:error, :not_found} ->
+        conn
+        |> put_status(:not_found)
+        |> json(%{error: "status.not_found"})
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
     end
   end
 
@@ -183,7 +238,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
         conn
         |> put_status(:ok)
-        |> json(serialize_post(post))
+        |> json(serialize_post(conn, post))
 
       {:error, :not_found} ->
         conn
@@ -216,13 +271,25 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
   # GET /api/v1/statuses/:id/context
   def context(conn, %{"id" => id}) do
+    identity_id = current_identity_id(conn)
+
     case Posts.get_thread(id) do
       {:ok, %{ancestors: ancestors, descendants: descendants}} ->
+        serialized_ancestors =
+          PostSerializer.serialize_many(ancestors, current_identity_id: identity_id)
+
+        serialized_descendants =
+          PostSerializer.serialize_many(descendants, current_identity_id: identity_id)
+
+        # Insert tombstones for gaps (exclude the focused post itself)
+        serialized_ancestors = insert_tombstones(serialized_ancestors, id)
+        serialized_descendants = insert_descendant_tombstones(serialized_descendants, id)
+
         conn
         |> put_status(:ok)
         |> json(%{
-          ancestors: Enum.map(ancestors, &serialize_post/1),
-          descendants: Enum.map(descendants, &serialize_post/1)
+          ancestors: serialized_ancestors,
+          descendants: serialized_descendants
         })
 
       {:error, :not_found} ->
@@ -235,6 +302,17 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
   # POST /api/v1/statuses/:id/pin
   def pin(conn, %{"id" => id}) do
     identity = conn.assigns.current_identity
+    limits = TierLimits.limits_for(identity)
+    max_pins = limits[:pinned_posts] || 1
+
+    # Check current pin count
+    pinned_count = Posts.pinned_count(identity.id)
+
+    if pinned_count >= max_pins do
+      conn
+      |> put_status(:unprocessable_entity)
+      |> json(%{error: "limits.max_pinned_posts", max: max_pins})
+    else
 
     case Posts.pin_post(id, identity.id) do
       {:ok, post} ->
@@ -242,7 +320,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
         conn
         |> put_status(:ok)
-        |> json(serialize_post(post))
+        |> json(serialize_post(conn, post))
 
       {:error, :not_found} ->
         conn
@@ -253,6 +331,8 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "status.forbidden"})
+    end
+
     end
   end
 
@@ -266,7 +346,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
         conn
         |> put_status(:ok)
-        |> json(serialize_post(post))
+        |> json(serialize_post(conn, post))
 
       {:error, :not_found} ->
         conn
@@ -316,65 +396,52 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
   # --- Serialization ---
 
-  defp serialize_post(post) do
-    badges =
-      Hybridsocial.Badges.badges_for_post(
-        post.identity,
-        group_id: post.group_id,
-        page_id: post.page_id
-      )
-
-    account = serialize_account(post.identity, badges)
-
-    quote_post =
-      case post.quote do
-        %Hybridsocial.Social.Post{} = q ->
-          q = Hybridsocial.Repo.preload(q, :identity)
-          serialize_post(q)
-
-        _ ->
-          nil
-      end
-
-    # If the identity has force_sensitive enabled, override sensitive to true
-    sensitive =
-      case post.identity do
-        %{force_sensitive: true} -> true
-        _ -> post.sensitive
-      end
-
-    %{
-      id: post.id,
-      type: post.post_type,
-      content: post.content,
-      content_html: post.content_html,
-      visibility: post.visibility,
-      sensitive: sensitive,
-      spoiler_text: post.spoiler_text,
-      language: post.language,
-      reply_count: post.reply_count,
-      boost_count: post.boost_count,
-      reaction_count: post.reaction_count,
-      is_pinned: post.is_pinned,
-      created_at: post.inserted_at,
-      edited_at: post.edited_at,
-      account: account,
-      parent_id: post.parent_id,
-      quote: quote_post
-    }
+  defp serialize_post(conn, post) do
+    PostSerializer.serialize(post, current_identity_id: current_identity_id(conn))
   end
 
-  defp serialize_account(%Hybridsocial.Accounts.Identity{} = identity, badges) do
-    %{
-      id: identity.id,
-      handle: identity.handle,
-      display_name: identity.display_name,
-      avatar_url: identity.avatar_url,
-      badges: badges
-    }
+  defp current_identity_id(conn) do
+    case conn.assigns[:current_identity] do
+      %{id: id} -> id
+      _ -> nil
+    end
   end
 
-  defp serialize_account(_, _), do: nil
+  # Insert tombstones for gaps in ancestor chain
+  defp insert_tombstones(ancestors, focused_id) do
+    known_ids = MapSet.new([focused_id | Enum.map(ancestors, & &1[:id])])
+
+    ancestors
+    |> Enum.reduce({[], nil}, fn post, {acc, _prev_id} ->
+      parent = post[:parent_id]
+
+      acc =
+        if parent && !MapSet.member?(known_ids, parent) && !Enum.any?(acc, fn p -> p[:id] == parent end) do
+          [PostSerializer.serialize_tombstone(parent) | acc]
+        else
+          acc
+        end
+
+      {acc ++ [post], post[:id]}
+    end)
+    |> elem(0)
+  end
+
+  # Insert tombstones for orphaned descendants
+  defp insert_descendant_tombstones(descendants, focused_id) do
+    known_ids = MapSet.new([focused_id | Enum.map(descendants, & &1[:id])])
+
+    Enum.flat_map(descendants, fn post ->
+      parent = post[:parent_id]
+
+      if parent && !MapSet.member?(known_ids, parent) do
+        [PostSerializer.serialize_tombstone(parent), post]
+      else
+        [post]
+      end
+    end)
+    |> Enum.uniq_by(& &1[:id])
+  end
 
   defp serialize_revision(revision) do
     %{
@@ -403,6 +470,23 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       true ->
         :ok
     end
+  end
+
+  # POST /api/v1/statuses/:id/mute
+  def mute_post(conn, %{"id" => post_id}) do
+    identity = conn.assigns.current_identity
+
+    case Hybridsocial.Social.mute_post(post_id, identity.id) do
+      {:ok, _} -> json(conn, %{status: "ok"})
+      _ -> json(conn, %{status: "ok"})
+    end
+  end
+
+  # DELETE /api/v1/statuses/:id/mute
+  def unmute_post(conn, %{"id" => post_id}) do
+    identity = conn.assigns.current_identity
+    Hybridsocial.Social.unmute_post(post_id, identity.id)
+    json(conn, %{status: "ok"})
   end
 
   defp format_errors(changeset) do

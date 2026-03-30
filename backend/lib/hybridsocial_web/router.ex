@@ -82,6 +82,44 @@ defmodule HybridsocialWeb.Router do
     # Actor migration
     post "/migrate", AccountController, :migrate
     post "/also_known_as", AccountController, :also_known_as
+    delete "/also_known_as", AccountController, :remove_alias
+
+    # Follow requests
+    get "/follow_requests", AccountController, :follow_requests
+    post "/follow_requests/:id/authorize", AccountController, :authorize_follow
+    post "/follow_requests/:id/reject", AccountController, :reject_follow
+
+    # User content filters
+    get "/filters", AccountController, :list_filters
+    post "/filters", AccountController, :create_filter
+    put "/filters/:id", AccountController, :update_filter
+    delete "/filters/:id", AccountController, :delete_filter
+
+    # User-level domain blocks
+    get "/domain_blocks", AccountController, :domain_blocks
+    post "/domain_blocks", AccountController, :block_domain
+    delete "/domain_blocks", AccountController, :unblock_domain
+
+    # Change email
+    post "/change_email", AccountController, :change_email
+
+    # Blocks, mutes, favourites lists
+    get "/blocks", AccountController, :blocked_accounts
+    get "/mutes", AccountController, :muted_accounts
+    get "/favourites", AccountController, :favourited_posts
+
+    # Suggested users
+    get "/suggestions", AccountController, :suggestions
+
+    # Crypto donation addresses
+    get "/crypto_addresses", AccountController, :list_crypto_addresses
+    post "/crypto_addresses", AccountController, :set_crypto_address
+    delete "/crypto_addresses/:coin", AccountController, :remove_crypto_address
+
+    # Followed hashtags
+    get "/followed_tags", AccountController, :followed_tags
+    post "/followed_tags", AccountController, :follow_tag
+    delete "/followed_tags/:name", AccountController, :unfollow_tag
   end
 
   # Public account endpoints (optional auth for visibility filtering)
@@ -92,6 +130,8 @@ defmodule HybridsocialWeb.Router do
     get "/:id/followers", AccountController, :followers
     get "/:id/following", AccountController, :following
     get "/:id/statuses", AccountController, :statuses
+    get "/:id/familiar_followers", AccountController, :familiar_followers
+    get "/:id/crypto_addresses", AccountController, :public_crypto_addresses
     get "/:id", AccountController, :show
   end
 
@@ -142,6 +182,7 @@ defmodule HybridsocialWeb.Router do
     put "/:id", StatusController, :update
     delete "/:id", StatusController, :delete
 
+    get "/:id/reactions", StatusController, :reactions
     post "/:id/react", StatusController, :react
     delete "/:id/react", StatusController, :unreact
 
@@ -155,6 +196,9 @@ defmodule HybridsocialWeb.Router do
 
     post "/:id/bookmark", BookmarkController, :create
     delete "/:id/bookmark", BookmarkController, :delete
+
+    post "/:id/mute", StatusController, :mute_post
+    delete "/:id/mute", StatusController, :unmute_post
   end
 
   # Bookmarks (authenticated)
@@ -310,6 +354,11 @@ defmodule HybridsocialWeb.Router do
     delete "/:id/messages/:mid", ConversationController, :delete_message
     post "/:id/read", ConversationController, :mark_read
     patch "/:id/settings", ConversationController, :update_settings
+    post "/:id/accept", ConversationController, :accept
+    delete "/:id/decline", ConversationController, :decline
+    post "/:id/messages/:mid/reactions", ConversationController, :add_reaction
+    delete "/:id/messages/:mid/reactions/:emoji", ConversationController, :remove_reaction
+    get "/:id/messages/:mid/reactions", ConversationController, :message_reactions
   end
 
   # DM Preferences (authenticated)
@@ -342,6 +391,13 @@ defmodule HybridsocialWeb.Router do
     pipe_through [:api, :optional_auth]
 
     get "/search", SearchController, :index
+  end
+
+  # Directory (public)
+  scope "/api/v1/directory", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :optional_auth]
+
+    get "/new", DirectoryController, :new_users
   end
 
   # Trends (optional auth)
@@ -481,9 +537,41 @@ defmodule HybridsocialWeb.Router do
     # Audit Log
     get "/audit_log", AdminController, :audit_log
 
-    # Accounts
+    # Accounts (aliased as /users for frontend compatibility)
     get "/accounts", AdminController, :list_accounts
+    get "/users", AdminController, :list_accounts
+    get "/users/:id", AdminController, :show_account
     post "/accounts/:id/action", AdminController, :account_action
+    post "/users/:id/suspend", AdminController, :suspend_account
+    post "/users/:id/unsuspend", AdminController, :unsuspend_account
+    post "/users/:id/warn", AdminController, :warn_account
+    post "/users/:id/silence", AdminController, :silence_account
+    post "/users/:id/unsilence", AdminController, :unsilence_account
+    post "/users/:id/shadow_ban", AdminController, :shadow_ban_account
+    post "/users/:id/unshadow_ban", AdminController, :unshadow_ban_account
+    post "/users/:id/force_sensitive", AdminController, :force_sensitive_account
+    post "/users/:id/unforce_sensitive", AdminController, :unforce_sensitive_account
+    post "/users/:id/revoke_sessions", AdminController, :revoke_sessions
+    post "/users/:id/trust_level", AdminController, :set_trust_level
+    get "/users/:id/notes", AdminController, :list_notes
+    post "/users/:id/notes", AdminController, :create_note
+
+    # Promotions management
+    get "/promotions", AdminController, :list_promotions
+    post "/promotions", AdminController, :admin_create_promotion
+    post "/promotions/:id/cancel", AdminController, :cancel_promotion
+
+    # Approval queue
+    get "/pending_accounts", AdminController, :pending_accounts
+    post "/pending_accounts/:id/approve", AdminController, :approve_account
+    post "/pending_accounts/:id/reject", AdminController, :reject_account
+
+    # Suggested users curation
+    post "/users/:id/suggest", AdminController, :suggest_user
+    post "/users/:id/unsuggest", AdminController, :unsuggest_user
+
+    # Name revocation
+    post "/users/:id/revoke_name", AdminController, :revoke_name
 
     # Content Filters
     get "/content_filters", AdminController, :list_filters
@@ -590,6 +678,21 @@ defmodule HybridsocialWeb.Router do
     get "/site_pages/:id", Admin.SitePagesController, :show
     put "/site_pages/:id", Admin.SitePagesController, :update
     post "/site_pages/seed", Admin.SitePagesController, :seed
+  end
+
+  # Markers (authenticated)
+  scope "/api/v1/markers", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :authenticated]
+
+    get "/", MarkerController, :index
+    post "/", MarkerController, :create
+  end
+
+  # Media proxy (public)
+  scope "/proxy", HybridsocialWeb do
+    pipe_through :api
+
+    get "/media/:signature/:encoded_url", MediaProxyController, :show
   end
 
   # --- Federation / ActivityPub ---

@@ -5,7 +5,7 @@ defmodule Hybridsocial.Accounts.Identity do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @valid_types ~w(user organization)
+  @valid_types ~w(user organization bot group)
 
   schema "identities" do
     field :type, :string
@@ -37,22 +37,33 @@ defmodule Hybridsocial.Accounts.Identity do
     field :moved_to, :string
     field :trust_level, :integer, default: 0
     field :deleted_at, :utc_datetime_usec
+    field :is_suggested, :boolean, default: false
+    field :is_name_revoked, :boolean, default: false
+    field :birthday, :date
+
+    # Subaccount hierarchy: bots, groups, and organizations belong to a parent user
+    belongs_to :parent, __MODULE__, foreign_key: :parent_identity_id
+    has_many :children, __MODULE__, foreign_key: :parent_identity_id
 
     has_one :user, Hybridsocial.Accounts.User, foreign_key: :identity_id
     has_one :organization, Hybridsocial.Accounts.Organization, foreign_key: :identity_id
+    has_one :bot, Hybridsocial.Accounts.Bot, foreign_key: :identity_id
+    has_one :group, Hybridsocial.Groups.Group, foreign_key: :identity_id
 
     timestamps(type: :utc_datetime_usec)
   end
 
   def create_changeset(identity, attrs) do
     identity
-    |> cast(attrs, [:type, :handle, :display_name, :bio, :is_locked, :is_bot])
+    |> cast(attrs, [:type, :handle, :display_name, :bio, :is_locked, :is_bot, :parent_identity_id])
     |> validate_required([:type, :handle])
     |> validate_inclusion(:type, @valid_types)
+    |> validate_subaccount_type()
     |> validate_handle()
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
     |> unique_constraint(:handle)
+    |> foreign_key_constraint(:parent_identity_id)
     |> generate_ap_urls()
     |> generate_keys()
   end
@@ -64,7 +75,8 @@ defmodule Hybridsocial.Accounts.Identity do
     :header_url,
     :metadata,
     :is_locked,
-    :show_badge
+    :show_badge,
+    :birthday
   ]
 
   def update_changeset(identity, attrs) do
@@ -153,6 +165,26 @@ defmodule Hybridsocial.Accounts.Identity do
   def soft_delete_changeset(identity) do
     identity
     |> change(deleted_at: DateTime.utc_now())
+  end
+
+  @doc "Returns true if this identity type must have a parent (is a subaccount)."
+  def subaccount_type?(type) when type in ~w(bot group organization), do: true
+  def subaccount_type?(_), do: false
+
+  defp validate_subaccount_type(changeset) do
+    type = get_field(changeset, :type)
+    parent_id = get_field(changeset, :parent_identity_id)
+
+    cond do
+      subaccount_type?(type) && is_nil(parent_id) ->
+        add_error(changeset, :parent_identity_id, "is required for #{type} accounts")
+
+      type == "user" && !is_nil(parent_id) ->
+        add_error(changeset, :parent_identity_id, "user accounts cannot have a parent")
+
+      true ->
+        changeset
+    end
   end
 
   defp validate_handle(changeset) do

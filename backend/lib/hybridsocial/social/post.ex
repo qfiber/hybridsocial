@@ -26,11 +26,13 @@ defmodule Hybridsocial.Social.Post do
     field :is_pinned, :boolean, default: false
 
     field :ap_id, :string
+    field :parent_ap_id, :string
 
     field :edited_at, :utc_datetime_usec
     field :edit_expires_at, :utc_datetime_usec
     field :scheduled_at, :utc_datetime_usec
     field :published_at, :utc_datetime_usec
+    field :expires_at, :utc_datetime_usec
     field :deleted_at, :utc_datetime_usec
 
     belongs_to :identity, Hybridsocial.Accounts.Identity
@@ -65,7 +67,8 @@ defmodule Hybridsocial.Social.Post do
       :quote_id,
       :identity_id,
       :scheduled_at,
-      :ap_id
+      :ap_id,
+      :parent_ap_id
     ])
     |> validate_required([:identity_id])
     |> validate_inclusion(:visibility, @valid_visibilities)
@@ -113,7 +116,8 @@ defmodule Hybridsocial.Social.Post do
   defp validate_edit_window(changeset, post) do
     case post.edit_expires_at do
       nil ->
-        add_error(changeset, :edit_expires_at, "edit window has expired")
+        # nil means unlimited editing
+        changeset
 
       expires_at ->
         if DateTime.compare(DateTime.utc_now(), expires_at) == :gt do

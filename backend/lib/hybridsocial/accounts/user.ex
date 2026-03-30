@@ -19,6 +19,8 @@ defmodule Hybridsocial.Accounts.User do
     field :otp_secret, :string
     field :otp_enabled, :boolean, default: false
     field :recovery_codes_hash, :string
+    field :approved_at, :utc_datetime_usec
+    field :approval_required, :boolean, default: false
 
     # Virtual fields
     field :password, :string, virtual: true

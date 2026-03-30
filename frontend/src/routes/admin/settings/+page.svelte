@@ -128,7 +128,23 @@
                 {/if}
               </div>
               <div class="setting-input">
-                {#if renderInput(setting) === 'checkbox'}
+                {#if setting.key === 'public_timeline_access'}
+                  <select
+                    id="setting-{setting.key}"
+                    class="input"
+                    bind:value={editValues[setting.key]}
+                  >
+                    <option value="none">Disallow — login required to view timelines</option>
+                    <option value="local">Local only — local + trending visible, global blocked</option>
+                    <option value="all">Allow all — all timelines public (more server load)</option>
+                  </select>
+                  {#if editValues[setting.key] === 'all'}
+                    <p class="setting-warning">
+                      <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle">warning</span>
+                      Allowing all timelines publicly may increase server load and bandwidth usage from crawlers and unauthenticated traffic.
+                    </p>
+                  {/if}
+                {:else if renderInput(setting) === 'checkbox'}
                   <label class="toggle-wrapper">
                     <input
                       type="checkbox"
@@ -232,6 +248,14 @@
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
     line-height: 1.4;
+  }
+
+  .setting-warning {
+    font-size: var(--text-xs);
+    color: var(--color-warning, #f59e0b);
+    margin-block-start: 6px;
+    line-height: 1.4;
+    font-weight: 500;
   }
 
   .setting-input {

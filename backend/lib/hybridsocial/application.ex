@@ -13,7 +13,8 @@ defmodule Hybridsocial.Application do
         Hybridsocial.Repo,
         {DNSCluster, query: Application.get_env(:hybridsocial, :dns_cluster_query) || :ignore},
         {Phoenix.PubSub, name: Hybridsocial.PubSub},
-        {Task.Supervisor, name: Hybridsocial.Federation.DeliveryTaskSupervisor}
+        {Task.Supervisor, name: Hybridsocial.Federation.DeliveryTaskSupervisor},
+        {Task.Supervisor, name: Hybridsocial.TaskSupervisor}
       ] ++
         if(env != :test,
           do: [
@@ -32,7 +33,9 @@ defmodule Hybridsocial.Application do
             Hybridsocial.Content.ScheduledPostWorker,
             Hybridsocial.Trending.Worker,
             Hybridsocial.Search.IndexWorker,
-            Hybridsocial.Feeds.SignalWorker
+            Hybridsocial.Feeds.SignalWorker,
+            # Activity expiration cleanup
+            Hybridsocial.Federation.ActivityExpirationWorker
           ],
           else: []
         ) ++

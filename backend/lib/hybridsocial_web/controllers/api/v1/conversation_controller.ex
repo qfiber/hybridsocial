@@ -236,6 +236,10 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
     %{
       id: conversation.id,
       type: conversation.type,
+      accepted: conversation.accepted,
+      is_local: conversation.is_local,
+      is_encrypted: conversation.is_local == true,
+      created_by_id: conversation.created_by_id,
       participants: participants,
       created_at: conversation.inserted_at,
       updated_at: conversation.updated_at
@@ -279,6 +283,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
           nil
       end
 
+    # Get reactions for this message
+    reactions = Hybridsocial.Messaging.get_message_reactions(message.id)
+
     %{
       id: message.id,
       conversation_id: message.conversation_id,
@@ -287,6 +294,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
       sender: sender,
       media_id: message.media_id,
       reply_to_id: message.reply_to_id,
+      reactions: reactions,
       edited_at: message.edited_at,
       created_at: message.created_at
     }
@@ -310,6 +318,61 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
   end
 
   defp parse_int(val, _default) when is_integer(val), do: val
+
+  # POST /api/v1/conversations/:id/accept
+  def accept(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+
+    case Messaging.accept_conversation(id, identity.id) do
+      {:ok, conv} ->
+        conv = Hybridsocial.Repo.preload(conv, participants: :identity)
+        json(conn, serialize_conversation(conv))
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "conversation.not_found"})
+    end
+  end
+
+  # DELETE /api/v1/conversations/:id/decline
+  def decline(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+
+    case Messaging.decline_conversation(id, identity.id) do
+      {:ok, _} -> json(conn, %{status: "ok"})
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "conversation.not_found"})
+    end
+  end
+
+  # POST /api/v1/conversations/:id/messages/:mid/reactions
+  def add_reaction(conn, %{"id" => _conv_id, "mid" => message_id, "emoji" => emoji}) do
+    identity = conn.assigns.current_identity
+
+    case Messaging.react_to_message(message_id, identity.id, emoji) do
+      {:ok, reaction} ->
+        json(conn, %{id: reaction.id, emoji: reaction.emoji, message_id: reaction.message_id})
+
+      {:error, changeset} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "reaction.failed", details: format_errors(changeset)})
+    end
+  end
+
+  # DELETE /api/v1/conversations/:id/messages/:mid/reactions/:emoji
+  def remove_reaction(conn, %{"id" => _conv_id, "mid" => message_id, "emoji" => emoji}) do
+    identity = conn.assigns.current_identity
+
+    case Messaging.unreact_to_message(message_id, identity.id, emoji) do
+      :ok -> json(conn, %{status: "ok"})
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "reaction.not_found"})
+    end
+  end
+
+  # GET /api/v1/conversations/:id/messages/:mid/reactions
+  def message_reactions(conn, %{"id" => _conv_id, "mid" => message_id}) do
+    reactions = Messaging.get_message_reactions(message_id)
+    json(conn, reactions)
+  end
 
   defp format_errors(%Ecto.Changeset{} = changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->

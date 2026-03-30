@@ -140,10 +140,18 @@
   }
 
   .data-table td {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-4) var(--space-4);
     border-block-end: 1px solid var(--color-border);
     color: var(--color-text);
     vertical-align: middle;
+  }
+
+  .data-table tbody tr:nth-child(even) {
+    background: var(--color-surface, #f9fafb);
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--color-surface-container-low, #f0f2f3);
   }
 
   .data-table tbody tr:last-child td {

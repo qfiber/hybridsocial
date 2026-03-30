@@ -5,7 +5,7 @@ defmodule HybridsocialWeb.Api.V1.PromotionController do
 
   @doc "GET /api/v1/promotions/pricing — public pricing info"
   def pricing(conn, _params) do
-    pricing = Promotions.get_pricing()
+    pricing = Promotions.get_full_pricing()
     json(conn, %{data: pricing})
   end
 

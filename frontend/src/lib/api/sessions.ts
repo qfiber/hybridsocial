@@ -12,7 +12,7 @@ export interface Session {
 }
 
 export function getSessions(): Promise<Session[]> {
-  return api.get('/api/v1/auth/sessions').then((r: { data: Session[] }) => r.data);
+  return api.get<{ data: Session[] }>('/api/v1/auth/sessions').then((r) => r.data);
 }
 
 export function revokeSession(id: string): Promise<void> {

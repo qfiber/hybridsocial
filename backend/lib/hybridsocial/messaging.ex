@@ -5,7 +5,7 @@ defmodule Hybridsocial.Messaging do
   import Ecto.Query
 
   alias Hybridsocial.Repo
-  alias Hybridsocial.Messaging.{Conversation, Participant, Message, DeliveryStatus, DmPreference}
+  alias Hybridsocial.Messaging.{Conversation, Participant, Message, DeliveryStatus, DmPreference, MessageReaction}
   alias Hybridsocial.Social
 
   # ---------------------------------------------------------------------------
@@ -264,6 +264,7 @@ defmodule Hybridsocial.Messaging do
       |> Repo.transaction()
       |> case do
         {:ok, %{message: message}} ->
+          broadcast_new_message(message)
           {:ok, message}
 
         {:error, :message, changeset, _changes} ->
@@ -360,9 +361,27 @@ defmodule Hybridsocial.Messaging do
             {:error, :not_found}
 
           participant ->
-            participant
-            |> Ecto.Changeset.change(last_read_message_id: message.id)
-            |> Repo.update()
+            result =
+              participant
+              |> Ecto.Changeset.change(last_read_message_id: message.id)
+              |> Repo.update()
+
+            # Broadcast read receipt
+            broadcast_conversation_event(conversation_id, :read, %{
+              identity_id: identity_id,
+              last_read_message_id: message.id
+            })
+
+            # Update delivery statuses to 'read'
+            DeliveryStatus
+            |> where([d], d.recipient_id == ^identity_id)
+            |> join(:inner, [d], m in Message,
+              on: d.message_id == m.id and m.conversation_id == ^conversation_id
+            )
+            |> where([d], d.status != "read")
+            |> Repo.update_all(set: [status: "read", updated_at: DateTime.utc_now()])
+
+            result
         end
     end
   end
@@ -501,5 +520,156 @@ defmodule Hybridsocial.Messaging do
         is_nil(p.left_at)
     )
     |> Repo.exists?()
+  end
+
+  # ---------------------------------------------------------------------------
+  # Chat Acceptance
+  # ---------------------------------------------------------------------------
+
+  @doc "Accept a pending conversation."
+  def accept_conversation(conversation_id, identity_id) do
+    with {:ok, conv} <- get_conversation(conversation_id, identity_id) do
+      conv
+      |> Conversation.changeset(%{accepted: true})
+      |> Repo.update()
+    end
+  end
+
+  @doc "Decline (delete) a pending conversation."
+  def decline_conversation(conversation_id, identity_id) do
+    with {:ok, conv} <- get_conversation(conversation_id, identity_id) do
+      Repo.delete(conv)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Message Reactions
+  # ---------------------------------------------------------------------------
+
+  @doc "Add an emoji reaction to a message."
+  def react_to_message(message_id, identity_id, emoji) do
+    %MessageReaction{}
+    |> MessageReaction.changeset(%{
+      message_id: message_id,
+      identity_id: identity_id,
+      emoji: emoji
+    })
+    |> Repo.insert(on_conflict: :nothing)
+    |> case do
+      {:ok, reaction} ->
+        broadcast_message_event(message_id, :reaction_added, %{
+          message_id: message_id,
+          identity_id: identity_id,
+          emoji: emoji
+        })
+        {:ok, reaction}
+
+      error ->
+        error
+    end
+  end
+
+  @doc "Remove an emoji reaction from a message."
+  def unreact_to_message(message_id, identity_id, emoji) do
+    case Repo.get_by(MessageReaction, message_id: message_id, identity_id: identity_id, emoji: emoji) do
+      nil ->
+        {:error, :not_found}
+
+      reaction ->
+        case Repo.delete(reaction) do
+          {:ok, _} ->
+            broadcast_message_event(message_id, :reaction_removed, %{
+              message_id: message_id,
+              identity_id: identity_id,
+              emoji: emoji
+            })
+            :ok
+
+          error ->
+            error
+        end
+    end
+  end
+
+  @doc "Get reactions for a message."
+  def get_message_reactions(message_id) do
+    MessageReaction
+    |> where([r], r.message_id == ^message_id)
+    |> preload(:identity)
+    |> Repo.all()
+    |> Enum.group_by(& &1.emoji)
+    |> Enum.map(fn {emoji, reactions} ->
+      %{
+        emoji: emoji,
+        count: length(reactions),
+        accounts: Enum.map(reactions, fn r ->
+          %{id: r.identity.id, handle: r.identity.handle, display_name: r.identity.display_name}
+        end)
+      }
+    end)
+  end
+
+  # ---------------------------------------------------------------------------
+  # Read Receipts Broadcasting
+  # ---------------------------------------------------------------------------
+
+  @doc "Mark as read and broadcast the read receipt."
+  def mark_read_with_broadcast(conversation_id, identity_id) do
+    result = mark_read(conversation_id, identity_id)
+    broadcast_conversation_event(conversation_id, :read, %{identity_id: identity_id})
+    result
+  end
+
+  # ---------------------------------------------------------------------------
+  # PubSub Broadcasting
+  # ---------------------------------------------------------------------------
+
+  defp broadcast_message_event(message_id, event, payload) do
+    # Get conversation_id from message
+    case Repo.get(Message, message_id) do
+      nil -> :ok
+      message ->
+        broadcast_conversation_event(message.conversation_id, event, payload)
+    end
+  end
+
+  defp broadcast_conversation_event(conversation_id, event, payload) do
+    # Broadcast to all participants in the SSE-compatible format
+    participants =
+      Participant
+      |> where([p], p.conversation_id == ^conversation_id and is_nil(p.left_at))
+      |> select([p], p.identity_id)
+      |> Repo.all()
+
+    event_name = "chat.#{event}"
+    full_payload = Map.put(payload, :conversation_id, conversation_id)
+
+    for pid <- participants do
+      Phoenix.PubSub.broadcast(
+        Hybridsocial.PubSub,
+        "user:#{pid}",
+        %{event: event_name, payload: full_payload}
+      )
+    end
+  end
+
+  @doc "Broadcast a new message to all conversation participants."
+  def broadcast_new_message(message) do
+    message = Repo.preload(message, :sender)
+
+    broadcast_conversation_event(message.conversation_id, :new_message, %{
+      id: message.id,
+      conversation_id: message.conversation_id,
+      content: message.content,
+      content_type: message.content_type,
+      reply_to_id: message.reply_to_id,
+      sender: %{
+        id: message.sender.id,
+        handle: message.sender.handle,
+        display_name: message.sender.display_name,
+        avatar_url: message.sender.avatar_url
+      },
+      created_at: message.created_at
+    })
   end
 end

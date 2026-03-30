@@ -19,8 +19,11 @@ export interface TierLimits {
 
 export interface Identity {
   id: string;
-  type: 'user' | 'organization';
+  type: 'user' | 'organization' | 'bot' | 'group';
   handle: string;
+  acct?: string;
+  url?: string;
+  domain?: string | null;
   display_name: string | null;
   bio: string | null;
   avatar_url: string | null;
@@ -39,8 +42,43 @@ export interface Identity {
   created_at: string;
 }
 
+export interface PostReaction {
+  name: string;
+  count: number;
+  me: boolean;
+}
+
+export interface PostMention {
+  acct: string;
+  id?: string;
+  url?: string;
+}
+
+export interface PostTag {
+  name: string;
+  url: string;
+}
+
+export interface PostEmoji {
+  shortcode: string;
+  url: string;
+  static_url: string;
+  category: string | null;
+}
+
+export interface LinkCard {
+  url: string;
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  provider_name: string | null;
+}
+
 export interface Post {
   id: string;
+  type: string;
+  uri: string;
+  url: string;
   content: string;
   content_html: string | null;
   visibility: 'public' | 'followers' | 'group' | 'direct' | 'list';
@@ -54,15 +92,35 @@ export interface Post {
   is_pinned: boolean;
   is_boosted: boolean;
   is_bookmarked: boolean;
+  is_muted: boolean;
   current_user_reaction: string | null;
   created_at: string;
   edited_at: string | null;
+  edit_expires_at: string | null;
   account: Identity;
   parent_id: string | null;
+  root_id: string | null;
+  in_reply_to_account_id: string | null;
   quote: Post | null;
+  card: LinkCard | null;
+  mentions: PostMention[];
+  tags: PostTag[];
+  emojis: PostEmoji[];
+  reactions: PostReaction[];
   poll: Poll | null;
   media_attachments: MediaAttachment[];
+  tombstone?: { reason: string };
 }
+
+export interface BoostEntry {
+  id: string;
+  type: 'boost';
+  created_at: string;
+  account: Identity;
+  post: Post;
+}
+
+export type FeedEntry = Post | BoostEntry;
 
 export interface Poll {
   id: string;
@@ -103,6 +161,11 @@ export interface Notification {
 
 export interface Conversation {
   id: string;
+  type: 'direct' | 'group_dm';
+  accepted: boolean;
+  is_local: boolean;
+  is_encrypted: boolean;
+  created_by_id: string | null;
   unread_count: number;
   last_message: Message | null;
   participants: Identity[];
@@ -110,16 +173,26 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  accounts: { id: string; handle: string; display_name: string | null }[];
+}
+
 export interface Message {
   id: string;
   conversation_id: string;
   content: string;
   content_html: string | null;
+  content_type: string;
   sender: Identity;
   media_attachments: MediaAttachment[];
+  reply_to_id: string | null;
+  reactions: MessageReaction[];
   created_at: string;
   edited_at: string | null;
   read_at: string | null;
+  pending?: boolean;
 }
 
 export interface Group {
@@ -160,6 +233,7 @@ export interface InstanceInfo {
   rules: InstanceRule[];
   stats: InstanceStats;
   theme: ThemeConfig | null;
+  analytics?: unknown;
 }
 
 export interface InstanceRule {
@@ -201,12 +275,14 @@ export interface AuthTokens {
   refresh_token: string;
   expires_in: number;
   token_type: string;
+  identity_id?: string;
 }
 
 export interface TwoFactorSetup {
   secret: string;
   qr_code_url: string;
   backup_codes: string[];
+  uri?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -228,6 +304,7 @@ export interface UserPreferences {
   auto_play_media: boolean;
   default_visibility: Post['visibility'];
   default_language: string | null;
+  comment_style: 'threaded' | 'flat';
 }
 
 export interface NotificationPreferences {
@@ -411,7 +488,7 @@ export interface DeliveryQueueStats {
 export interface AdminSetting {
   key: string;
   value: string;
-  type: 'string' | 'integer' | 'boolean' | 'text';
+  type: 'string' | 'integer' | 'boolean' | 'text' | 'json';
   category: string;
   description: string;
 }

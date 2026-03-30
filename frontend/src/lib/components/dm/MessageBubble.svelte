@@ -20,11 +20,13 @@
   );
 
   let isRead = $derived(!!message.read_at);
+  let isPending = $derived(!!message.pending);
   let mediaAttachments = $derived(message.media_attachments || []);
+  let reactions = $derived(message.reactions || []);
   let sender = $derived(message.sender || {});
 </script>
 
-<div class="message-row" class:own={isOwn}>
+<div class="message-row" class:own={isOwn} class:pending={isPending}>
   {#if !isOwn && showAvatar}
     <div class="message-avatar">
       <Avatar
@@ -68,12 +70,24 @@
       </div>
     {/if}
 
+    {#if reactions.length > 0}
+      <div class="message-reactions">
+        {#each reactions as r (r.emoji)}
+          <span class="msg-reaction" title="{r.count} {r.emoji}">
+            {r.emoji} {#if r.count > 1}<span class="msg-reaction-count">{r.count}</span>{/if}
+          </span>
+        {/each}
+      </div>
+    {/if}
+
     <div class="message-meta">
       <time class="message-time" datetime={message.created_at}>{formattedTime}</time>
       {#if message.edited_at}
         <span class="message-edited">edited</span>
       {/if}
-      {#if isOwn}
+      {#if isPending}
+        <span class="message-pending">sending...</span>
+      {:else if isOwn}
         <span class="read-receipt" class:read={isRead} aria-label={isRead ? 'Read' : 'Sent'}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             {#if isRead}
@@ -182,5 +196,40 @@
 
   .read-receipt.read {
     color: var(--color-primary);
+  }
+
+  .pending {
+    opacity: 0.6;
+  }
+
+  .message-pending {
+    font-size: 10px;
+    color: var(--color-text-tertiary);
+    font-style: italic;
+  }
+
+  .message-reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-block-start: 4px;
+  }
+
+  .msg-reaction {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 6px;
+    border-radius: 10px;
+    background: var(--color-surface-container-lowest);
+    border: 1px solid var(--color-border);
+    font-size: 0.75rem;
+    cursor: default;
+  }
+
+  .msg-reaction-count {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
   }
 </style>

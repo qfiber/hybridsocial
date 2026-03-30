@@ -11,21 +11,79 @@ defmodule Hybridsocial.Federation.Inbox do
   alias Hybridsocial.Accounts.Identity
   alias Hybridsocial.Social
   alias Hybridsocial.Social.Post
+  alias Hybridsocial.Social.Posts
   alias Hybridsocial.Federation.ActivityMapper
+  alias Hybridsocial.Federation.ObjectResolver
+  alias Hybridsocial.Federation.Containment
+  alias Hybridsocial.Federation.Validator, as: ActivityValidator
+  alias Hybridsocial.Federation.MRF
 
   require Logger
 
   @doc """
   Processes an incoming ActivityPub activity.
-  Dispatches to the appropriate handler based on the activity's "type" field.
-  Returns {:ok, result} or {:error, reason}.
+
+  Before dispatching to type-specific handlers, runs:
+  1. Containment checks (origin verification)
+  2. Activity validation
+  3. MRF policy pipeline
   """
   def process(%{"type" => type} = activity) do
     Logger.info("Processing #{type} activity: #{activity["id"]}")
-    dispatch(type, activity)
+
+    with :ok <- run_containment(activity),
+         {:ok, activity} <- run_validation(activity),
+         {:ok, activity} <- run_mrf(activity) do
+      dispatch(type, activity)
+    end
   end
 
   def process(_), do: {:error, :invalid_activity}
+
+  # --- Pre-processing pipeline ---
+
+  defp run_containment(activity) do
+    actor = Containment.get_actor(activity)
+    activity_id = activity["id"]
+
+    cond do
+      is_nil(actor) ->
+        {:error, :missing_actor}
+
+      is_binary(activity_id) and Containment.contain_origin(activity_id, activity) == :error ->
+        Logger.warning("Containment: origin mismatch for #{activity_id}")
+        {:error, :containment_origin_mismatch}
+
+      Containment.contain_child(activity) == :error ->
+        Logger.warning("Containment: child origin mismatch for #{activity_id}")
+        {:error, :containment_child_mismatch}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp run_validation(activity) do
+    case ActivityValidator.validate(activity) do
+      {:ok, activity} ->
+        {:ok, activity}
+
+      {:error, reason} ->
+        Logger.warning("Validation failed for #{activity["id"]}: #{inspect(reason)}")
+        {:error, {:validation_failed, reason}}
+    end
+  end
+
+  defp run_mrf(activity) do
+    case MRF.filter_pipeline(activity) do
+      {:ok, activity} ->
+        {:ok, activity}
+
+      {:reject, reason} ->
+        Logger.info("MRF rejected #{activity["id"]}: #{reason}")
+        {:error, {:mrf_rejected, reason}}
+    end
+  end
 
   defp dispatch("Follow", activity), do: handle_follow(activity)
   defp dispatch("Accept", activity), do: handle_accept(activity)
@@ -103,7 +161,13 @@ defmodule Hybridsocial.Federation.Inbox do
   defp handle_reject(_), do: {:error, :invalid_reject_activity}
 
   # --- Create ---
-  # A remote actor created a new object (Note, Article, Question).
+  # A remote actor created a new object (Note, Article, Question, Audio, Video, Page, etc.).
+
+  defp handle_create(%{"actor" => actor_ap_id, "object" => %{"type" => "Answer"} = object})
+       when is_binary(actor_ap_id) do
+    # Answer objects are poll responses — delegate to poll handling
+    handle_poll_answer(actor_ap_id, object)
+  end
 
   defp handle_create(%{"actor" => actor_ap_id, "object" => object})
        when is_binary(actor_ap_id) and is_map(object) do
@@ -156,24 +220,69 @@ defmodule Hybridsocial.Federation.Inbox do
   defp insert_remote_post(post_attrs, remote_identity) do
     case get_post_by_ap_id(post_attrs["ap_id"]) do
       nil ->
-        parent_id = resolve_parent_post_id(post_attrs["parent_ap_id"])
+        parent_ap_id = post_attrs["parent_ap_id"]
+        parent_id = resolve_parent_post_id(parent_ap_id)
 
         insert_attrs =
           post_attrs
           |> Map.delete("parent_ap_id")
           |> Map.put("identity_id", remote_identity.id)
+          |> Map.put("parent_ap_id", parent_ap_id)
           |> maybe_put_parent(parent_id)
+          |> Posts.maybe_resolve_root_id()
 
-        %Post{}
-        |> Post.create_changeset(insert_attrs)
-        |> maybe_put_published_at(post_attrs["published_at"])
-        |> maybe_put_content_html(post_attrs["content_html"])
-        |> Repo.insert()
+        result =
+          %Post{}
+          |> Post.create_changeset(insert_attrs)
+          |> maybe_put_published_at(post_attrs["published_at"])
+          |> maybe_put_content_html(post_attrs["content_html"])
+          |> Repo.insert()
+
+        # If parent couldn't be resolved locally, try backfilling from remote
+        case {result, parent_ap_id, parent_id} do
+          {{:ok, post}, ap_id, nil} when is_binary(ap_id) ->
+            schedule_thread_backfill(post.id, ap_id)
+            {:ok, post}
+
+          _ ->
+            result
+        end
 
       existing ->
         {:ok, existing}
     end
   end
+
+  # --- Poll Answer ---
+  # A remote actor submitted a poll answer.
+
+  defp handle_poll_answer(actor_ap_id, %{"inReplyTo" => poll_ap_id, "name" => answer_name})
+       when is_binary(poll_ap_id) and is_binary(answer_name) do
+    with {:ok, remote_identity} <- resolve_or_create_remote_identity(actor_ap_id),
+         {:ok, post} <- resolve_local_post(poll_ap_id) do
+      # Look up the poll and find the option matching the answer name
+      poll = Repo.one(from(p in Hybridsocial.Social.Poll, where: p.post_id == ^post.id))
+
+      if poll do
+        option =
+          Repo.one(
+            from(o in Hybridsocial.Social.PollOption,
+              where: o.poll_id == ^poll.id and o.title == ^answer_name
+            )
+          )
+
+        if option do
+          Hybridsocial.Social.Polls.vote(poll.id, remote_identity.id, [option.id])
+        else
+          {:error, :poll_option_not_found}
+        end
+      else
+        {:error, :poll_not_found}
+      end
+    end
+  end
+
+  defp handle_poll_answer(_actor_ap_id, _object), do: {:error, :invalid_poll_answer}
 
   # --- Like ---
 
@@ -781,6 +890,103 @@ defmodule Hybridsocial.Federation.Inbox do
 
   defp maybe_put_parent(attrs, nil), do: attrs
   defp maybe_put_parent(attrs, parent_id), do: Map.put(attrs, "parent_id", parent_id)
+
+  defp schedule_thread_backfill(post_id, parent_ap_id) do
+    Task.Supervisor.start_child(
+      Hybridsocial.TaskSupervisor,
+      fn -> backfill_thread(post_id, parent_ap_id) end
+    )
+  end
+
+  defp backfill_thread(child_post_id, parent_ap_id, depth \\ 0) do
+    # Limit depth to prevent infinite recursion
+    if depth >= 10 do
+      Logger.warning("Thread backfill: max depth reached for #{parent_ap_id}")
+      :ok
+    else
+      case ObjectResolver.resolve(parent_ap_id) do
+        {:ok, object} ->
+          case handle_backfilled_object(object, child_post_id) do
+            {:ok, parent_post, grandparent_ap_id} ->
+              # Continue walking up the chain if there's a grandparent
+              if grandparent_ap_id do
+                backfill_thread(parent_post.id, grandparent_ap_id, depth + 1)
+              else
+                :ok
+              end
+
+            _ ->
+              :ok
+          end
+
+        {:error, reason} ->
+          Logger.warning("Thread backfill failed for #{parent_ap_id}: #{inspect(reason)}")
+          :ok
+      end
+    end
+  end
+
+  defp handle_backfilled_object(object, child_post_id) do
+    ap_id = object["id"]
+
+    # Don't re-import if we already have it
+    case get_post_by_ap_id(ap_id) do
+      nil ->
+        post_attrs = ActivityMapper.to_post(object)
+        actor_ap_id = object["attributedTo"] || object["actor"]
+
+        case resolve_or_create_remote_identity(actor_ap_id) do
+          {:ok, remote_identity} ->
+            grandparent_ap_id = post_attrs["parent_ap_id"]
+            grandparent_id = resolve_parent_post_id(grandparent_ap_id)
+
+            insert_attrs =
+              post_attrs
+              |> Map.delete("parent_ap_id")
+              |> Map.put("identity_id", remote_identity.id)
+              |> Map.put("parent_ap_id", grandparent_ap_id)
+              |> maybe_put_parent(grandparent_id)
+              |> Posts.maybe_resolve_root_id()
+
+            case %Post{}
+                 |> Post.create_changeset(insert_attrs)
+                 |> maybe_put_published_at(post_attrs["published_at"])
+                 |> maybe_put_content_html(post_attrs["content_html"])
+                 |> Repo.insert() do
+              {:ok, parent_post} ->
+                # Link the child post to this newly fetched parent
+                link_child_to_parent(child_post_id, parent_post)
+                {:ok, parent_post, grandparent_ap_id}
+
+              error ->
+                error
+            end
+
+          error ->
+            error
+        end
+
+      existing_parent ->
+        # Parent already exists, just link the child
+        link_child_to_parent(child_post_id, existing_parent)
+        {:ok, existing_parent, nil}
+    end
+  end
+
+  defp link_child_to_parent(child_post_id, parent_post) do
+    root_id = parent_post.root_id || parent_post.id
+
+    Post
+    |> where([p], p.id == ^child_post_id)
+    |> Repo.update_all(set: [parent_id: parent_post.id, root_id: root_id])
+
+    # Also update any other orphaned posts that reference this parent via parent_ap_id
+    if parent_post.ap_id do
+      Post
+      |> where([p], p.parent_ap_id == ^parent_post.ap_id and is_nil(p.parent_id))
+      |> Repo.update_all(set: [parent_id: parent_post.id, root_id: root_id])
+    end
+  end
 
   defp maybe_put_content_html(changeset, nil), do: changeset
 

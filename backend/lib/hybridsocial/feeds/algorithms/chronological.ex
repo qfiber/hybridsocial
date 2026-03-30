@@ -11,7 +11,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
   import Ecto.Query
 
   alias Hybridsocial.Repo
-  alias Hybridsocial.Social.{Post, Follow, Boost}
+  alias Hybridsocial.Social.{Post, Follow, Boost, FollowedTag}
   alias Hybridsocial.Feeds.Visibility
   alias Hybridsocial.Feeds
 
@@ -34,11 +34,29 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
       |> where([f], f.follower_id == ^identity_id and f.status == :accepted)
       |> select([f], f.followee_id)
 
-    # Original posts from followed accounts + own posts
+    # Followed hashtag IDs
+    followed_tag_ids =
+      FollowedTag
+      |> where([ft], ft.identity_id == ^identity_id)
+      |> select([ft], ft.hashtag_id)
+
+    # Post IDs from followed hashtags
+    tagged_post_ids =
+      from(ph in "post_hashtags",
+        where: ph.hashtag_id in subquery(followed_tag_ids),
+        select: ph.post_id
+      )
+
+    # Original posts from followed accounts + own posts + followed tags
     posts_query =
       Post
-      |> where([p], p.identity_id in subquery(followed_ids) or p.identity_id == ^identity_id)
+      |> where([p],
+        p.identity_id in subquery(followed_ids) or
+        p.identity_id == ^identity_id or
+        p.id in subquery(tagged_post_ids)
+      )
       |> where([p], is_nil(p.deleted_at))
+      |> where([p], is_nil(p.parent_id))
       |> apply_cursor_filters(opts)
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)

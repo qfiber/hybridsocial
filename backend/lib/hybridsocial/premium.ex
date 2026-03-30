@@ -4,7 +4,7 @@ defmodule Hybridsocial.Premium do
   """
   import Ecto.Query
   alias Hybridsocial.Repo
-  alias Hybridsocial.Premium.{Verification, Subscription}
+  alias Hybridsocial.Premium.{Verification, Subscription, CryptoAddress}
 
   @premium_features ~w(markdown extended_post_length extra_reactions scheduled_posts post_analytics hd_video)a
 
@@ -207,4 +207,38 @@ defmodule Hybridsocial.Premium do
   end
 
   def feature_available?(_identity_id, _feature), do: false
+
+  # --- Crypto Addresses ---
+
+  def list_crypto_addresses(identity_id) do
+    CryptoAddress
+    |> where([c], c.identity_id == ^identity_id and c.is_public == true)
+    |> order_by([c], asc: c.coin)
+    |> Repo.all()
+  end
+
+  def list_own_crypto_addresses(identity_id) do
+    CryptoAddress
+    |> where([c], c.identity_id == ^identity_id)
+    |> order_by([c], asc: c.coin)
+    |> Repo.all()
+  end
+
+  def set_crypto_address(identity_id, attrs) do
+    %CryptoAddress{}
+    |> CryptoAddress.changeset(Map.put(attrs, "identity_id", identity_id))
+    |> Repo.insert(
+      on_conflict: {:replace, [:address, :label, :is_public, :updated_at]},
+      conflict_target: [:identity_id, :coin]
+    )
+  end
+
+  def remove_crypto_address(identity_id, coin) do
+    CryptoAddress
+    |> where([c], c.identity_id == ^identity_id and c.coin == ^coin)
+    |> Repo.delete_all()
+    :ok
+  end
+
+  def supported_coins, do: CryptoAddress.supported_coins()
 end

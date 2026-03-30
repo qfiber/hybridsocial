@@ -10,6 +10,9 @@
   let user: Identity | null = $state(null);
   let authenticated = $state(false);
   let searchQuery = $state('');
+  let searchExpanded = $state(false);
+  let searchInputEl: HTMLInputElement | undefined = $state();
+  let searchHoverTimer: ReturnType<typeof setTimeout> | null = null;
   let notifCount = $state(0);
 
   currentUser.subscribe((v) => (user = v));
@@ -21,8 +24,42 @@
     if (searchQuery.trim()) {
       const q = searchQuery.trim();
       searchQuery = '';
+      searchExpanded = false;
       goto(`/explore?q=${encodeURIComponent(q)}`);
     }
+  }
+
+  function expandSearch() {
+    searchExpanded = true;
+    setTimeout(() => searchInputEl?.focus(), 50);
+  }
+
+  function collapseSearch() {
+    if (!searchQuery.trim()) {
+      searchExpanded = false;
+    }
+  }
+
+  let searchCloseTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleSearchHoverOut() {
+    if (searchHoverTimer) {
+      clearTimeout(searchHoverTimer);
+      searchHoverTimer = null;
+    }
+    if (searchExpanded && !searchQuery.trim()) {
+      searchCloseTimer = setTimeout(() => {
+        searchExpanded = false;
+      }, 100);
+    }
+  }
+
+  function handleSearchHoverIn() {
+    if (searchCloseTimer) {
+      clearTimeout(searchCloseTimer);
+      searchCloseTimer = null;
+    }
+    searchHoverTimer = setTimeout(expandSearch, 200);
   }
 
   async function handleLogout() {
@@ -54,26 +91,39 @@
         <span class="header-logo-text">HybridSocial</span>
       </a>
 
-      <nav class="header-nav" aria-label="Main navigation">
-        <a href="/explore" class="header-nav-link">Explore</a>
-        <a href="/tags/trending" class="header-nav-link">Trends</a>
-      </nav>
     </div>
 
     <!-- Search -->
-    <form class="header-search" onsubmit={handleSearch}>
-      <svg class="search-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <circle cx="9" cy="9" r="7" />
-        <line x1="14" y1="14" x2="19" y2="19" />
-      </svg>
-      <input
-        type="search"
-        bind:value={searchQuery}
-        placeholder="Search HybridSocial..."
-        class="search-input"
-        aria-label="Search"
-      />
-    </form>
+    <div
+      class="header-search-wrap"
+      class:search-expanded={searchExpanded}
+      onmouseenter={handleSearchHoverIn}
+      onmouseleave={handleSearchHoverOut}
+    >
+      {#if searchExpanded}
+        <form class="header-search" onsubmit={handleSearch}>
+          <span class="material-symbols-outlined search-form-icon">search</span>
+          <input
+            bind:this={searchInputEl}
+            type="search"
+            bind:value={searchQuery}
+            placeholder="Search..."
+            class="search-input"
+            aria-label="Search"
+            onblur={collapseSearch}
+          />
+        </form>
+      {:else}
+        <button
+          type="button"
+          class="header-icon-btn search-toggle-btn"
+          onclick={expandSearch}
+          aria-label="Search"
+        >
+          <span class="material-symbols-outlined">search</span>
+        </button>
+      {/if}
+    </div>
 
     <!-- Actions -->
     <div class="header-actions">
@@ -102,7 +152,7 @@
           {#snippet trigger()}
             <button class="avatar-btn" type="button" aria-label="Account menu">
               <span class="avatar-ring">
-                <Avatar src={user.avatar_url} name={user.display_name || user.handle} size="sm" />
+                <Avatar src={user!.avatar_url} name={user!.display_name || user!.handle} size="sm" />
               </span>
             </button>
           {/snippet}
@@ -171,61 +221,55 @@
     letter-spacing: -0.02em;
   }
 
-  .header-nav {
+  /* --- Search --- */
+  .header-search-wrap {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: var(--space-1);
   }
 
-  .header-nav-link {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--space-2) var(--space-3);
-    font-family: var(--font-body);
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-on-surface-variant);
-    text-decoration: none;
-    border-radius: var(--radius-full);
-    transition: background var(--transition-fast), color var(--transition-fast);
+  .search-toggle-btn .material-symbols-outlined {
+    font-size: 22px;
   }
 
-  .header-nav-link:hover {
-    background: var(--color-surface-container-low);
-    color: var(--color-on-surface);
-    text-decoration: none;
-  }
-
-  /* --- Search --- */
   .header-search {
-    flex: 1;
-    max-width: 420px;
+    display: flex;
+    align-items: center;
     position: relative;
+    animation: search-expand 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .search-icon {
+  @keyframes search-expand {
+    from {
+      width: 40px;
+      opacity: 0;
+    }
+    to {
+      width: 260px;
+      opacity: 1;
+    }
+  }
+
+  .search-form-icon {
     position: absolute;
-    inset-inline-start: var(--space-4);
-    top: 50%;
-    transform: translateY(-50%);
+    inset-inline-start: 12px;
+    font-size: 20px;
     color: var(--color-text-tertiary);
     pointer-events: none;
   }
 
   .search-input {
-    width: 100%;
+    width: 260px;
     height: 40px;
     padding: var(--space-2) var(--space-4);
-    padding-inline-start: var(--space-10);
+    padding-inline-start: 40px;
     border: none;
     border-radius: var(--radius-full);
     font-family: var(--font-body);
     font-size: var(--text-sm);
     background: var(--color-surface-container-high);
     color: var(--color-on-surface);
-    transition:
-      background var(--transition-fast),
-      box-shadow var(--transition-fast);
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
   }
 
   .search-input::placeholder {
@@ -254,9 +298,12 @@
     justify-content: center;
     width: 40px;
     height: 40px;
+    border: none;
+    background: none;
     border-radius: var(--radius-full);
     color: var(--color-on-surface-variant);
     text-decoration: none;
+    cursor: pointer;
     transition: background var(--transition-fast), color var(--transition-fast);
   }
 
@@ -307,12 +354,6 @@
   }
 
   /* --- Responsive --- */
-  @media (max-width: 1024px) {
-    .header-nav {
-      display: none;
-    }
-  }
-
   @media (max-width: 768px) {
     .header-inner {
       padding: 0 var(--space-3);
@@ -323,12 +364,13 @@
       display: none;
     }
 
-    .header-search {
-      max-width: none;
+    .search-input {
+      width: 180px;
     }
 
-    .header-nav {
-      display: none;
+    @keyframes search-expand {
+      from { width: 40px; opacity: 0; }
+      to { width: 180px; opacity: 1; }
     }
   }
 </style>

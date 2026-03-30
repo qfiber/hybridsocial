@@ -542,7 +542,7 @@ defmodule Hybridsocial.Moderation do
   defp reverse_moderation_action(%Appeal{action_type: "suspension", identity_id: identity_id}) do
     case Repo.get(Identity, identity_id) do
       nil -> {:ok, :no_op}
-      identity -> identity |> Identity.unsuspend_changeset() |> Repo.update()
+      identity -> Hybridsocial.Accounts.unsuspend_identity(identity)
     end
   end
 
@@ -704,7 +704,7 @@ defmodule Hybridsocial.Moderation do
         {:ok, :no_op}
 
       identity ->
-        case identity |> Identity.suspend_changeset() |> Repo.update() do
+        case Hybridsocial.Accounts.suspend_identity(identity) do
           {:ok, updated} ->
             log(admin_id, "account.suspended", "identity", identity_id, %{
               source: "moderation_queue"

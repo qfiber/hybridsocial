@@ -26,7 +26,7 @@
     userId = u?.id ?? '';
   });
 
-  let conversationId = $derived(page.params.id);
+  let conversationId = $derived(page.params.id!);
 
   let otherParticipants = $derived(
     conversation?.participants.filter((p) => p.id !== userId) ?? []

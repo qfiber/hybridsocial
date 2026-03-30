@@ -35,7 +35,7 @@ defmodule Hybridsocial.Promotions do
       price_cents: promotion_price_cents(),
       duration_days: promotion_duration_days(),
       enabled: promotions_enabled?(),
-      currency: "USD"
+      currency: currency()
     }
   end
 
@@ -52,7 +52,7 @@ defmodule Hybridsocial.Promotions do
         |> Promotion.changeset(%{
           identity_id: identity_id,
           amount_cents: promotion_price_cents(),
-          currency: "USD",
+          currency: currency(),
           duration_days: promotion_duration_days(),
           status: "pending"
         })
@@ -100,10 +100,10 @@ defmodule Hybridsocial.Promotions do
       [p],
       p.identity_id == ^identity_id and
         p.status == "active" and
-        p.expires_at > ^now and
+        (is_nil(p.expires_at) or p.expires_at > ^now) and
         is_nil(p.deleted_at)
     )
-    |> order_by([p], desc: p.expires_at)
+    |> order_by([p], desc: p.inserted_at)
     |> limit(1)
     |> Repo.one()
   end
@@ -117,13 +117,13 @@ defmodule Hybridsocial.Promotions do
       [p],
       p.identity_id == ^identity_id and
         p.status == "active" and
-        p.expires_at > ^now and
+        (is_nil(p.expires_at) or p.expires_at > ^now) and
         is_nil(p.deleted_at)
     )
     |> Repo.exists?()
   end
 
-  @doc "Get all currently promoted users (for the 'Who to follow' sidebar)."
+  @doc "Get all currently promoted users for the sidebar."
   def get_promoted_users(opts \\ []) do
     now = DateTime.utc_now()
     limit = opts[:limit] || promotion_max_active()
@@ -134,7 +134,7 @@ defmodule Hybridsocial.Promotions do
       |> where(
         [p],
         p.status == "active" and
-          p.expires_at > ^now and
+          (is_nil(p.expires_at) or p.expires_at > ^now) and
           is_nil(p.deleted_at)
       )
       |> order_by(fragment("RANDOM()"))
@@ -185,15 +185,100 @@ defmodule Hybridsocial.Promotions do
     |> Repo.preload(:identity)
   end
 
+  @doc "Check if a real payment gateway is configured (not noop)."
+  def payment_configured? do
+    Hybridsocial.Payments.Resolver.impl() != Hybridsocial.Payments.Noop
+  end
+
+  @doc "Get pricing — includes payment_configured flag."
+  def currency do
+    Hybridsocial.Config.get("subscription_currency", "USD")
+  end
+
+  def get_full_pricing do
+    %{
+      price_cents: promotion_price_cents(),
+      duration_days: promotion_duration_days(),
+      max_duration_days: 90,
+      enabled: promotions_enabled?(),
+      payment_configured: payment_configured?(),
+      currency: currency()
+    }
+  end
+
+  # ---- Admin functions ----
+
+  @doc "Admin: manually promote a user (free, optionally unlimited)."
+  def admin_promote(identity_id, opts \\ []) do
+    duration_days = Keyword.get(opts, :duration_days, 0)  # 0 = unlimited
+
+    %Promotion{}
+    |> Promotion.changeset(%{
+      identity_id: identity_id,
+      amount_cents: 0,
+      currency: currency(),
+      duration_days: duration_days,
+      payment_provider: "admin",
+      status: "pending"
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, promo} -> activate_promotion(promo.id)
+      error -> error
+    end
+  end
+
+  @doc "Admin: cancel a promotion."
+  def admin_cancel_promotion(promotion_id) do
+    case get_promotion(promotion_id) do
+      nil -> {:error, :not_found}
+      promo ->
+        promo
+        |> Ecto.Changeset.change(status: "cancelled")
+        |> Repo.update()
+    end
+  end
+
   @doc "Expire promotions that are past their expiry date."
   def expire_promotions do
     now = DateTime.utc_now()
 
     {count, _} =
       Promotion
-      |> where([p], p.status == "active" and p.expires_at <= ^now)
+      |> where([p], p.status == "active" and not is_nil(p.expires_at) and p.expires_at <= ^now)
       |> Repo.update_all(set: [status: "expired", updated_at: now])
 
     {:ok, count}
+  end
+
+  @doc "Create a user promotion with duration validation (max 90 days)."
+  def create_promotion_with_duration(identity_id, duration_days) do
+    cond do
+      not promotions_enabled?() ->
+        {:error, :promotions_disabled}
+
+      not payment_configured?() ->
+        {:error, :payment_not_configured}
+
+      has_active_promotion?(identity_id) ->
+        {:error, :already_promoted}
+
+      duration_days < 1 or duration_days > 90 ->
+        {:error, :invalid_duration}
+
+      true ->
+        price = promotion_price_cents() * div(duration_days, promotion_duration_days())
+        price = max(price, promotion_price_cents())
+
+        %Promotion{}
+        |> Promotion.changeset(%{
+          identity_id: identity_id,
+          amount_cents: price,
+          currency: currency(),
+          duration_days: duration_days,
+          status: "pending"
+        })
+        |> Repo.insert()
+    end
   end
 end

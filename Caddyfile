@@ -1,0 +1,64 @@
+{$DOMAIN:localhost} {
+	# Frontend (SvelteKit)
+	handle /api/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /.well-known/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /nodeinfo/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /inbox {
+		reverse_proxy backend:4000
+	}
+
+	handle /users/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /oauth/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /media/* {
+		reverse_proxy backend:4000
+	}
+
+	# WebSocket streaming
+	handle /api/v1/streaming/* {
+		reverse_proxy backend:4000 {
+			transport http {
+				read_timeout 0
+			}
+		}
+	}
+
+	# Everything else goes to frontend
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	# Security headers
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	# Compression
+	encode gzip zstd
+
+	# Logging
+	log {
+		output file /data/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

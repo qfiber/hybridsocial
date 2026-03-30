@@ -5,7 +5,7 @@ defmodule Hybridsocial.Media do
   import Ecto.Query
 
   alias Hybridsocial.Repo
-  alias Hybridsocial.Media.{MediaFile, Storage, Validator, Hash}
+  alias Hybridsocial.Media.{MediaFile, Storage, Validator, Hash, Filter}
 
   @doc """
   Uploads a file: validates magic bytes, validates size, stores to disk, creates DB record.
@@ -18,7 +18,13 @@ defmodule Hybridsocial.Media do
          :ok <- Validator.validate_file_size(file_size, content_type),
          :ok <- Hash.check_upload(path),
          :ok <- Validator.strip_metadata(path),
-         {:ok, storage_path} <- Storage.store(%{upload | content_type: content_type}, identity_id) do
+         {:ok, filtered} <-
+           Filter.filter(%{path: path, filename: filename, content_type: content_type}),
+         {:ok, storage_path} <-
+           Storage.store(
+             %{upload | content_type: content_type, filename: filtered.filename},
+             identity_id
+           ) do
       attrs = %{
         identity_id: identity_id,
         content_type: content_type,

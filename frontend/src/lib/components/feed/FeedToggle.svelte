@@ -1,5 +1,5 @@
 <script lang="ts">
-  export type FeedTab = 'latest' | 'foryou' | 'trending';
+  export type FeedTab = 'latest' | 'foryou' | 'top';
 
   let {
     active = 'latest',
@@ -12,7 +12,7 @@
   const tabs: { id: FeedTab; label: string }[] = [
     { id: 'latest', label: 'Latest' },
     { id: 'foryou', label: 'For You' },
-    { id: 'trending', label: 'Trending' },
+    { id: 'top', label: 'Top' },
   ];
 
   let activeIndex = $derived(tabs.findIndex(t => t.id === active));

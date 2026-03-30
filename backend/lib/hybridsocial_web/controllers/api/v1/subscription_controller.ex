@@ -5,30 +5,46 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
 
   # GET /api/v1/subscriptions/plans
   def plans(conn, _params) do
-    plans = [
-      %{
-        id: "free",
-        name: "Free",
-        price: 0,
-        features: ["basic_posting", "follows", "messaging"]
-      },
-      %{
-        id: "premium",
-        name: "Premium",
-        price: 999,
-        currency: "USD",
-        features: [
-          "markdown",
-          "extended_post_length",
-          "extra_reactions",
-          "scheduled_posts",
-          "post_analytics",
-          "hd_video"
-        ]
-      }
-    ]
+    alias Hybridsocial.Premium.TierLimits
 
-    conn |> put_status(:ok) |> json(%{plans: plans})
+    tiers_enabled = TierLimits.enabled?()
+    payment_configured = TierLimits.payment_configured?()
+    all_tiers = TierLimits.all_tier_configs()
+
+    tier_names = %{
+      "free" => "Free",
+      "verified_starter" => "Starter",
+      "verified_creator" => "Creator",
+      "verified_pro" => "Pro"
+    }
+
+    tier_prices = %{
+      "free" => 0,
+      "verified_starter" => Hybridsocial.Config.get("tier_verified_starter_price", 499),
+      "verified_creator" => Hybridsocial.Config.get("tier_verified_creator_price", 999),
+      "verified_pro" => Hybridsocial.Config.get("tier_verified_pro_price", 1999)
+    }
+
+    plans =
+      TierLimits.tiers()
+      |> Enum.map(fn tier ->
+        limits = all_tiers[tier]
+        %{
+          id: tier,
+          name: tier_names[tier] || tier,
+          price: tier_prices[tier] || 0,
+          currency: Hybridsocial.Config.get("subscription_currency", "USD"),
+          limits: limits
+        }
+      end)
+
+    conn
+    |> put_status(:ok)
+    |> json(%{
+      plans: plans,
+      tiers_enabled: tiers_enabled,
+      payment_configured: payment_configured
+    })
   end
 
   # POST /api/v1/subscriptions

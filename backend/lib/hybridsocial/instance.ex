@@ -1,5 +1,5 @@
 defmodule Hybridsocial.Instance do
-  @moduledoc "Instance info — compatible with Mastodon, Pleroma, and Misskey client APIs."
+  @moduledoc "Instance info — compatible with Mastodon and Fediverse client APIs."
   import Ecto.Query
   alias Hybridsocial.Repo
   alias Hybridsocial.Config
@@ -38,7 +38,7 @@ defmodule Hybridsocial.Instance do
     reg_mode = Config.get("registration_mode", "open")
 
     %{
-      # === Shared (Mastodon + Pleroma) ===
+      # === Standard instance fields (Fediverse-compatible) ===
       uri: host,
       title: Config.get("instance_name", "HybridSocial"),
       short_description:
@@ -85,7 +85,7 @@ defmodule Hybridsocial.Instance do
       # === Mastodon-specific ===
       # (Mastodon clients look for these)
 
-      # === Pleroma-specific ===
+      # === Extended fields (Fediverse client compatibility) ===
       max_toot_chars: max_chars,
       max_media_attachments: max_media,
       description_limit: max_chars,
@@ -100,6 +100,9 @@ defmodule Hybridsocial.Instance do
         min_expiration: Config.get("min_poll_expiration", 300),
         max_expiration: Config.get("max_poll_expiration", 2_629_746)
       },
+      # NOTE: The "pleroma" key and "pleroma_*" feature flags are required for
+      # Fediverse client compatibility. Clients like Soapbox, Tusky, and Ice Cubes
+      # check these fields to enable features. Do NOT remove or rename them.
       pleroma: %{
         metadata: %{
           account_activation_required: Config.get("require_email_confirmation", true),
@@ -125,11 +128,7 @@ defmodule Hybridsocial.Instance do
           },
           post_formats: ["text/plain", "text/markdown"],
           privileged_staff: true,
-          restrict_unauthenticated: %{
-            activities: %{local: false, remote: true},
-            profiles: %{local: false, remote: true},
-            timelines: %{local: false, federated: true}
-          }
+          restrict_unauthenticated: restrict_unauthenticated_config()
         },
         stats: %{
           mau: active_users_count(30)
@@ -348,5 +347,32 @@ defmodule Hybridsocial.Instance do
 
     from(u in "users", where: u.last_login_at > ^cutoff, select: count(u.identity_id))
     |> Repo.one() || 0
+  end
+
+  defp restrict_unauthenticated_config do
+    access = Config.get("public_timeline_access", "all")
+
+    case access do
+      "none" ->
+        %{
+          profiles: %{local: true, remote: true},
+          activities: %{local: true, remote: true},
+          timelines: %{local: true, federated: true}
+        }
+
+      "local" ->
+        %{
+          profiles: %{local: false, remote: true},
+          activities: %{local: false, remote: true},
+          timelines: %{local: false, federated: true}
+        }
+
+      _ ->
+        %{
+          profiles: %{local: false, remote: false},
+          activities: %{local: false, remote: false},
+          timelines: %{local: false, federated: false}
+        }
+    end
   end
 end

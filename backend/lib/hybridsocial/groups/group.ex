@@ -14,16 +14,21 @@ defmodule Hybridsocial.Groups.Group do
       values: [:open, :screening, :approval, :invite_only],
       default: :open
 
-    field :ap_actor_url, :string
-    field :public_key, :string
-    field :private_key, :string
     field :avatar_url, :string
     field :header_url, :string
     field :member_count, :integer, default: 0
     field :post_count, :integer, default: 0
     field :deleted_at, :utc_datetime_usec
 
+    # Legacy fields kept for backwards compat during migration
+    field :ap_actor_url, :string
+    field :public_key, :string
+    field :private_key, :string
+
     belongs_to :creator, Hybridsocial.Accounts.Identity, foreign_key: :created_by
+
+    # Link to the identity system — group is now a federated actor via its identity
+    belongs_to :identity, Hybridsocial.Accounts.Identity
 
     has_many :members, Hybridsocial.Groups.GroupMember
     has_one :screening_config, Hybridsocial.Groups.GroupScreeningConfig
@@ -40,7 +45,8 @@ defmodule Hybridsocial.Groups.Group do
       :join_policy,
       :avatar_url,
       :header_url,
-      :created_by
+      :created_by,
+      :identity_id
     ])
     |> validate_required([:name, :created_by])
     |> validate_length(:name, min: 1, max: 100)
@@ -48,6 +54,8 @@ defmodule Hybridsocial.Groups.Group do
     |> validate_length(:avatar_url, max: 2048)
     |> validate_length(:header_url, max: 2048)
     |> foreign_key_constraint(:created_by)
+    |> foreign_key_constraint(:identity_id)
+    |> unique_constraint(:identity_id)
   end
 
   def update_changeset(group, attrs) do

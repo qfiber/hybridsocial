@@ -172,8 +172,8 @@ class ApiClient {
     return this.request<T>('PATCH', path, { body });
   }
 
-  delete<T>(path: string): Promise<T> {
-    return this.request<T>('DELETE', path);
+  delete<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>('DELETE', path, { body });
   }
 
   async upload<T>(path: string, file: File, fields?: Record<string, string>): Promise<T> {

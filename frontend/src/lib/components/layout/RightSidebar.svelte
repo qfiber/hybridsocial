@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { api } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
   import { getPromotedUsers, getPromotionPricing, purchasePromotion, formatPrice } from '$lib/api/promotions.js';
   import type { PromotedUser, PromotionPricing } from '$lib/api/promotions.js';
@@ -16,19 +17,62 @@
   let pricing: PromotionPricing | null = $state(null);
   let showPromoModal = $state(false);
 
-  let allSuggestions = $derived([
+  interface NewUser {
+    id: string;
+    handle: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    bio: string | null;
+    joined_at: string;
+  }
+  let newUsers: NewUser[] = $state([]);
+
+  let allPool = $derived([
     ...promotedUsers,
     ...suggestions.filter(s => !promotedUsers.some(p => p.handle === s.handle))
   ]);
 
+  // Shuffle and rotate visible suggestions every 2 minutes
+  let shuffleTick = $state(0);
+  let rotateInterval: ReturnType<typeof setInterval> | null = null;
+
+  onMount(() => {
+    rotateInterval = setInterval(() => { shuffleTick++; }, 120_000);
+    return () => { if (rotateInterval) clearInterval(rotateInterval); };
+  });
+
+  function seededShuffle<T>(arr: T[], seed: number): T[] {
+    const copy = [...arr];
+    let s = seed;
+    for (let i = copy.length - 1; i > 0; i--) {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      const j = s % (i + 1);
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  }
+
+  let allSuggestions = $derived(seededShuffle(allPool, shuffleTick + Date.now() / 120_000 | 0).slice(0, 5));
+
+  function timeAgo(dateStr: string): string {
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
   onMount(async () => {
     try {
-      const [users, pricingData] = await Promise.all([
+      const [users, pricingData, newUsersData] = await Promise.all([
         getPromotedUsers().catch(() => [] as PromotedUser[]),
-        getPromotionPricing().catch(() => null)
+        getPromotionPricing().catch(() => null),
+        api.get<NewUser[]>('/api/v1/directory/new').catch(() => [] as NewUser[]),
       ]);
       promotedUsers = users;
       pricing = pricingData;
+      newUsers = newUsersData;
     } catch {
       // Sidebar is non-critical
     }
@@ -71,11 +115,12 @@
   </section>
 
   <section class="sidebar-section">
-    <h3 class="section-title">Who to follow</h3>
+    <h3 class="section-title">Recommended Accounts</h3>
     {#if allSuggestions.length > 0}
-      <ul class="suggestions-list">
-        {#each allSuggestions as person (person.handle)}
-          <li>
+      {#key shuffleTick}
+      <ul class="suggestions-list suggestions-enter">
+        {#each allSuggestions as person, i (person.handle)}
+          <li class="suggestion-stagger" style="animation-delay: {i * 60}ms">
             <a href="/@{person.handle}" class="suggestion-item">
               <div class="suggestion-avatar">
                 {#if person.avatar_url}
@@ -97,12 +142,39 @@
           </li>
         {/each}
       </ul>
+      {/key}
     {:else}
       <p class="empty-text">No suggestions right now.</p>
     {/if}
   </section>
 
-  {#if pricing?.enabled}
+  {#if newUsers.length > 0}
+    <section class="sidebar-section">
+      <h3 class="section-title">New Members</h3>
+      <ul class="new-users-list">
+        {#each newUsers as user (user.id)}
+          <li>
+            <a href="/@{user.handle}" class="new-user-item">
+              <div class="new-user-avatar">
+                {#if user.avatar_url}
+                  <img src={user.avatar_url} alt="" class="new-user-img" />
+                {:else}
+                  <span class="new-user-initial">{(user.display_name || user.handle).charAt(0).toUpperCase()}</span>
+                {/if}
+              </div>
+              <div class="new-user-info">
+                <span class="new-user-name">{user.display_name || user.handle}</span>
+                <span class="new-user-meta">@{user.handle} &middot; {timeAgo(user.joined_at)}</span>
+              </div>
+              <span class="new-user-badge">New</span>
+            </a>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  {/if}
+
+  {#if pricing?.enabled && pricing?.payment_configured}
     <section class="sidebar-section promo-cta">
       <div class="promo-cta-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -111,7 +183,7 @@
       </div>
       <h4 class="promo-cta-title">Promote your profile</h4>
       <p class="promo-cta-text">
-        Get featured in "Who to follow" for {pricing.duration_days} days.
+        Get featured in "Recommended Accounts" for {pricing.duration_days} days.
       </p>
       <button class="promo-cta-btn" onclick={() => showPromoModal = true}>
         Promote for {formatPrice(pricing.price_cents, pricing.currency)}
@@ -148,7 +220,7 @@
 
       <h3 id="promo-modal-title" class="modal-title">Promote Your Profile</h3>
       <p class="modal-desc">
-        Your profile will appear in the "Who to follow" section for all users
+        Your profile will appear in the "Recommended Accounts" section for all users
         on this server for <strong>{pricing.duration_days} days</strong>.
       </p>
 
@@ -160,7 +232,7 @@
       <ul class="modal-features">
         <li>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Featured in "Who to follow" sidebar
+          Featured in "Recommended Accounts" sidebar
         </li>
         <li>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -217,6 +289,30 @@
   .suggestions-list {
     display: flex;
     flex-direction: column;
+  }
+
+  .suggestions-enter {
+    animation: suggestions-fade-in 0.3s ease;
+  }
+
+  @keyframes suggestions-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .suggestion-stagger {
+    animation: suggestion-slide-in 0.3s ease both;
+  }
+
+  @keyframes suggestion-slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
   }
 
   .trending-item {
@@ -325,6 +421,85 @@
   .empty-text {
     font-size: var(--text-sm);
     color: var(--color-text-tertiary);
+  }
+
+  /* ---- New Members ---- */
+  .new-users-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .new-user-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    margin-inline: calc(-1 * var(--space-3));
+    text-decoration: none;
+    color: var(--color-on-surface);
+    border-radius: var(--radius-lg);
+    transition: background var(--transition-fast);
+  }
+
+  .new-user-item:hover {
+    text-decoration: none;
+    background: var(--color-surface-container-low);
+  }
+
+  .new-user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-full);
+    background: var(--color-secondary-container);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .new-user-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .new-user-initial {
+    font-weight: 600;
+    color: var(--color-primary);
+    font-size: var(--text-sm);
+  }
+
+  .new-user-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .new-user-name {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .new-user-meta {
+    font-size: var(--text-xs);
+    color: var(--color-on-surface-variant);
+  }
+
+  .new-user-badge {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-success, #22c55e);
+    background: rgba(34, 197, 94, 0.1);
+    padding: 2px 6px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
   }
 
   /* ---- Promote CTA ---- */

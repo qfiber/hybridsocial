@@ -20,7 +20,7 @@
   let followLoading: Set<string> = $state(new Set());
 
   const unsub = page.subscribe(($page) => {
-    handle = $page.params.handle;
+    handle = $page.params.handle!;
   });
 
   async function loadFollowing(reset = false) {

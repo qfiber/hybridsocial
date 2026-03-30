@@ -3,8 +3,11 @@
   import { browser } from '$app/environment';
   import { get } from 'svelte/store';
   import AppLayout from '$lib/components/layout/AppLayout.svelte';
+  import ConnectionBanner from '$lib/components/ui/ConnectionBanner.svelte';
+  import OnboardingModal from '$lib/components/ui/OnboardingModal.svelte';
   import { authStore, isLoggedIn } from '$lib/stores/auth.js';
   import { connectNotificationStream, disconnectNotificationStream } from '$lib/stores/notifications.js';
+  import { startHealthCheck, stopHealthCheck } from '$lib/stores/health.js';
   import { cookieConsent, hasConsented } from '$lib/stores/consent.js';
   import CookieBanner from '$lib/components/ui/CookieBanner.svelte';
   import { api } from '$lib/api/client.js';
@@ -14,6 +17,7 @@
   let { children } = $props();
   let loggedIn = $state(false);
   let consented = $state(hasConsented());
+  let showOnboarding = $state(false);
 
   cookieConsent.subscribe((v) => (consented = v));
   const unsub = isLoggedIn.subscribe((v) => (loggedIn = v));
@@ -32,13 +36,21 @@
     if (token) {
       const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       connectNotificationStream(apiBase, token);
-
-      // Subscribe to web push notifications
       subscribeToPush(token);
+    }
+
+    // Start health check polling
+    startHealthCheck();
+
+    // Show onboarding for new users (no display_name set yet)
+    const authState = get(authStore);
+    if (authState.user && !authState.user.display_name && !localStorage.getItem('hs_onboarded')) {
+      showOnboarding = true;
     }
 
     return () => {
       disconnectNotificationStream();
+      stopHealthCheck();
       unsub();
     };
   });
@@ -57,7 +69,11 @@
 {#if !consented}
   <CookieBanner onaccept={() => consented = true} />
 {:else}
+  <ConnectionBanner />
   <AppLayout>
     {@render children()}
   </AppLayout>
+  {#if showOnboarding}
+    <OnboardingModal onclose={() => { showOnboarding = false; localStorage.setItem('hs_onboarded', '1'); }} />
+  {/if}
 {/if}

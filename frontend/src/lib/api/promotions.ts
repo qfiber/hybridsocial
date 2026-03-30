@@ -3,7 +3,9 @@ import { api } from './client.js';
 export interface PromotionPricing {
   price_cents: number;
   duration_days: number;
+  max_duration_days: number;
   enabled: boolean;
+  payment_configured: boolean;
   currency: string;
 }
 
@@ -27,11 +29,11 @@ export interface PromotedUser {
 }
 
 export function getPromotionPricing(): Promise<PromotionPricing> {
-  return api.get('/api/v1/promotions/pricing').then((r: { data: PromotionPricing }) => r.data);
+  return api.get<{ data: PromotionPricing }>('/api/v1/promotions/pricing').then((r) => r.data);
 }
 
 export function getPromotedUsers(): Promise<PromotedUser[]> {
-  return api.get('/api/v1/promotions/promoted').then((r: { data: PromotedUser[] }) => r.data);
+  return api.get<{ data: PromotedUser[] }>('/api/v1/promotions/promoted').then((r) => r.data);
 }
 
 export function purchasePromotion(): Promise<{ data: Promotion; message: string }> {
@@ -43,7 +45,7 @@ export function getMyPromotion(): Promise<{ data: Promotion | null; pricing?: Pr
 }
 
 export function getPromotionHistory(): Promise<Promotion[]> {
-  return api.get('/api/v1/promotions/history').then((r: { data: Promotion[] }) => r.data);
+  return api.get<{ data: Promotion[] }>('/api/v1/promotions/history').then((r) => r.data);
 }
 
 export function formatPrice(cents: number, currency: string = 'USD'): string {

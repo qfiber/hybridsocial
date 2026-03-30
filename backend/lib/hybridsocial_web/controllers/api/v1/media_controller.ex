@@ -8,8 +8,23 @@ defmodule HybridsocialWeb.Api.V1.MediaController do
   Accepts multipart with `file` field and optional `alt_text`.
   """
   def create(conn, %{"file" => %Plug.Upload{} = upload} = params) do
-    identity_id = conn.assigns.current_identity.id
+    identity = conn.assigns.current_identity
+    identity_id = identity.id
     alt_text = params["alt_text"]
+    limits = Hybridsocial.Premium.TierLimits.limits_for(identity)
+
+    # Enforce tier-based file size limits
+    file_size = File.stat!(upload.path).size
+    content_type = upload.content_type || ""
+    is_video = String.starts_with?(content_type, "video/")
+    max_bytes = if is_video, do: (limits[:video_size_mb] || 40) * 1_048_576, else: (limits[:image_size_mb] || 10) * 1_048_576
+
+    if file_size > max_bytes do
+      max_mb = if is_video, do: limits[:video_size_mb] || 40, else: limits[:image_size_mb] || 10
+      conn
+      |> put_status(:request_entity_too_large)
+      |> json(%{error: "media.file_too_large", max_mb: max_mb})
+    else
 
     case Media.upload(identity_id, upload, alt_text) do
       {:ok, media} ->
@@ -36,6 +51,8 @@ defmodule HybridsocialWeb.Api.V1.MediaController do
         conn
         |> put_status(:unprocessable_entity)
         |> json(%{error: "media.upload_failed"})
+    end
+
     end
   end
 

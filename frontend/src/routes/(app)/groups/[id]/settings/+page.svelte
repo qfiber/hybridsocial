@@ -53,7 +53,7 @@
   let inviting = $state(false);
   let inviteTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  let groupId = $derived(page.params.id);
+  let groupId = $derived(page.params.id!);
 
   const tabs = [
     { id: 'general', label: 'General' },

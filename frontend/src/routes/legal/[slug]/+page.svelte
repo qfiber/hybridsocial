@@ -16,7 +16,7 @@
 
   onMount(async () => {
     try {
-      const promises: Promise<unknown>[] = [getPublicSitePage(slug)];
+      const promises: Promise<unknown>[] = [getPublicSitePage(slug!)];
       if (slug === 'about') {
         promises.push(getInstanceInfo());
       }

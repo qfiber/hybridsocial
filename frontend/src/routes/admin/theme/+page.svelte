@@ -158,7 +158,7 @@
   }
 
   function setColorValue(key: keyof AdminThemeConfig, value: string) {
-    (theme as Record<string, unknown>)[key] = value;
+    (theme as unknown as Record<string, unknown>)[key] = value;
     theme = { ...theme };
   }
 

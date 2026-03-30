@@ -14,6 +14,7 @@
   } = $props();
 
   let showDropdown = $state(false);
+  let dropdownUpward = $state(false);
   let showDeleteConfirm = $state(false);
   let deleteReason = $state('');
   let actionLoading = $state(false);
@@ -25,6 +26,11 @@
   function toggleDropdown(e: MouseEvent) {
     e.stopPropagation();
     showDropdown = !showDropdown;
+    if (showDropdown) {
+      const btn = e.currentTarget as HTMLElement;
+      const rect = btn.getBoundingClientRect();
+      dropdownUpward = window.innerHeight - rect.bottom < 280;
+    }
   }
 
   function closeDropdown() {
@@ -121,7 +127,7 @@
   </button>
 
   {#if showDropdown}
-    <div class="admin-dropdown" role="menu" onclick={(e) => e.stopPropagation()}>
+    <div class="admin-dropdown" class:admin-dropdown-upward={dropdownUpward} role="menu" onclick={(e) => e.stopPropagation()}>
       <button type="button" class="admin-dropdown-item admin-dropdown-danger" role="menuitem" onclick={openDeleteConfirm}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -234,31 +240,52 @@
     min-width: 200px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-    padding: var(--space-1);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    padding: 6px;
     z-index: var(--z-dropdown, 50);
+    animation: admin-menu-down 0.2s ease;
+    transform-origin: top right;
+  }
+
+  @keyframes admin-menu-down {
+    from { opacity: 0; transform: scaleY(0.6) translateY(-4px); }
+    to { opacity: 1; transform: scaleY(1) translateY(0); }
+  }
+
+  .admin-dropdown-upward {
+    inset-block-start: auto;
+    inset-block-end: 100%;
+    margin-block-start: 0;
+    margin-block-end: var(--space-1);
+    animation: admin-menu-up 0.2s ease;
+    transform-origin: bottom right;
+  }
+
+  @keyframes admin-menu-up {
+    from { opacity: 0; transform: scaleY(0.6) translateY(4px); }
+    to { opacity: 1; transform: scaleY(1) translateY(0); }
   }
 
   .admin-dropdown-item {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
+    gap: 10px;
     width: 100%;
-    padding: var(--space-2) var(--space-3);
+    padding: 10px 14px;
     background: transparent;
     border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
+    border-radius: 10px;
+    font-size: 0.875rem;
     color: var(--color-text);
     cursor: pointer;
     text-align: start;
-    transition: background-color var(--transition-fast);
+    transition: background-color 150ms ease;
     font-family: inherit;
   }
 
   .admin-dropdown-item:hover {
-    background: var(--color-bg-tertiary);
+    background: var(--color-surface);
   }
 
   .admin-dropdown-danger {

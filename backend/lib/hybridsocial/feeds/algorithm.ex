@@ -87,6 +87,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       Post
       |> where([p], p.identity_id in ^followed_ids)
       |> where([p], is_nil(p.deleted_at))
+      |> where([p], is_nil(p.parent_id))
       |> where([p], p.inserted_at >= ^cutoff)
       |> maybe_max_id(Keyword.get(opts, :max_id))
       |> maybe_min_id(Keyword.get(opts, :min_id))

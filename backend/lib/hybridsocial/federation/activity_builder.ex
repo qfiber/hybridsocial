@@ -307,6 +307,8 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
     end
   end
 
+  defp build_in_reply_to(%{parent_ap_id: ap_id}) when is_binary(ap_id), do: ap_id
+
   defp build_in_reply_to(%{parent_id: nil}), do: nil
 
   defp build_in_reply_to(%{parent_id: parent_id}) when not is_nil(parent_id) do

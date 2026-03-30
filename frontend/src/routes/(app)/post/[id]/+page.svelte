@@ -4,6 +4,7 @@
   import type { Post } from '$lib/api/types.js';
   import { getPost, getPostContext } from '$lib/api/statuses.js';
   import PostCard from '$lib/components/post/PostCard.svelte';
+  import ThreadedReplies from '$lib/components/post/ThreadedReplies.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
   let post = $state<Post | null>(null);
@@ -12,9 +13,9 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  let postId = $derived(page.params.id);
+  let postId = $derived(page.params.id!);
 
-  onMount(async () => {
+  async function loadThread() {
     try {
       const [p, context] = await Promise.all([
         getPost(postId),
@@ -28,6 +29,45 @@
     } finally {
       loading = false;
     }
+  }
+
+  onMount(() => {
+    loadThread();
+
+    // Listen for new replies (optimistic)
+    function handleNewPost(e: Event) {
+      const newPost = (e as CustomEvent<Post>).detail;
+      if (!newPost) return;
+
+      const isReplyToThisThread =
+        newPost.parent_id === postId ||
+        newPost.root_id === postId ||
+        descendants.some(d => d.id === newPost.parent_id);
+
+      if (isReplyToThisThread) {
+        if (!descendants.some(d => d.id === newPost.id)) {
+          descendants = [...descendants, newPost];
+        }
+        if (post && newPost.parent_id === postId) {
+          post.reply_count = (post.reply_count || 0) + 1;
+        }
+      }
+    }
+
+    function handlePostDeleted(e: Event) {
+      const { id } = (e as CustomEvent).detail;
+      if (id) {
+        descendants = descendants.filter(d => d.id !== id);
+      }
+    }
+
+    window.addEventListener('new-post', handleNewPost);
+    window.addEventListener('post-deleted', handlePostDeleted);
+
+    return () => {
+      window.removeEventListener('new-post', handleNewPost);
+      window.removeEventListener('post-deleted', handlePostDeleted);
+    };
   });
 
   function goBack() {
@@ -46,12 +86,8 @@
 <div class="post-detail-page">
   <div class="page-header">
     <button type="button" class="back-btn" onclick={goBack} aria-label="Go back">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <polyline points="15 18 9 12 15 6"/>
-      </svg>
-      <span>Back</span>
+      <span class="material-symbols-outlined back-icon">arrow_back</span>
     </button>
-    <h1 class="page-title">Post</h1>
   </div>
 
   {#if loading}
@@ -79,10 +115,7 @@
 
       {#if descendants.length > 0}
         <div class="thread-replies">
-          <h2 class="replies-heading">Replies</h2>
-          {#each descendants as reply (reply.id)}
-            <PostCard post={reply} />
-          {/each}
+          <ThreadedReplies {descendants} rootPostId={post.id} />
         </div>
       {/if}
     </div>
@@ -102,24 +135,21 @@
   }
 
   .page-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding-block-end: var(--space-4);
+    padding-block-end: var(--space-2);
   }
 
   .back-btn {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
+    justify-content: center;
+    width: 36px;
+    height: 36px;
     background: none;
     border: none;
     color: var(--color-text-secondary);
     cursor: pointer;
-    font-size: var(--text-sm);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-md);
-    transition: background var(--transition-fast), color var(--transition-fast);
+    border-radius: 50%;
+    transition: background 150ms ease, color 150ms ease;
   }
 
   .back-btn:hover {
@@ -127,10 +157,8 @@
     color: var(--color-text);
   }
 
-  .page-title {
-    font-size: var(--text-xl);
-    font-weight: 700;
-    color: var(--color-text);
+  .back-icon {
+    font-size: 22px;
   }
 
   .page-loading,
@@ -153,10 +181,31 @@
   .thread-ancestors {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    opacity: 0.85;
-    border-inline-start: 2px solid var(--color-border);
-    padding-inline-start: var(--space-3);
+    gap: 0;
+    position: relative;
+    padding-inline-start: 20px;
+  }
+
+  /* Vertical connector line running down the ancestor chain */
+  .thread-ancestors::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 8px;
+    top: 40px;
+    bottom: -8px;
+    width: 2px;
+    background: var(--color-border);
+  }
+
+  .thread-ancestors :global(.post-card) {
+    opacity: 0.75;
+    box-shadow: none;
+    border: 1px solid var(--color-border);
+    margin-block: 2px;
+  }
+
+  .thread-ancestors :global(.post-card:hover) {
+    opacity: 1;
   }
 
   .thread-main {
@@ -166,14 +215,5 @@
   .thread-replies {
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
-    margin-block-start: var(--space-2);
-  }
-
-  .replies-heading {
-    font-size: var(--text-base);
-    font-weight: 600;
-    color: var(--color-text);
-    padding-block: var(--space-2);
   }
 </style>

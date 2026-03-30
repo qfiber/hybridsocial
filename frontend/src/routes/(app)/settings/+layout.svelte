@@ -14,6 +14,14 @@
     { href: '/settings/notifications', label: 'Notifications', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0' },
     { href: '/settings/security', label: 'Security', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4' },
     { href: '/settings/account', label: 'Account', icon: 'M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4' },
+    { href: '/settings/filters', label: 'Content Filters', icon: 'M22 3H2l8 9.46V19l4 2v-8.54L22 3z' },
+    { href: '/settings/blocks', label: 'Blocks', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM4.93 4.93l14.14 14.14' },
+    { href: '/settings/mutes', label: 'Mutes', icon: 'M1 1l22 22M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6' },
+    { href: '/settings/follow-requests', label: 'Follow Requests', icon: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8.5 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM17 11l2 2 4-4' },
+    { href: '/settings/sessions', label: 'Sessions', icon: 'M2 3h20a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM8 21h8M12 17v4' },
+    { href: '/settings/import-export', label: 'Import / Export', icon: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3' },
+    { href: '/settings/migration', label: 'Migration', icon: 'M15 3l6 6-6 6M9 21l-6-6 6-6M21 9H14M3 15h7' },
+    { href: '/settings/donations', label: 'Donations', icon: 'M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
   ];
 
   function isActive(href: string): boolean {

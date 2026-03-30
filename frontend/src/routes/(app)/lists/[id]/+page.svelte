@@ -44,7 +44,7 @@
   let adding = $state(false);
   let addTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  let listId = $derived(page.params.id);
+  let listId = $derived(page.params.id!);
 
   onMount(async () => {
     try {
@@ -53,7 +53,7 @@
         getListTimeline(listId)
       ]);
       list = l;
-      editTitle = l.title;
+      editTitle = l.title || l.name;
       posts = timeline.data;
       postsCursor = timeline.next_cursor;
       hasMorePosts = !!timeline.next_cursor;
@@ -81,7 +81,7 @@
 
   function startEditTitle() {
     if (list) {
-      editTitle = list.title;
+      editTitle = list.title || list.name;
       editingTitle = true;
     }
   }
@@ -103,7 +103,7 @@
 
   function cancelEditTitle() {
     editingTitle = false;
-    if (list) editTitle = list.title;
+    if (list) editTitle = list.title || list.name;
   }
 
   async function handleDelete() {

@@ -92,8 +92,8 @@
   --space-16: 4rem;
 
   /* Typography */
-  --font-headline: 'Manrope', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  --font-headline: 'Manrope', 'Rubik', sans-serif;
+  --font-body: 'Manrope', 'Rubik', sans-serif;
   --font-mono: 'SF Mono', SFMono-Regular, Consolas, monospace;
   --font-sans: var(--font-body);  /* backward compat */
   --text-xs: 0.75rem;

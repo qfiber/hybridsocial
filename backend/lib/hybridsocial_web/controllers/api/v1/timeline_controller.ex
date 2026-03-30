@@ -2,7 +2,36 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Feeds
+  alias Hybridsocial.Config
+  alias HybridsocialWeb.Serializers.PostSerializer
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
+
+  # Timeline access levels:
+  # "none"      — disallow all, require login
+  # "local"     — allow local + trending, block global
+  # "all"       — allow everything
+  defp timeline_access do
+    Config.get("public_timeline_access", "all")
+  end
+
+  defp check_timeline_access(conn, level) do
+    has_user = conn.assigns[:current_identity] != nil
+    access = timeline_access()
+
+    cond do
+      has_user -> :ok
+      access == "none" -> :denied
+      access == "local" and level == :global -> :denied
+      true -> :ok
+    end
+  end
+
+  defp deny_access(conn) do
+    conn
+    |> put_status(:unauthorized)
+    |> json(%{error: "timeline.login_required", message: "You need to create an account to view this timeline."})
+    |> halt()
+  end
 
   @doc "GET /api/v1/timelines/home - Authenticated home timeline"
   def home(conn, params) do
@@ -19,11 +48,13 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
     entries = Feeds.home_timeline(identity.id, opts)
 
+    identity_id = identity.id
+
     posts =
       if Keyword.get(opts, :algorithm) do
-        Enum.map(entries, &serialize_post/1)
+        PostSerializer.serialize_many(entries, current_identity_id: identity_id)
       else
-        serialize_timeline_entries(entries)
+        serialize_timeline_entries(entries, identity_id)
       end
 
     conn
@@ -34,6 +65,10 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/public - Public timeline (optional auth)"
   def public(conn, params) do
+    case check_timeline_access(conn, :local) do
+      :denied -> deny_access(conn)
+      :ok ->
+
     viewer_id =
       case conn.assigns[:current_identity] do
         nil -> nil
@@ -49,16 +84,22 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
       )
 
     posts = Feeds.public_timeline(opts)
-    serialized = Enum.map(posts, &serialize_post/1)
+    serialized = PostSerializer.serialize_many(posts, current_identity_id: viewer_id)
 
     conn
     |> put_link_headers(serialized, "/api/v1/timelines/public")
     |> put_status(:ok)
     |> json(serialized)
+
+    end
   end
 
   @doc "GET /api/v1/timelines/tag/:hashtag - Hashtag timeline (optional auth)"
   def hashtag(conn, %{"hashtag" => hashtag} = params) do
+    case check_timeline_access(conn, :local) do
+      :denied -> deny_access(conn)
+      :ok ->
+
     viewer_id =
       case conn.assigns[:current_identity] do
         nil -> nil
@@ -70,12 +111,14 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
       |> Keyword.put(:viewer_id, viewer_id)
 
     posts = Feeds.hashtag_timeline(hashtag, opts)
-    serialized = Enum.map(posts, &serialize_post/1)
+    serialized = PostSerializer.serialize_many(posts, current_identity_id: viewer_id)
 
     conn
     |> put_link_headers(serialized, "/api/v1/timelines/tag/#{hashtag}")
     |> put_status(:ok)
     |> json(serialized)
+
+    end
   end
 
   @doc "GET /api/v1/timelines/list/:id - List timeline (authenticated)"
@@ -85,7 +128,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
     case Feeds.list_timeline(list_id, identity.id, opts) do
       {:ok, posts} ->
-        serialized = Enum.map(posts, &serialize_post/1)
+        serialized = PostSerializer.serialize_many(posts, current_identity_id: identity.id)
 
         conn
         |> put_link_headers(serialized, "/api/v1/timelines/list/#{list_id}")
@@ -106,7 +149,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
     case Feeds.group_timeline(group_id, identity.id, opts) do
       {:ok, posts} ->
-        serialized = Enum.map(posts, &serialize_post/1)
+        serialized = PostSerializer.serialize_many(posts, current_identity_id: identity.id)
 
         conn
         |> put_link_headers(serialized, "/api/v1/timelines/group/#{group_id}")
@@ -127,6 +170,10 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/global - Global timeline (optional auth)"
   def global(conn, params) do
+    case check_timeline_access(conn, :global) do
+      :denied -> deny_access(conn)
+      :ok ->
+
     viewer_id =
       case conn.assigns[:current_identity] do
         nil -> nil
@@ -141,12 +188,14 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
       )
 
     posts = Feeds.global_timeline(opts)
-    serialized = Enum.map(posts, &serialize_post/1)
+    serialized = PostSerializer.serialize_many(posts, current_identity_id: viewer_id)
 
     conn
     |> put_link_headers(serialized, "/api/v1/timelines/global")
     |> put_status(:ok)
     |> json(serialized)
+
+    end
   end
 
   @doc "GET /api/v1/timelines/streams - Video streams (reels) timeline"
@@ -156,7 +205,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
     opts = parse_pagination_params(params)
 
     posts = Hybridsocial.Social.Streams.streams_feed(viewer_id, opts)
-    serialized = Enum.map(posts, &serialize_post/1)
+    serialized = PostSerializer.serialize_many(posts, current_identity_id: viewer_id)
 
     conn
     |> put_link_headers(serialized, "/api/v1/timelines/streams")
@@ -217,10 +266,10 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   # Serialization
   # ---------------------------------------------------------------------------
 
-  defp serialize_timeline_entries(entries) do
+  defp serialize_timeline_entries(entries, identity_id) do
     Enum.map(entries, fn
       %{type: :post, data: post} ->
-        serialize_post(post)
+        PostSerializer.serialize(post, current_identity_id: identity_id)
 
       %{type: :boost, data: boost} ->
         %{
@@ -228,80 +277,13 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
           type: "boost",
           created_at: boost.inserted_at,
           account:
-            serialize_account(boost.identity, Hybridsocial.Badges.instance_badges(boost.identity)),
-          post: serialize_post(boost.post)
+            PostSerializer.serialize_account(
+              boost.identity,
+              Hybridsocial.Badges.instance_badges(boost.identity)
+            ),
+          post: PostSerializer.serialize(boost.post, current_identity_id: identity_id)
         }
     end)
   end
 
-  defp serialize_post(post) do
-    badges =
-      Hybridsocial.Badges.badges_for_post(
-        post.identity,
-        group_id: post.group_id,
-        page_id: post.page_id
-      )
-
-    # If the identity has force_sensitive enabled, override sensitive to true
-    sensitive =
-      case post.identity do
-        %{force_sensitive: true} -> true
-        _ -> post.sensitive
-      end
-
-    %{
-      id: post.id,
-      content: post.content,
-      content_html: post.content_html,
-      visibility: post.visibility,
-      sensitive: sensitive,
-      spoiler_text: post.spoiler_text,
-      reply_count: post.reply_count,
-      boost_count: post.boost_count,
-      reaction_count: post.reaction_count,
-      is_pinned: post.is_pinned,
-      created_at: post.inserted_at,
-      edited_at: post.edited_at,
-      parent_id: post.parent_id,
-      account: serialize_account(post.identity, badges)
-    }
-  end
-
-  defp serialize_account(nil, _badges), do: nil
-
-  defp serialize_account(identity, badges) do
-    domain = extract_domain(identity)
-
-    %{
-      id: identity.id,
-      handle: identity.handle,
-      display_name: identity.display_name,
-      avatar_url: identity.avatar_url,
-      header_url: identity.header_url,
-      bio: identity.bio,
-      is_bot: identity.is_bot,
-      is_locked: identity.is_locked,
-      badges: badges,
-      domain: domain,
-      created_at: identity.inserted_at
-    }
-  end
-
-  defp extract_domain(identity) do
-    local_host = URI.parse(HybridsocialWeb.Endpoint.url()).host
-
-    cond do
-      # Check handle for @user@domain format
-      identity.handle && String.contains?(identity.handle, "@") ->
-        identity.handle |> String.split("@") |> List.last()
-
-      # Check ap_actor_url for remote actors
-      identity.ap_actor_url ->
-        host = URI.parse(identity.ap_actor_url).host
-        if host == local_host, do: nil, else: host
-
-      true ->
-        nil
-    end
-  end
 end

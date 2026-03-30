@@ -11,36 +11,41 @@ defmodule Hybridsocial.Pages do
   # Page lifecycle
   # ---------------------------------------------------------------------------
 
-  @doc "Creates an organization identity + organization record."
+  @doc "Creates an organization identity + organization record as a subaccount."
   def create_page(owner_identity_id, attrs) do
-    Ecto.Multi.new()
-    |> Ecto.Multi.insert(:identity, fn _ ->
-      %Identity{}
-      |> Identity.create_changeset(%{
-        "type" => "organization",
-        "handle" => attrs["handle"],
-        "display_name" => attrs["display_name"],
-        "bio" => attrs["bio"]
-      })
-    end)
-    |> Ecto.Multi.insert(:organization, fn %{identity: identity} ->
-      %Organization{identity_id: identity.id}
-      |> Organization.changeset(%{
-        website: attrs["website"],
-        category: attrs["category"]
-      })
-      |> Ecto.Changeset.put_change(:owner_id, owner_identity_id)
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{identity: identity, organization: org}} ->
-        {:ok, %{identity | organization: org}}
+    with :ok <- Hybridsocial.Accounts.check_subaccount_limit(owner_identity_id, "organization") do
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:identity, fn _ ->
+        %Identity{}
+        |> Identity.create_changeset(%{
+          "type" => "organization",
+          "handle" => attrs["handle"],
+          "display_name" => attrs["display_name"],
+          "bio" => attrs["bio"],
+          "parent_identity_id" => owner_identity_id
+        })
+      end)
+      |> Ecto.Multi.insert(:organization, fn %{identity: identity} ->
+        %Organization{identity_id: identity.id}
+        |> Organization.changeset(%{
+          website: attrs["website"],
+          category: attrs["category"]
+        })
+        |> Ecto.Changeset.put_change(:owner_id, owner_identity_id)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{identity: identity, organization: org}} ->
+          page = %{identity | organization: org}
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_created, page})
+          {:ok, page}
 
-      {:error, :identity, changeset, _} ->
-        {:error, changeset}
+        {:error, :identity, changeset, _} ->
+          {:error, changeset}
 
-      {:error, :organization, changeset, _} ->
-        {:error, changeset}
+        {:error, :organization, changeset, _} ->
+          {:error, changeset}
+      end
     end
   end
 
@@ -63,7 +68,9 @@ defmodule Hybridsocial.Pages do
       |> Repo.transaction()
       |> case do
         {:ok, %{identity: identity, organization: org}} ->
-          {:ok, %{identity | organization: org}}
+          page = %{identity | organization: org}
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_updated, page})
+          {:ok, page}
 
         {:error, _step, changeset, _} ->
           {:error, changeset}
@@ -78,9 +85,12 @@ defmodule Hybridsocial.Pages do
   def delete_page(page_identity_id, owner_id) do
     with {:ok, identity, org} <- get_page_with_auth(page_identity_id),
          true <- org.owner_id == owner_id do
-      identity
-      |> Identity.soft_delete_changeset()
-      |> Repo.update()
+      case identity |> Identity.soft_delete_changeset() |> Repo.update() do
+        {:ok, deleted} ->
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_deleted, deleted.id})
+          {:ok, deleted}
+        error -> error
+      end
     else
       false -> {:error, :forbidden}
       {:error, reason} -> {:error, reason}
@@ -114,12 +124,11 @@ defmodule Hybridsocial.Pages do
 
   @doc "Lists all pages owned by the given identity."
   def pages_for_owner(owner_id) do
-    Organization
-    |> where([o], o.owner_id == ^owner_id)
+    Identity
+    |> where([i], i.parent_identity_id == ^owner_id and i.type == "organization" and is_nil(i.deleted_at))
+    |> order_by([i], asc: i.inserted_at)
     |> Repo.all()
-    |> Repo.preload(:identity)
-    |> Enum.map(fn org -> %{org.identity | organization: org} end)
-    |> Enum.filter(fn identity -> is_nil(identity.deleted_at) end)
+    |> Repo.preload(:organization)
   end
 
   # ---------------------------------------------------------------------------
@@ -184,14 +193,15 @@ defmodule Hybridsocial.Pages do
     |> Repo.exists?()
   end
 
-  @doc "Checks if the identity can edit the page (owner, admin, or editor)."
+  @doc "Checks if the identity can edit the page (parent owner, org owner, admin, or editor)."
   def can_edit?(page_identity_id, identity_id) do
-    case Repo.get(Organization, page_identity_id) do
+    case get_page(page_identity_id) do
       nil ->
         false
 
-      org ->
-        org.owner_id == identity_id or
+      page_identity ->
+        page_identity.parent_identity_id == identity_id or
+          page_identity.organization.owner_id == identity_id or
           has_role?(page_identity_id, identity_id, ["admin", "editor"])
     end
   end

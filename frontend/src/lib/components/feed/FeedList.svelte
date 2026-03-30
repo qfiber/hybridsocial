@@ -1,8 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import type { Post } from '$lib/api/types.js';
+  import type { Post, FeedEntry, BoostEntry } from '$lib/api/types.js';
   import PostCard from '$lib/components/post/PostCard.svelte';
   import SkeletonPost from './SkeletonPost.svelte';
+
+  function isBoostEntry(entry: FeedEntry): entry is BoostEntry {
+    return entry.type === 'boost';
+  }
 
   let {
     posts = [],
@@ -12,7 +16,7 @@
     emptyMessage = 'No posts yet',
     onloadmore,
   }: {
-    posts?: Post[];
+    posts?: FeedEntry[];
     loading?: boolean;
     hasMore?: boolean;
     compact?: boolean;
@@ -24,12 +28,15 @@
   let newPostsCount = $state(0);
   let showStagger = $state(true);
   let newIds = $state(new Set<string>());
+  let deletingIds = $state(new Set<string>());
+  let hiddenIds = $state(new Set<string>());
+
+  let visiblePosts: FeedEntry[] = $derived(posts.filter(p => !hiddenIds.has(p.id)));
 
   // Non-reactive tracker — avoids $effect infinite loop
   let _knownIds = new Set<string>();
 
   $effect(() => {
-    // Only depend on `posts` (reactive), not _knownIds
     const currentPosts = posts;
     const fresh = new Set<string>();
     for (const p of currentPosts) {
@@ -37,10 +44,16 @@
         fresh.add(p.id);
       }
     }
-    // Update the non-reactive tracker
+
+    // If most posts are new (tab switch / full reload), re-trigger stagger
+    const isFullReplace = fresh.size > 0 && fresh.size >= currentPosts.length * 0.8;
+
     _knownIds = new Set(currentPosts.map(p => p.id));
 
-    if (fresh.size > 0 && !showStagger) {
+    if (isFullReplace) {
+      showStagger = true;
+      setTimeout(() => { showStagger = false; }, 800);
+    } else if (fresh.size > 0 && !showStagger) {
       newIds = fresh;
       setTimeout(() => { newIds = new Set(); }, 500);
     }
@@ -73,8 +86,26 @@
       newPostsCount += 1;
     }
 
+    function handlePostDeleted(e: Event) {
+      const detail = (e as CustomEvent).detail;
+      const id = detail?.id;
+      if (!id || !posts.some(p => p.id === id)) return;
+
+      // Animate out, then hide permanently
+      deletingIds = new Set([...deletingIds, id]);
+
+      setTimeout(() => {
+        hiddenIds = new Set([...hiddenIds, id]);
+        deletingIds = new Set([...deletingIds].filter(x => x !== id));
+      }, 400);
+    }
+
     window.addEventListener('feed-new-post', handleNewPost);
-    return () => window.removeEventListener('feed-new-post', handleNewPost);
+    window.addEventListener('post-deleted', handlePostDeleted);
+    return () => {
+      window.removeEventListener('feed-new-post', handleNewPost);
+      window.removeEventListener('post-deleted', handlePostDeleted);
+    };
   });
 
   function showNewPosts() {
@@ -95,26 +126,27 @@
     </button>
   {/if}
 
-  {#if posts.length === 0 && !loading}
+  {#if visiblePosts.length === 0 && !loading}
     <div class="feed-empty">
       <p class="feed-empty-text">{emptyMessage}</p>
     </div>
   {/if}
 
-  {#each posts as entry, i (entry.id)}
-    {@const isBoost = entry.type === 'boost'}
-    {@const post = isBoost ? entry.post : entry}
+  {#each visiblePosts as entry, i (entry.id)}
+    {@const boost = isBoostEntry(entry) ? entry : null}
+    {@const post = boost ? boost.post : entry as Post}
     {#if post && post.content !== undefined}
       <div
         class="feed-item"
         style={showStagger ? `animation-delay: ${i * 60}ms` : ''}
         class:stagger={showStagger}
         class:feed-item-new={newIds.has(entry.id)}
+        class:feed-item-deleting={deletingIds.has(entry.id)}
       >
-        {#if isBoost}
+        {#if boost}
           <div class="boost-label">
             <span class="material-symbols-outlined boost-icon">cached</span>
-            <span>{entry.account?.display_name || entry.account?.handle || 'Someone'} boosted</span>
+            <span>{boost.account?.display_name || boost.account?.handle || 'Someone'} boosted</span>
           </div>
         {/if}
         <PostCard {post} {compact} />
@@ -221,6 +253,41 @@
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Dissolve out animation for deleted posts */
+  .feed-item-deleting {
+    animation: post-dissolve 0.4s ease forwards;
+    pointer-events: none;
+  }
+
+  @keyframes post-dissolve {
+    0% {
+      opacity: 1;
+      transform: scale(1);
+      filter: blur(0);
+      max-height: 600px;
+    }
+    40% {
+      opacity: 0.5;
+      transform: scale(0.97);
+      filter: blur(1px);
+    }
+    70% {
+      opacity: 0;
+      transform: scale(0.94);
+      filter: blur(3px);
+      max-height: 600px;
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.9);
+      filter: blur(4px);
+      max-height: 0;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
     }
   }
 

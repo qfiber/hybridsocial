@@ -10,7 +10,8 @@ const defaults: UserPreferences = {
   sidebar_position: 'left',
   auto_play_media: true,
   default_visibility: 'public',
-  default_language: null
+  default_language: null,
+  comment_style: 'threaded'
 };
 
 function loadPreferences(): UserPreferences {

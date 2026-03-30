@@ -67,3 +67,7 @@ mobile/.flutter-plugins-dependencies
 *.pem
 *.key
 !priv/cert/
+
+# External files
+/Extra/
+*.zip

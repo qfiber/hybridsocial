@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { api } from '$lib/api/client.js';
   import { uploadMedia } from '$lib/api/media.js';
   import { search } from '$lib/api/search.js';
   import type { Post, MediaAttachment, Identity } from '$lib/api/types.js';
-  import { currentUser } from '$lib/stores/auth.js';
+  import { currentUser, authStore } from '$lib/stores/auth.js';
   import EmojiPicker from './EmojiPicker.svelte';
 
   let isOpen = $state(false);
@@ -15,6 +16,7 @@
   let loading = $state(false);
   let error = $state('');
   let replyTo = $state<Post | null>(null);
+  let quotePost = $state<Post | null>(null);
 
   // Tier-aware limits
   let charLimit = $derived($currentUser?.limits?.char_limit ?? 5000);
@@ -30,6 +32,12 @@
 
   // Emoji picker state
   let showEmojiPicker = $state(false);
+  let showGifPicker = $state(false);
+
+  // Schedule state
+  let showSchedule = $state(false);
+  let scheduledAt = $state('');
+
 
   // Poll state
   let showPoll = $state(false);
@@ -63,6 +71,12 @@
       if (detail?.replyTo) {
         replyTo = detail.replyTo;
       }
+      if (detail?.quotePost) {
+        quotePost = detail.quotePost;
+      }
+      if (detail?.prefill) {
+        content = detail.prefill;
+      }
       openComposer();
     }
 
@@ -87,12 +101,15 @@
     spoilerText = '';
     showCW = false;
     replyTo = null;
+    quotePost = null;
     error = '';
     uploadedMedia = [];
     showPoll = false;
     pollOptions = ['', ''];
     pollDuration = '86400';
     pollMultiple = false;
+    showSchedule = false;
+    scheduledAt = '';
   }
 
   function autoGrow() {
@@ -190,6 +207,43 @@
     detectMention();
   }
 
+  function handlePaste(e: ClipboardEvent) {
+    // When pasting rich text (HTML), extract plain text to preserve newlines
+    const html = e.clipboardData?.getData('text/html');
+    if (html) {
+      e.preventDefault();
+      // Convert <br>, <p>, <div> to newlines, strip all other HTML
+      let text = html
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<\/div>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+
+      // Insert at cursor position
+      if (textareaEl) {
+        const start = textareaEl.selectionStart;
+        const end = textareaEl.selectionEnd;
+        content = content.substring(0, start) + text + content.substring(end);
+        setTimeout(() => {
+          if (textareaEl) {
+            const newPos = start + text.length;
+            textareaEl.selectionStart = newPos;
+            textareaEl.selectionEnd = newPos;
+            autoGrow();
+          }
+        }, 0);
+      }
+    }
+    // Plain text paste is handled natively by the textarea
+  }
+
   function detectMention() {
     if (!textareaEl) return;
     const cursor = textareaEl.selectionStart;
@@ -230,11 +284,11 @@
     if (!textareaEl) return;
     const cursor = textareaEl.selectionStart;
     // Replace from @ to current cursor with the full mention
+    // Use acct (user@domain for remote, handle for local)
     const before = content.substring(0, mentionAtPos);
     const after = content.substring(cursor);
-    const mentionText = account.handle.includes('@')
-      ? `${account.handle} `
-      : `${account.handle} `;
+    const mention = account.acct || account.handle;
+    const mentionText = `${mention} `;
     content = before + mentionText + after;
     closeMentions();
     setTimeout(() => {
@@ -302,6 +356,9 @@
       if (replyTo) {
         body.parent_id = replyTo.id;
       }
+      if (quotePost) {
+        body.quote_id = quotePost.id;
+      }
       if (uploadedMedia.length > 0) {
         body.media_ids = uploadedMedia.map((m) => m.id);
       }
@@ -316,11 +373,87 @@
           body.expires_at = expiresAt;
         }
       }
+      if (showSchedule && scheduledAt) {
+        body.scheduled_at = new Date(scheduledAt).toISOString();
+      }
 
-      const newPost = await api.post('/api/v1/statuses', body);
+      // Create optimistic post for immediate display
+      const optimisticId = `pending-${Date.now()}`;
+      const auth = get(authStore);
+      const contentStr = String(body.content || '');
+
+      // Build optimistic poll if present
+      let optimisticPoll = null;
+      if (showPoll) {
+        const validOpts = pollOptions.filter((o) => o.trim());
+        if (validOpts.length >= 2) {
+          optimisticPoll = {
+            id: optimisticId + '-poll',
+            options: validOpts.map(title => ({ title, votes_count: 0 })),
+            votes_count: 0,
+            voters_count: 0,
+            voted: false,
+            own_votes: [],
+            multiple: pollMultiple,
+            expired: false,
+            expires_at: body.expires_at || null,
+          };
+        }
+      }
+
+      const optimisticPost = {
+        id: optimisticId,
+        type: uploadedMedia.length > 0 ? 'media' : (optimisticPoll ? 'poll' : 'text'),
+        post_type: uploadedMedia.length > 0 ? 'media' : (optimisticPoll ? 'poll' : 'text'),
+        content: contentStr,
+        content_html: contentStr ? `<p>${contentStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br>')}</p>` : null,
+        visibility: body.visibility,
+        sensitive: body.sensitive || false,
+        spoiler_text: body.spoiler_text || null,
+        language: null,
+        reply_count: 0,
+        boost_count: 0,
+        reaction_count: 0,
+        is_pinned: false,
+        is_boosted: false,
+        is_bookmarked: false,
+        is_muted: false,
+        current_user_reaction: null,
+        created_at: new Date().toISOString(),
+        edited_at: null,
+        account: auth.user,
+        parent_id: body.parent_id || null,
+        root_id: null,
+        in_reply_to_account_id: null,
+        quote: null,
+        card: null,
+        mentions: [],
+        tags: [],
+        emojis: [],
+        reactions: [],
+        poll: optimisticPoll,
+        media_attachments: uploadedMedia.map(m => ({
+          id: m.id,
+          type: m.type || 'image',
+          url: m.url || m.preview_url || '',
+          preview_url: m.preview_url || m.url || '',
+          remote_url: null,
+          description: m.description || null,
+          blurhash: m.blurhash || null,
+          meta: null,
+        })),
+        uri: '',
+        url: '',
+        pending: true,
+      };
+
+      // Show optimistic post immediately
+      window.dispatchEvent(new CustomEvent('new-post', { detail: optimisticPost }));
       resetComposer();
-      // Notify the timeline to prepend the new post
-      window.dispatchEvent(new CustomEvent('new-post', { detail: newPost }));
+
+      // Send to server, then replace optimistic with real
+      const newPost = await api.post('/api/v1/statuses', body);
+      window.dispatchEvent(new CustomEvent('post-replace', { detail: { oldId: optimisticId, post: newPost } }));
     } catch {
       error = 'Failed to publish post. Please try again.';
     } finally {
@@ -376,6 +509,21 @@
       </div>
     {/if}
 
+    {#if quotePost}
+      <div class="composer-quote-context">
+        <div class="quote-preview">
+          <span class="material-symbols-outlined" style="font-size: 16px; color: var(--color-primary)">format_quote</span>
+          <div class="quote-preview-content">
+            <strong>{quotePost.account.display_name || quotePost.account.handle}</strong>
+            <p>{(quotePost.content || '').slice(0, 100)}{(quotePost.content || '').length > 100 ? '...' : ''}</p>
+          </div>
+          <button type="button" class="quote-remove" onclick={() => quotePost = null} aria-label="Remove quote">
+            <span class="material-symbols-outlined" style="font-size: 16px">close</span>
+          </button>
+        </div>
+      </div>
+    {/if}
+
     {#if error}
       <div class="composer-error" role="alert">{error}</div>
     {/if}
@@ -398,9 +546,9 @@
           <input
             type="text"
             class="composer-cw-input"
-            placeholder="Content warning"
+            placeholder="NSFW warning (optional description)"
             bind:value={spoilerText}
-            aria-label="Content warning text"
+            aria-label="NSFW warning text"
           />
         {/if}
 
@@ -410,6 +558,7 @@
             bind:value={content}
             oninput={handleTextareaInput}
             onkeydown={handleMentionKeydown}
+            onpaste={handlePaste}
             class="composer-textarea"
             placeholder="What's on your mind?"
             aria-label="Post content"
@@ -435,7 +584,7 @@
                   {/if}
                   <div class="mention-info">
                     <span class="mention-name">{account.display_name || account.handle}</span>
-                    <span class="mention-handle">@{account.handle}</span>
+                    <span class="mention-handle">@{account.acct || account.handle}</span>
                   </div>
                 </button>
               {/each}
@@ -527,6 +676,26 @@
       </div>
     {/if}
 
+    {#if showSchedule}
+      <div class="schedule-picker">
+        <div class="schedule-header">
+          <span class="material-symbols-outlined schedule-icon">schedule_send</span>
+          <span class="schedule-label">Schedule post</span>
+        </div>
+        <input
+          type="datetime-local"
+          class="schedule-input"
+          bind:value={scheduledAt}
+          min={new Date(Date.now() + 300000).toISOString().slice(0, 16)}
+        />
+        {#if scheduledAt}
+          <p class="schedule-preview">
+            Will be published on {new Date(scheduledAt).toLocaleString()}
+          </p>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Hidden file input -->
     <input
       bind:this={fileInputEl}
@@ -551,16 +720,6 @@
           <span class="material-symbols-outlined tool-icon">image</span>
         </button>
 
-        <!-- GIF button -->
-        <button
-          type="button"
-          class="tool-btn"
-          aria-label="Insert GIF"
-          disabled
-        >
-          <span class="material-symbols-outlined tool-icon">gif_box</span>
-        </button>
-
         <!-- Poll toggle -->
         <button
           type="button"
@@ -574,13 +733,27 @@
           <span class="material-symbols-outlined tool-icon">ballot</span>
         </button>
 
+        <!-- Schedule toggle -->
+        {#if canSchedule}
+          <button
+            type="button"
+            class="tool-btn"
+            class:tool-active={showSchedule}
+            onclick={() => showSchedule = !showSchedule}
+            aria-label="Schedule post"
+            aria-pressed={showSchedule}
+          >
+            <span class="material-symbols-outlined tool-icon">schedule_send</span>
+          </button>
+        {/if}
+
         <!-- Emoji picker -->
         <div class="emoji-picker-wrapper">
           <button
             type="button"
             class="tool-btn"
             class:tool-active={showEmojiPicker}
-            onclick={() => { showEmojiPicker = !showEmojiPicker; }}
+            onclick={() => { showEmojiPicker = !showEmojiPicker; showGifPicker = false; }}
             aria-label="Insert emoji"
             aria-expanded={showEmojiPicker}
           >
@@ -602,16 +775,16 @@
           {/each}
         </select>
 
-        <!-- CW toggle -->
+        <!-- NSFW toggle -->
         <button
           type="button"
           class="tool-btn tool-btn-text"
           class:tool-active={showCW}
           onclick={() => { showCW = !showCW; }}
-          aria-label="Toggle content warning"
+          aria-label="Toggle NSFW warning"
           aria-pressed={showCW}
         >
-          CW
+          NSFW
         </button>
       </div>
 
@@ -733,6 +906,57 @@
     background: var(--color-surface);
     border-radius: 10px;
     margin-block-end: 16px;
+  }
+
+  .composer-quote-context {
+    margin-block-end: 12px;
+  }
+
+  .quote-preview {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-inline-start: 3px solid var(--color-primary);
+    border-radius: 8px;
+  }
+
+  .quote-preview-content {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
+  .quote-preview-content strong {
+    color: var(--color-text);
+    display: block;
+    margin-block-end: 2px;
+  }
+
+  .quote-preview-content p {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .quote-remove {
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .quote-remove:hover {
+    background: var(--color-surface-container-low);
+    color: var(--color-text);
   }
 
   .composer-error {
@@ -888,6 +1112,54 @@
   }
 
   /* ---- Poll Creator ---- */
+  /* Schedule picker */
+  .schedule-picker {
+    padding: 12px 16px;
+    background: var(--color-surface);
+    border-radius: 10px;
+    margin-block-end: 8px;
+  }
+
+  .schedule-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-block-end: 10px;
+  }
+
+  .schedule-icon {
+    font-size: 20px;
+    color: var(--color-primary);
+  }
+
+  .schedule-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .schedule-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    background: var(--color-surface-container-lowest);
+  }
+
+  .schedule-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-soft, rgba(0, 128, 128, 0.1));
+  }
+
+  .schedule-preview {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    margin-block-start: 6px;
+  }
+
   .poll-creator {
     padding: 12px;
     margin: 8px 0;

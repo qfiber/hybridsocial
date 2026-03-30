@@ -6,7 +6,7 @@ defmodule Hybridsocial.Social do
 
   alias Hybridsocial.Repo
   alias Hybridsocial.Accounts
-  alias Hybridsocial.Social.{Follow, Block, Mute}
+  alias Hybridsocial.Social.{Follow, Block, Mute, PostMute, UserDomainBlock, AccountNote, FollowedTag, Hashtag, UserContentFilter}
 
   # --- Follows ---
 
@@ -105,6 +105,24 @@ defmodule Hybridsocial.Social do
     Follow
     |> where([f], f.follower_id == ^identity_id and f.status == :accepted)
     |> Repo.aggregate(:count)
+  end
+
+  @doc "Accounts that the viewer follows who also follow the target account."
+  def familiar_followers(viewer_id, target_id) do
+    # People the viewer follows
+    viewer_following =
+      Follow
+      |> where([f], f.follower_id == ^viewer_id and f.status == :accepted)
+      |> select([f], f.followee_id)
+
+    # Of those, who follows the target?
+    Follow
+    |> where([f], f.follower_id in subquery(viewer_following))
+    |> where([f], f.followee_id == ^target_id and f.status == :accepted)
+    |> join(:inner, [f], i in Hybridsocial.Accounts.Identity, on: i.id == f.follower_id and is_nil(i.deleted_at))
+    |> select([f, i], i)
+    |> limit(5)
+    |> Repo.all()
   end
 
   # --- Blocks ---
@@ -287,5 +305,205 @@ defmodule Hybridsocial.Social do
         muting: MapSet.member?(muted_ids_set, target_id)
       }
     end)
+  end
+
+  # --- Post Mutes (mute notifications from a specific post) ---
+
+  def mute_post(post_id, identity_id) do
+    %PostMute{}
+    |> PostMute.changeset(%{post_id: post_id, identity_id: identity_id})
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:post_id, :identity_id])
+  end
+
+  def unmute_post(post_id, identity_id) do
+    PostMute
+    |> where([pm], pm.post_id == ^post_id and pm.identity_id == ^identity_id)
+    |> Repo.delete_all()
+
+    :ok
+  end
+
+  def post_muted?(post_id, identity_id) do
+    PostMute
+    |> where([pm], pm.post_id == ^post_id and pm.identity_id == ^identity_id)
+    |> Repo.exists?()
+  end
+
+  # --- Follow Requests ---
+
+  def pending_follow_requests(identity_id) do
+    Follow
+    |> where([f], f.followee_id == ^identity_id and f.status == :pending)
+    |> order_by([f], desc: f.inserted_at)
+    |> preload(:follower)
+    |> Repo.all()
+  end
+
+  # --- Blocked & Muted account lists ---
+
+  def blocked_accounts(identity_id) do
+    Block
+    |> where([b], b.blocker_id == ^identity_id)
+    |> join(:inner, [b], i in Hybridsocial.Accounts.Identity, on: i.id == b.blocked_id)
+    |> select([b, i], i)
+    |> Repo.all()
+  end
+
+  def muted_accounts(identity_id) do
+    Mute
+    |> where([m], m.muter_id == ^identity_id)
+    |> join(:inner, [m], i in Hybridsocial.Accounts.Identity, on: i.id == m.muted_id)
+    |> select([m, i], i)
+    |> Repo.all()
+  end
+
+  # --- User-level domain blocks ---
+
+  def list_domain_blocks(identity_id) do
+    UserDomainBlock
+    |> where([d], d.identity_id == ^identity_id)
+    |> order_by([d], desc: d.inserted_at)
+    |> Repo.all()
+  end
+
+  def block_domain(identity_id, domain) do
+    %UserDomainBlock{}
+    |> UserDomainBlock.changeset(%{identity_id: identity_id, domain: domain})
+    |> Repo.insert(on_conflict: :nothing)
+  end
+
+  def unblock_domain(identity_id, domain) do
+    UserDomainBlock
+    |> where([d], d.identity_id == ^identity_id and d.domain == ^String.downcase(domain))
+    |> Repo.delete_all()
+    :ok
+  end
+
+  def domain_blocked?(identity_id, domain) do
+    UserDomainBlock
+    |> where([d], d.identity_id == ^identity_id and d.domain == ^String.downcase(domain))
+    |> Repo.exists?()
+  end
+
+  # --- Personal account notes ---
+
+  def set_account_note(author_id, target_id, content) do
+    %AccountNote{}
+    |> AccountNote.changeset(%{author_id: author_id, target_id: target_id, content: content})
+    |> Repo.insert(
+      on_conflict: {:replace, [:content, :updated_at]},
+      conflict_target: [:author_id, :target_id]
+    )
+  end
+
+  def get_account_note(author_id, target_id) do
+    AccountNote
+    |> where([n], n.author_id == ^author_id and n.target_id == ^target_id)
+    |> Repo.one()
+  end
+
+  def delete_account_note(author_id, target_id) do
+    AccountNote
+    |> where([n], n.author_id == ^author_id and n.target_id == ^target_id)
+    |> Repo.delete_all()
+    :ok
+  end
+
+  # --- Followed Hashtags ---
+
+  def follow_tag(identity_id, tag_name) do
+    tag_name = String.downcase(tag_name) |> String.trim_leading("#")
+
+    # Find or create the hashtag
+    hashtag =
+      case Repo.get_by(Hashtag, name: tag_name) do
+        nil ->
+          %Hashtag{}
+          |> Hashtag.changeset(%{name: tag_name})
+          |> Repo.insert!()
+
+        existing ->
+          existing
+      end
+
+    %FollowedTag{}
+    |> FollowedTag.changeset(%{identity_id: identity_id, hashtag_id: hashtag.id})
+    |> Repo.insert(on_conflict: :nothing)
+    |> case do
+      {:ok, ft} -> {:ok, ft}
+      {:error, _} -> {:ok, :already_following}
+    end
+  end
+
+  def unfollow_tag(identity_id, tag_name) do
+    tag_name = String.downcase(tag_name) |> String.trim_leading("#")
+
+    case Repo.get_by(Hashtag, name: tag_name) do
+      nil -> :ok
+      hashtag ->
+        FollowedTag
+        |> where([ft], ft.identity_id == ^identity_id and ft.hashtag_id == ^hashtag.id)
+        |> Repo.delete_all()
+        :ok
+    end
+  end
+
+  def followed_tags(identity_id) do
+    FollowedTag
+    |> where([ft], ft.identity_id == ^identity_id)
+    |> join(:inner, [ft], h in Hashtag, on: h.id == ft.hashtag_id)
+    |> select([ft, h], %{id: h.id, name: h.name, following: true})
+    |> order_by([ft, h], asc: h.name)
+    |> Repo.all()
+  end
+
+  def following_tag?(identity_id, tag_name) do
+    tag_name = String.downcase(tag_name) |> String.trim_leading("#")
+
+    FollowedTag
+    |> join(:inner, [ft], h in Hashtag, on: h.id == ft.hashtag_id)
+    |> where([ft, h], ft.identity_id == ^identity_id and h.name == ^tag_name)
+    |> Repo.exists?()
+  end
+
+  # --- User Content Filters ---
+
+  def list_user_filters(identity_id) do
+    UserContentFilter
+    |> where([f], f.identity_id == ^identity_id)
+    |> where([f], is_nil(f.expires_at) or f.expires_at > ^DateTime.utc_now())
+    |> order_by([f], desc: f.inserted_at)
+    |> Repo.all()
+  end
+
+  def create_user_filter(identity_id, attrs) do
+    %UserContentFilter{}
+    |> UserContentFilter.changeset(Map.put(attrs, "identity_id", identity_id))
+    |> Repo.insert()
+  end
+
+  def update_user_filter(filter_id, identity_id, attrs) do
+    case Repo.get_by(UserContentFilter, id: filter_id, identity_id: identity_id) do
+      nil -> {:error, :not_found}
+      filter ->
+        filter
+        |> UserContentFilter.changeset(attrs)
+        |> Repo.update()
+    end
+  end
+
+  def delete_user_filter(filter_id, identity_id) do
+    case Repo.get_by(UserContentFilter, id: filter_id, identity_id: identity_id) do
+      nil -> {:error, :not_found}
+      filter -> Repo.delete(filter)
+    end
+  end
+
+  def followed_tag_names(identity_id) do
+    FollowedTag
+    |> where([ft], ft.identity_id == ^identity_id)
+    |> join(:inner, [ft], h in Hashtag, on: h.id == ft.hashtag_id)
+    |> select([ft, h], h.name)
+    |> Repo.all()
   end
 end

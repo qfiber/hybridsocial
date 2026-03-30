@@ -15,6 +15,7 @@ defmodule Hybridsocial.Groups do
   }
 
   alias Hybridsocial.Accounts
+  alias Hybridsocial.Accounts.Identity
 
   @default_page_size 20
 
@@ -23,52 +24,113 @@ defmodule Hybridsocial.Groups do
   # ---------------------------------------------------------------------------
 
   def create_group(identity_id, attrs) do
-    Ecto.Multi.new()
-    |> Ecto.Multi.insert(:group, fn _ ->
-      %Group{}
-      |> Group.create_changeset(Map.put(attrs, "created_by", identity_id))
-    end)
-    |> Ecto.Multi.insert(:owner_member, fn %{group: group} ->
-      %GroupMember{}
-      |> GroupMember.changeset(%{
-        group_id: group.id,
-        identity_id: identity_id,
-        role: :owner,
-        status: :approved
-      })
-    end)
-    |> Ecto.Multi.update(:update_count, fn %{group: group} ->
-      group
-      |> Ecto.Changeset.change(member_count: 1)
-    end)
-    |> Repo.transaction()
-    |> case do
-      {:ok, %{group: _group, update_count: group_updated}} ->
-        {:ok, group_updated}
+    with :ok <- Accounts.check_subaccount_limit(identity_id, "group") do
+      handle = attrs["handle"] || generate_group_handle(attrs["name"])
 
-      {:error, :group, changeset, _} ->
-        {:error, changeset}
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:identity, fn _ ->
+        %Identity{}
+        |> Identity.create_changeset(%{
+          "type" => "group",
+          "handle" => handle,
+          "display_name" => attrs["name"],
+          "bio" => attrs["description"],
+          "parent_identity_id" => identity_id
+        })
+      end)
+      |> Ecto.Multi.insert(:group, fn %{identity: group_identity} ->
+        %Group{}
+        |> Group.create_changeset(
+          attrs
+          |> Map.put("created_by", identity_id)
+          |> Map.put("identity_id", group_identity.id)
+        )
+      end)
+      |> Ecto.Multi.insert(:owner_member, fn %{group: group} ->
+        %GroupMember{}
+        |> GroupMember.changeset(%{
+          group_id: group.id,
+          identity_id: identity_id,
+          role: :owner,
+          status: :approved
+        })
+      end)
+      |> Ecto.Multi.update(:update_count, fn %{group: group} ->
+        group
+        |> Ecto.Changeset.change(member_count: 1)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{identity: group_identity, update_count: group_updated}} ->
+          group = %{group_updated | identity: group_identity}
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "groups", {:group_created, group})
+          {:ok, group}
 
-      {:error, :owner_member, changeset, _} ->
-        {:error, changeset}
+        {:error, :identity, changeset, _} ->
+          {:error, changeset}
+
+        {:error, :group, changeset, _} ->
+          {:error, changeset}
+
+        {:error, :owner_member, changeset, _} ->
+          {:error, changeset}
+      end
+    end
+  end
+
+  defp generate_group_handle(nil), do: "group_#{:crypto.strong_rand_bytes(4) |> Base.encode16(case: :lower)}"
+
+  defp generate_group_handle(name) do
+    handle =
+      name
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9_]/, "_")
+      |> String.replace(~r/_+/, "_")
+      |> String.trim("_")
+      |> String.slice(0, 20)
+
+    if handle == "" do
+      generate_group_handle(nil)
+    else
+      handle
     end
   end
 
   def update_group(group_id, identity_id, attrs) do
     with {:ok, group} <- get_existing_group(group_id),
          {:ok, _role} <- require_role(group_id, identity_id, [:admin, :owner]) do
-      group
-      |> Group.update_changeset(attrs)
-      |> Repo.update()
+      case group |> Group.update_changeset(attrs) |> Repo.update() do
+        {:ok, updated} ->
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "groups", {:group_updated, updated})
+          {:ok, updated}
+        error -> error
+      end
     end
   end
 
   def delete_group(group_id, identity_id) do
     with {:ok, group} <- get_existing_group(group_id),
          {:ok, _role} <- require_role(group_id, identity_id, [:owner]) do
-      group
-      |> Group.soft_delete_changeset()
-      |> Repo.update()
+      Ecto.Multi.new()
+      |> Ecto.Multi.update(:group, Group.soft_delete_changeset(group))
+      |> Ecto.Multi.run(:soft_delete_identity, fn _repo, _ ->
+        if group.identity_id do
+          case Repo.get(Identity, group.identity_id) do
+            nil -> {:ok, nil}
+            identity -> identity |> Identity.soft_delete_changeset() |> Repo.update()
+          end
+        else
+          {:ok, nil}
+        end
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{group: deleted_group}} ->
+          Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "groups", {:group_deleted, deleted_group.id})
+          {:ok, deleted_group}
+        {:error, :group, changeset, _} -> {:error, changeset}
+        {:error, _, reason, _} -> {:error, reason}
+      end
     end
   end
 

@@ -15,6 +15,7 @@
   let loading = $state(true);
   let search = $state('');
   let statusFilter = $state('all');
+  let locationFilter = $state<'all' | 'local' | 'remote'>('all');
   let sortKey = $state('created_at');
   let sortDir = $state<'asc' | 'desc'>('desc');
 
@@ -60,9 +61,16 @@
       const matchesSearch =
         !search ||
         u.handle.toLowerCase().includes(search.toLowerCase()) ||
-        u.email.toLowerCase().includes(search.toLowerCase());
+        ((u as any).acct || '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.display_name || '').toLowerCase().includes(search.toLowerCase()) ||
+        ((u as any).domain || '').toLowerCase().includes(search.toLowerCase()) ||
+        u.email?.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      const matchesLocation =
+        locationFilter === 'all' ||
+        (locationFilter === 'local' && (u as any).is_local !== false) ||
+        (locationFilter === 'remote' && (u as any).is_local === false);
+      return matchesSearch && matchesStatus && matchesLocation;
     })
   );
 
@@ -289,6 +297,12 @@
 <div class="users-page">
   <h1 class="page-title">Users</h1>
 
+  <div class="location-tabs" role="tablist">
+    <button type="button" role="tab" class="loc-tab" class:loc-tab-active={locationFilter === 'all'} onclick={() => locationFilter = 'all'}>All</button>
+    <button type="button" role="tab" class="loc-tab" class:loc-tab-active={locationFilter === 'local'} onclick={() => locationFilter = 'local'}>Local</button>
+    <button type="button" role="tab" class="loc-tab" class:loc-tab-active={locationFilter === 'remote'} onclick={() => locationFilter = 'remote'}>Remote</button>
+  </div>
+
   <div class="toolbar">
     <div class="search-bar">
       <input
@@ -316,14 +330,31 @@
   >
     {#snippet rowContent(row)}
       <td>
-        <div class="user-cell">
-          <span class="user-handle">@{row['handle']}</span>
-          {#if row['display_name']}
-            <span class="user-display">{row['display_name']}</span>
+        <div class="user-identity">
+          {#if row['avatar_url']}
+            <img src={row['avatar_url'] as string} alt="" class="user-avatar" />
+          {:else}
+            <div class="user-avatar user-avatar-placeholder">
+              {((row['display_name'] as string) || (row['handle'] as string) || '?').charAt(0).toUpperCase()}
+            </div>
           {/if}
+          <div class="user-info-col">
+            {#if row['display_name']}
+              <span class="user-display-name">{row['display_name']}</span>
+            {/if}
+            <span class="user-handle">@{row['acct'] || row['handle']}</span>
+            {#if row['domain']}
+              <span class="user-domain-badge">
+                <span class="material-symbols-outlined" style="font-size: 12px">public</span>
+                {row['domain']}
+              </span>
+            {:else}
+              <span class="user-local-badge">Local</span>
+            {/if}
+          </div>
         </div>
       </td>
-      <td>{row['email']}</td>
+      <td>{row['email'] || ''}</td>
       <td>{formatDate(row['created_at'] as string)}</td>
       <td>
         <span class="status-badge {statusClass(row['status'] as string)}">
@@ -766,5 +797,112 @@
     .status-select {
       width: 100%;
     }
+  }
+
+  /* Location tabs */
+  .location-tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 3px;
+    margin-block-end: var(--space-4);
+    max-width: 300px;
+  }
+
+  .loc-tab {
+    flex: 1;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 150ms ease;
+  }
+
+  .loc-tab:hover { color: var(--color-text); }
+
+  .loc-tab-active {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .loc-tab-active:hover { color: white; }
+
+  /* User identity cell */
+  .user-identity {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+  }
+
+  .user-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .user-avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .user-info-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .user-display-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.3;
+  }
+
+  .user-handle {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    font-weight: 400;
+  }
+
+  .user-domain-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.65rem;
+    color: var(--color-text-tertiary);
+    background: var(--color-surface);
+    padding: 1px 6px;
+    border-radius: 4px;
+    width: fit-content;
+    margin-block-start: 2px;
+  }
+
+  .user-local-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-success, #22c55e);
+    background: rgba(34, 197, 94, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    width: fit-content;
+    margin-block-start: 2px;
   }
 </style>

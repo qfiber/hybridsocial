@@ -120,134 +120,127 @@
   </div>
 
   {#if stats?.services}
+    {@const db = stats.services.database}
+    {@const vk = stats.services.valkey}
+    {@const ns = stats.services.nats}
+    {@const os = stats.services.opensearch}
+    {@const infraWorst = [db, vk, ns].some(s => s.status === 'down') ? 'down' : [db, vk, ns].some(s => s.status === 'degraded') ? 'degraded' : 'up'}
     <section class="services-section">
       <h2 class="section-heading">Services</h2>
-      <div class="services-grid">
-        {#each [
-          { key: 'database', label: 'PostgreSQL', icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4' },
-          { key: 'valkey', label: 'Valkey', icon: 'M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01' },
-          { key: 'opensearch', label: 'OpenSearch', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
-          { key: 'nats', label: 'NATS JetStream', icon: 'M13 10V3L4 14h7v7l9-11h-7z' }
-        ] as svc (svc.key)}
-          {@const health = stats.services[svc.key as keyof typeof stats.services]}
-          <div class="service-card" class:service-up={health.status === 'up'} class:service-down={health.status === 'down'} class:service-degraded={health.status === 'degraded'}>
-            <div class="service-header">
-              <div class="service-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d={svc.icon} />
-                </svg>
-              </div>
-              <div class="service-status-dot"></div>
+      <div class="services-grid services-grid-2">
+
+        <!-- Infrastructure (merged: PostgreSQL + Valkey + NATS) -->
+        <div class="service-card" class:service-up={infraWorst === 'up'} class:service-down={infraWorst === 'down'} class:service-degraded={infraWorst === 'degraded'}>
+          <div class="service-header">
+            <div class="service-name-row">
+              <span class="material-symbols-outlined service-icon-mat">dns</span>
+              <span class="service-name">Infrastructure</span>
             </div>
-            <div class="service-name">{svc.label}</div>
-            <div class="service-status-text">
-              {#if health.status === 'up'}
-                Operational
-              {:else if health.status === 'degraded'}
-                Degraded
-              {:else}
-                Offline
-              {/if}
-            </div>
+            <div class="service-status-dot"></div>
+          </div>
 
-            <!-- Common fields -->
-            {#if health.version}
-              <div class="service-detail">v{health.version}</div>
-            {/if}
-            {#if health.uptime_seconds}
-              <div class="service-detail">Up {formatUptime(health.uptime_seconds)}</div>
-            {/if}
-
-            <!-- Valkey details -->
-            {#if svc.key === 'valkey' && health.status === 'up'}
-              <div class="service-details-grid">
-                <div class="detail-item">
-                  <span class="detail-label">Memory</span>
-                  <span class="detail-value">{health.memory || '?'}</span>
+          <div class="infra-services">
+            {#each [
+              { label: 'PostgreSQL', health: db },
+              { label: 'Valkey', health: vk },
+              { label: 'NATS', health: ns },
+            ] as svc (svc.label)}
+              <div class="infra-row">
+                <div class="infra-label">
+                  <div class="infra-dot" class:dot-up={svc.health.status === 'up'} class:dot-down={svc.health.status === 'down'} class:dot-degraded={svc.health.status === 'degraded'}></div>
+                  {svc.label}
                 </div>
-                <div class="detail-item">
-                  <span class="detail-label">Peak</span>
-                  <span class="detail-value">{health.memory_peak || '?'}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">Keys</span>
-                  <span class="detail-value">{health.total_keys?.toLocaleString() || '0'}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">Clients</span>
-                  <span class="detail-value">{health.connected_clients || '0'}</span>
-                </div>
-              </div>
-            {/if}
-
-            <!-- OpenSearch details -->
-            {#if svc.key === 'opensearch' && health.status !== 'down'}
-              <div class="service-details-grid">
-                <div class="detail-item">
-                  <span class="detail-label">Cluster</span>
-                  <span class="detail-value">{health.cluster_name || '?'}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">Health</span>
-                  <span class="detail-value" class:text-success={health.cluster_health === 'green'} class:text-warning={health.cluster_health === 'yellow'} class:text-danger={health.cluster_health === 'red'}>{health.cluster_health || '?'}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">Nodes</span>
-                  <span class="detail-value">{health.node_count || '0'}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">Shards</span>
-                  <span class="detail-value">{health.active_shards || '0'}</span>
-                </div>
-              </div>
-              {#if health.indices && health.indices.length > 0}
-                <div class="service-indices">
-                  <div class="indices-title">Indices</div>
-                  {#each health.indices as idx}
-                    <div class="index-row">
-                      <span class="index-name">{idx.name}</span>
-                      <span class="index-docs">{idx.docs_count} docs</span>
-                      <span class="index-size">{idx.store_size}</span>
-                    </div>
-                  {/each}
-                </div>
-              {/if}
-            {/if}
-
-            <!-- NATS details -->
-            {#if svc.key === 'nats' && health.status === 'up'}
-              {#if health.integration === 'pending'}
-                <div class="service-detail integration-note">{health.note}</div>
-              {/if}
-              {#if health.connections !== undefined}
-                <div class="service-details-grid">
-                  <div class="detail-item">
-                    <span class="detail-label">Connections</span>
-                    <span class="detail-value">{health.connections}</span>
-                  </div>
-                  <div class="detail-item">
-                    <span class="detail-label">Messages</span>
-                    <span class="detail-value">{health.total_messages?.toLocaleString() || '0'}</span>
-                  </div>
-                  {#if health.jetstream_enabled}
-                    <div class="detail-item">
-                      <span class="detail-label">JS Streams</span>
-                      <span class="detail-value">{health.js_streams || '0'}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">JS Consumers</span>
-                      <span class="detail-value">{health.js_consumers || '0'}</span>
-                    </div>
+                <div class="infra-meta">
+                  {#if svc.health.version}
+                    <span class="infra-version">v{svc.health.version}</span>
+                  {/if}
+                  {#if svc.health.uptime_seconds}
+                    <span class="infra-uptime">{formatUptime(svc.health.uptime_seconds)}</span>
+                  {/if}
+                  {#if svc.health.status !== 'up'}
+                    <span class="infra-status-label" class:text-danger={svc.health.status === 'down'} class:text-warning={svc.health.status === 'degraded'}>
+                      {svc.health.status === 'down' ? 'Offline' : 'Degraded'}
+                    </span>
                   {/if}
                 </div>
+              </div>
+              {#if svc.health.error}
+                <div class="service-error" style="margin-inline-start: 20px">{svc.health.error}</div>
               {/if}
-            {/if}
-
-            {#if health.error}
-              <div class="service-error">{health.error}</div>
-            {/if}
+            {/each}
           </div>
-        {/each}
+
+          <!-- Valkey details -->
+          {#if vk.status === 'up'}
+            <div class="service-details-grid" style="margin-block-start: var(--space-2); padding-block-start: var(--space-2); border-block-start: 1px solid var(--color-border)">
+              <div class="detail-item">
+                <span class="detail-label">Cache Memory</span>
+                <span class="detail-value">{vk.memory || '?'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Cache Keys</span>
+                <span class="detail-value">{vk.total_keys?.toLocaleString() || '0'}</span>
+              </div>
+              {#if ns.connections !== undefined}
+                <div class="detail-item">
+                  <span class="detail-label">NATS Conns</span>
+                  <span class="detail-value">{ns.connections}</span>
+                </div>
+              {/if}
+              {#if ns.total_messages !== undefined}
+                <div class="detail-item">
+                  <span class="detail-label">Messages</span>
+                  <span class="detail-value">{ns.total_messages?.toLocaleString()}</span>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <!-- OpenSearch (own card) -->
+        <div class="service-card" class:service-up={os.status === 'up'} class:service-down={os.status === 'down'} class:service-degraded={os.status === 'degraded'}>
+          <div class="service-header">
+            <div class="service-name-row">
+              <span class="material-symbols-outlined service-icon-mat">search</span>
+              <span class="service-name">OpenSearch</span>
+            </div>
+            <div class="service-status-dot"></div>
+          </div>
+
+          <div class="service-status-text">
+            {#if os.status === 'up'}Operational{:else if os.status === 'degraded'}Degraded{:else}Offline{/if}
+          </div>
+
+          {#if os.version}
+            <div class="service-detail">v{os.version}</div>
+          {/if}
+
+          {#if os.status !== 'down'}
+            <div class="service-details-grid">
+              <div class="detail-item">
+                <span class="detail-label">Cluster</span>
+                <span class="detail-value">{os.cluster_name || '?'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Health</span>
+                <span class="detail-value" class:text-success={os.cluster_health === 'green'} class:text-warning={os.cluster_health === 'yellow'} class:text-danger={os.cluster_health === 'red'}>{os.cluster_health || '?'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Nodes</span>
+                <span class="detail-value">{os.node_count || '0'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Shards</span>
+                <span class="detail-value">{os.active_shards || '0'}</span>
+              </div>
+            </div>
+          {/if}
+
+          {#if os.error}
+            <div class="service-error">{os.error}</div>
+          {/if}
+        </div>
+
       </div>
     </section>
   {/if}
@@ -594,6 +587,10 @@
     gap: var(--space-3);
   }
 
+  .services-grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .service-card {
     background: var(--color-surface-raised);
     border: 1px solid var(--color-border);
@@ -608,8 +605,83 @@
     margin-block-end: var(--space-3);
   }
 
+  .service-name-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .service-icon-mat {
+    font-size: 20px;
+    color: var(--color-text-secondary);
+  }
+
   .service-icon {
     color: var(--color-text-secondary);
+  }
+
+  /* Infrastructure merged card */
+  .infra-services {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .infra-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+  }
+
+  .infra-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .infra-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text-tertiary);
+  }
+
+  .dot-up {
+    background: var(--color-success);
+    box-shadow: 0 0 4px var(--color-success);
+  }
+
+  .dot-down {
+    background: var(--color-danger);
+    box-shadow: 0 0 4px var(--color-danger);
+  }
+
+  .dot-degraded {
+    background: var(--color-warning);
+    box-shadow: 0 0 4px var(--color-warning);
+  }
+
+  .infra-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .infra-version,
+  .infra-uptime {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  .infra-status-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
   }
 
   .service-status-dot {
@@ -757,7 +829,7 @@
     }
 
     .services-grid {
-      grid-template-columns: repeat(2, 1fr);
+      grid-template-columns: 1fr;
     }
   }
 </style>

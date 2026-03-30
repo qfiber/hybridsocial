@@ -50,4 +50,15 @@ defmodule Hybridsocial.Config do
 
   @doc "Get the rate limit for anonymous users."
   def rate_limit_anonymous, do: get("rate_limit_anonymous", 60)
+
+  # --- Subaccount limits ---
+
+  @doc "Max bot subaccounts per user."
+  def max_bots_per_user, do: get("max_bots_per_user", 4)
+
+  @doc "Max organization (page) subaccounts per user."
+  def max_organizations_per_user, do: get("max_organizations_per_user", 2)
+
+  @doc "Max group subaccounts per user."
+  def max_groups_per_user, do: get("max_groups_per_user", 4)
 end

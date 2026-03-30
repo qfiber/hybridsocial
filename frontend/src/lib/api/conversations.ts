@@ -35,3 +35,19 @@ export function markConversationRead(id: string): Promise<void> {
 export function deleteConversation(id: string): Promise<void> {
   return api.delete(`/api/v1/conversations/${id}`);
 }
+
+export function acceptConversation(id: string): Promise<Conversation> {
+  return api.post(`/api/v1/conversations/${id}/accept`);
+}
+
+export function declineConversation(id: string): Promise<void> {
+  return api.delete(`/api/v1/conversations/${id}/decline`);
+}
+
+export function addMessageReaction(conversationId: string, messageId: string, emoji: string): Promise<void> {
+  return api.post(`/api/v1/conversations/${conversationId}/messages/${messageId}/reactions`, { emoji });
+}
+
+export function removeMessageReaction(conversationId: string, messageId: string, emoji: string): Promise<void> {
+  return api.delete(`/api/v1/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`);
+}

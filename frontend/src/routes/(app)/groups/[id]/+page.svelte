@@ -36,7 +36,7 @@
   let saving = $state(false);
   let deleting = $state(false);
 
-  let groupId = $derived(page.params.id);
+  let groupId = $derived(page.params.id!);
   let currentUserId = $derived(get(authStore)?.user?.id);
   let isAdmin = $derived(group?.role === 'owner' || group?.role === 'admin');
   let isOwner = $derived(group?.role === 'owner');
@@ -135,8 +135,8 @@
       const updated = await updateGroup(groupId, {
         name: editName,
         description: editDescription,
-        visibility: editVisibility,
-        join_policy: editJoinPolicy
+        visibility: editVisibility as 'public' | 'private' | 'secret',
+        join_policy: editJoinPolicy as 'open' | 'approval' | 'invite'
       });
       group = { ...group, ...updated };
       showEditModal = false;
@@ -159,7 +159,7 @@
     try {
       await updateMemberRole(groupId, memberId, newRole);
       members = members.map(m =>
-        m.id === memberId ? { ...m, role: newRole } : m
+        m.id === memberId ? { ...m, role: newRole as GroupMember['role'] } : m
       );
       showMemberActions = null;
     } catch {}
@@ -258,7 +258,7 @@
                       <button
                         type="button"
                         class="member-actions-btn"
-                        onclick={(e) => { e.stopPropagation(); showMemberActions = showMemberActions === member.id ? null : member.id; }}
+                        onclick={(e) => { e.stopPropagation(); showMemberActions = showMemberActions === member.id ? null : member.id!; }}
                         aria-label="Member actions"
                       >
                         ···
@@ -267,21 +267,21 @@
                       {#if showMemberActions === member.id}
                         <div class="member-actions-menu">
                           {#if member.role !== 'admin'}
-                            <button type="button" class="menu-item" onclick={() => handleChangeRole(member.id, 'admin')}>
+                            <button type="button" class="menu-item" onclick={() => handleChangeRole(member.id!, 'admin')}>
                               Make Admin
                             </button>
                           {/if}
                           {#if member.role !== 'moderator'}
-                            <button type="button" class="menu-item" onclick={() => handleChangeRole(member.id, 'moderator')}>
+                            <button type="button" class="menu-item" onclick={() => handleChangeRole(member.id!, 'moderator')}>
                               Make Moderator
                             </button>
                           {/if}
                           {#if member.role !== 'member'}
-                            <button type="button" class="menu-item" onclick={() => handleChangeRole(member.id, 'member')}>
+                            <button type="button" class="menu-item" onclick={() => handleChangeRole(member.id!, 'member')}>
                               Remove Role
                             </button>
                           {/if}
-                          <button type="button" class="menu-item menu-item-danger" onclick={() => handleRemoveMember(member.id)}>
+                          <button type="button" class="menu-item menu-item-danger" onclick={() => handleRemoveMember(member.id!)}>
                             Remove from Group
                           </button>
                         </div>

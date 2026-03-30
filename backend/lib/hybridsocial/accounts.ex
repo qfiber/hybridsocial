@@ -4,7 +4,7 @@ defmodule Hybridsocial.Accounts do
   """
   import Ecto.Query
   alias Hybridsocial.Repo
-  alias Hybridsocial.Accounts.{Identity, Invite, User}
+  alias Hybridsocial.Accounts.{Bot, Identity, Invite, User}
 
   # --- Identity queries ---
 
@@ -77,7 +77,9 @@ defmodule Hybridsocial.Accounts do
           _ -> :ok
         end
 
-        {:ok, %{identity | user: user}}
+        identity = %{identity | user: user}
+        Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_created, identity})
+        {:ok, identity}
 
       {:error, :identity, changeset, _} ->
         {:error, changeset}
@@ -310,15 +312,21 @@ defmodule Hybridsocial.Accounts do
   # --- Profile updates ---
 
   def update_identity(identity, attrs) do
-    identity
-    |> Identity.update_changeset(attrs)
-    |> Repo.update()
+    case identity |> Identity.update_changeset(attrs) |> Repo.update() do
+      {:ok, updated} ->
+        Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_updated, updated})
+        {:ok, updated}
+      error -> error
+    end
   end
 
   def admin_update_identity(identity, attrs) do
-    identity
-    |> Identity.admin_update_changeset(attrs)
-    |> Repo.update()
+    case identity |> Identity.admin_update_changeset(attrs) |> Repo.update() do
+      {:ok, updated} ->
+        Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_updated, updated})
+        {:ok, updated}
+      error -> error
+    end
   end
 
   def change_handle(identity, new_handle) do
@@ -377,6 +385,56 @@ defmodule Hybridsocial.Accounts do
     end
   end
 
+  # --- Suspension (with cascade to subaccounts) ---
+
+  def suspend_identity(identity) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:identity, Identity.suspend_changeset(identity))
+    |> Ecto.Multi.run(:cascade_children, fn _repo, _ ->
+      cascade_suspend_children(identity.id)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{identity: identity}} -> {:ok, identity}
+      {:error, :identity, changeset, _} -> {:error, changeset}
+      {:error, _, reason, _} -> {:error, reason}
+    end
+  end
+
+  def unsuspend_identity(identity) do
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:identity, Identity.unsuspend_changeset(identity))
+    |> Ecto.Multi.run(:cascade_children, fn _repo, _ ->
+      cascade_unsuspend_children(identity.id)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{identity: identity}} -> {:ok, identity}
+      {:error, :identity, changeset, _} -> {:error, changeset}
+      {:error, _, reason, _} -> {:error, reason}
+    end
+  end
+
+  defp cascade_suspend_children(parent_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    {count, _} =
+      Identity
+      |> where([i], i.parent_identity_id == ^parent_id and is_nil(i.deleted_at))
+      |> Repo.update_all(set: [is_suspended: true, suspended_at: now])
+
+    {:ok, count}
+  end
+
+  defp cascade_unsuspend_children(parent_id) do
+    {count, _} =
+      Identity
+      |> where([i], i.parent_identity_id == ^parent_id and is_nil(i.deleted_at))
+      |> Repo.update_all(set: [is_suspended: false, suspended_at: nil])
+
+    {:ok, count}
+  end
+
   # --- Silencing ---
 
   def silence_identity(identity, attrs \\ %{}) do
@@ -426,12 +484,110 @@ defmodule Hybridsocial.Accounts do
     revoke_all_tokens(identity_id)
   end
 
+  # --- Subaccounts ---
+
+  @doc "Creates a bot subaccount under the given parent user identity."
+  def create_bot(parent_identity_id, attrs) do
+    with :ok <- check_subaccount_limit(parent_identity_id, "bot") do
+      Ecto.Multi.new()
+      |> Ecto.Multi.insert(:identity, fn _ ->
+        %Identity{}
+        |> Identity.create_changeset(%{
+          "type" => "bot",
+          "handle" => attrs["handle"],
+          "display_name" => attrs["display_name"],
+          "bio" => attrs["bio"],
+          "parent_identity_id" => parent_identity_id,
+          "is_bot" => true
+        })
+      end)
+      |> Ecto.Multi.insert(:bot, fn %{identity: identity} ->
+        %Bot{identity_id: identity.id}
+        |> Bot.changeset(attrs)
+      end)
+      |> Repo.transaction()
+      |> case do
+        {:ok, %{identity: identity, bot: bot}} ->
+          {:ok, %{identity | bot: bot}}
+
+        {:error, :identity, changeset, _} ->
+          {:error, changeset}
+
+        {:error, :bot, changeset, _} ->
+          {:error, changeset}
+      end
+    end
+  end
+
+  @doc "Lists all subaccounts (children) of a parent identity."
+  def list_subaccounts(parent_identity_id, opts \\ []) do
+    type = Keyword.get(opts, :type)
+
+    Identity
+    |> where([i], i.parent_identity_id == ^parent_identity_id and is_nil(i.deleted_at))
+    |> filter_by_type(type)
+    |> order_by([i], asc: i.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc "Counts subaccounts of a given type for a parent identity."
+  def count_subaccounts(parent_identity_id, type) do
+    Identity
+    |> where([i], i.parent_identity_id == ^parent_identity_id and i.type == ^type and is_nil(i.deleted_at))
+    |> Repo.aggregate(:count)
+  end
+
+  @doc "Checks if the parent identity can create another subaccount of the given type."
+  def check_subaccount_limit(parent_identity_id, type) do
+    max = subaccount_limit(type)
+    current = count_subaccounts(parent_identity_id, type)
+
+    if current >= max do
+      {:error, :subaccount_limit_reached}
+    else
+      :ok
+    end
+  end
+
+  defp subaccount_limit("bot"), do: Hybridsocial.Config.get("max_bots_per_user", 4)
+  defp subaccount_limit("organization"), do: Hybridsocial.Config.get("max_organizations_per_user", 2)
+  defp subaccount_limit("group"), do: Hybridsocial.Config.get("max_groups_per_user", 4)
+  defp subaccount_limit(_), do: 0
+
+  @doc "Gets a subaccount identity, verifying it belongs to the parent."
+  def get_subaccount(parent_identity_id, child_identity_id) do
+    Identity
+    |> where([i], i.id == ^child_identity_id and i.parent_identity_id == ^parent_identity_id and is_nil(i.deleted_at))
+    |> Repo.one()
+  end
+
   # --- Account deletion ---
 
   def soft_delete_identity(identity) do
-    identity
-    |> Identity.soft_delete_changeset()
-    |> Repo.update()
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:identity, Identity.soft_delete_changeset(identity))
+    |> Ecto.Multi.run(:cascade_children, fn _repo, _ ->
+      cascade_soft_delete_children(identity.id)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{identity: deleted}} ->
+        Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_deleted, deleted.id})
+        {:ok, deleted}
+      {:error, :identity, changeset, _} -> {:error, changeset}
+      {:error, _, reason, _} -> {:error, reason}
+    end
+  end
+
+  defp cascade_soft_delete_children(parent_id) do
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+
+    {count, _} =
+      Identity
+      |> where([i], i.parent_identity_id == ^parent_id and is_nil(i.deleted_at))
+      |> Repo.update_all(set: [deleted_at: now])
+
+    {:ok, count}
   end
 
   # --- Listing ---
@@ -440,12 +596,17 @@ defmodule Hybridsocial.Accounts do
     Identity
     |> where([i], is_nil(i.deleted_at))
     |> filter_by_type(opts[:type])
+    |> filter_by_local(opts[:local])
     |> order_by([i], desc: i.inserted_at)
     |> Repo.all()
   end
 
   defp filter_by_type(query, nil), do: query
   defp filter_by_type(query, type), do: where(query, [i], i.type == ^type)
+
+  defp filter_by_local(query, nil), do: query
+  defp filter_by_local(query, true), do: where(query, [i], is_nil(i.ap_actor_url) or i.ap_actor_url == "")
+  defp filter_by_local(query, false), do: where(query, [i], not is_nil(i.ap_actor_url) and i.ap_actor_url != "")
 
   # --- Password Reset ---
 
@@ -611,5 +772,99 @@ defmodule Hybridsocial.Accounts do
       {:ok, secret} -> {:ok, secret}
       :error -> {:error, :invalid_secret}
     end
+  end
+
+  # --- Suggested Users ---
+
+  def suggested_users(viewer_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 10)
+
+    Identity
+    |> where([i], i.is_suggested == true)
+    |> where([i], is_nil(i.deleted_at) and i.is_suspended == false)
+    |> where([i], i.id != ^viewer_id)
+    |> order_by([i], desc: i.inserted_at)
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  # --- Account Approval ---
+
+  def pending_accounts do
+    User
+    |> where([u], not is_nil(u.confirmed_at) and is_nil(u.approved_at))
+    |> join(:inner, [u], i in Identity, on: i.id == u.identity_id)
+    |> select([u, i], %{user: u, identity: i})
+    |> order_by([u], asc: u.confirmed_at)
+    |> Repo.all()
+  end
+
+  def approve_account(identity_id) do
+    case Repo.get_by(User, identity_id: identity_id) do
+      nil -> {:error, :not_found}
+      user ->
+        user
+        |> Ecto.Changeset.change(approved_at: DateTime.utc_now() |> DateTime.truncate(:microsecond))
+        |> Repo.update()
+    end
+  end
+
+  def reject_account(identity_id) do
+    # Soft-delete the identity
+    case get_identity(identity_id) do
+      nil -> {:error, :not_found}
+      identity -> soft_delete_identity(identity)
+    end
+  end
+
+  # --- Change Email ---
+
+  def change_email(identity_id, new_email, password) do
+    with user when not is_nil(user) <- Repo.get_by(User, identity_id: identity_id),
+         true <- Bcrypt.verify_pass(password, user.password_hash) do
+      user
+      |> Ecto.Changeset.change(email: new_email)
+      |> Ecto.Changeset.validate_format(:email, ~r/@/)
+      |> Ecto.Changeset.unique_constraint(:email)
+      |> Repo.update()
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :invalid_password}
+    end
+  end
+
+  # --- Account Migration ---
+
+  def migrate_account(identity_id, target_acct, password) do
+    with user when not is_nil(user) <- Repo.get_by(User, identity_id: identity_id),
+         true <- Bcrypt.verify_pass(password, user.password_hash),
+         identity when not is_nil(identity) <- get_identity(identity_id) do
+      identity
+      |> Ecto.Changeset.change(moved_to: target_acct)
+      |> Repo.update()
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :invalid_password}
+    end
+  end
+
+  # --- Account Aliases ---
+
+  def add_alias(identity, alias_uri) do
+    current = identity.also_known_as || []
+    if alias_uri in current do
+      {:ok, identity}
+    else
+      identity
+      |> Ecto.Changeset.change(also_known_as: current ++ [alias_uri])
+      |> Repo.update()
+    end
+  end
+
+  def remove_alias(identity, alias_uri) do
+    current = identity.also_known_as || []
+    identity
+    |> Ecto.Changeset.change(also_known_as: Enum.reject(current, &(&1 == alias_uri)))
+    |> Repo.update()
   end
 end

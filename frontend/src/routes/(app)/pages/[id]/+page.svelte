@@ -25,7 +25,7 @@
   ];
 
   const unsub = page.subscribe(($page) => {
-    pageId = $page.params.id;
+    pageId = $page.params.id!;
   });
 
   async function loadPage() {

@@ -34,6 +34,7 @@ defmodule Hybridsocial.Search.Indexer do
 
   defp setup_posts_index do
     mapping = %{
+      settings: %{number_of_replicas: 0},
       mappings: %{
         properties: %{
           content: %{type: "text", analyzer: "standard"},
@@ -58,6 +59,7 @@ defmodule Hybridsocial.Search.Indexer do
 
   defp setup_accounts_index do
     mapping = %{
+      settings: %{number_of_replicas: 0},
       mappings: %{
         properties: %{
           handle: %{type: "text", fields: %{raw: %{type: "keyword"}}},
@@ -75,6 +77,7 @@ defmodule Hybridsocial.Search.Indexer do
 
   defp setup_hashtags_index do
     mapping = %{
+      settings: %{number_of_replicas: 0},
       mappings: %{
         properties: %{
           name: %{type: "text", fields: %{raw: %{type: "keyword"}}},
@@ -88,6 +91,7 @@ defmodule Hybridsocial.Search.Indexer do
 
   defp setup_groups_index do
     mapping = %{
+      settings: %{number_of_replicas: 0},
       mappings: %{
         properties: %{
           name: %{type: "text", fields: %{raw: %{type: "keyword"}}},

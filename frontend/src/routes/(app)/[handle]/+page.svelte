@@ -5,6 +5,7 @@
   import type { Identity, Relationship, Post } from '$lib/api/types.js';
   import { lookupAccount, getRelationship, follow, unfollow, block, unblock, mute, unmute } from '$lib/api/accounts.js';
   import { getAccountStatuses } from '$lib/api/statuses.js';
+  import { api } from '$lib/api/client.js';
   import { authStore, isStaffMember } from '$lib/stores/auth.js';
   import ProfileHeader from '$lib/components/profile/ProfileHeader.svelte';
   import AdminProfileActions from '$lib/components/admin/AdminProfileActions.svelte';
@@ -24,16 +25,27 @@
   let error: string | null = $state(null);
   let activeTab = $state('posts');
   let isOwnProfile = $state(false);
+  let confirmAction: 'block' | 'unblock' | 'mute' | 'unmute' | null = $state(null);
+  let familiarFollowers = $state<Identity[]>([]);
 
   const unsub = page.subscribe(($page) => {
-    handle = $page.params.handle;
+    handle = $page.params.handle!;
   });
 
-  const tabs = [
-    { id: 'posts', label: 'Posts' },
-    { id: 'replies', label: 'Posts & Replies' },
-    { id: 'media', label: 'Media' },
-  ];
+  let tabs = $derived(
+    isOwnProfile
+      ? [
+          { id: 'posts', label: 'Posts' },
+          { id: 'replies', label: 'Replies' },
+          { id: 'media', label: 'Media' },
+          { id: 'direct', label: 'Direct' },
+        ]
+      : [
+          { id: 'posts', label: 'Posts' },
+          { id: 'replies', label: 'Replies' },
+          { id: 'media', label: 'Media' },
+        ]
+  );
 
   let retryCount = 0;
 
@@ -48,6 +60,10 @@
 
       if (!isOwnProfile && auth.user) {
         relationship = await getRelationship(account.id);
+        // Load familiar followers
+        try {
+          familiarFollowers = await api.get<Identity[]>(`/api/v1/accounts/${account.id}/familiar_followers`);
+        } catch { familiarFollowers = []; }
       }
 
       await loadPosts(true);
@@ -74,18 +90,21 @@
     }
     feedLoading = true;
     try {
-      const params: { only_media?: boolean; cursor?: string } = {};
+      const params: { only_media?: boolean; pinned?: boolean; cursor?: string; exclude_replies?: boolean; only_direct?: boolean } = {};
+      if (activeTab === 'posts') params.exclude_replies = true;
       if (activeTab === 'media') params.only_media = true;
+      if (activeTab === 'direct') params.only_direct = true;
       if (cursor) params.cursor = cursor;
 
       const result = await getAccountStatuses(account.id, params);
+      const items = Array.isArray(result) ? result : (result as any).data || [];
       if (reset) {
-        posts = result.data;
+        posts = items;
       } else {
-        posts = [...posts, ...result.data];
+        posts = [...posts, ...items];
       }
-      cursor = result.next_cursor;
-      hasMore = !!result.next_cursor;
+      cursor = items.length > 0 ? items[items.length - 1]?.id : null;
+      hasMore = items.length >= 20;
     } catch {
       // Silently handle feed errors
     } finally {
@@ -111,27 +130,43 @@
     } catch { /* handle error */ }
   }
 
-  async function handleBlock() {
+  function handleBlock() {
     if (!account || !relationship) return;
-    try {
-      if (relationship.blocking) {
-        relationship = await unblock(account.id);
-      } else {
-        relationship = await block(account.id);
-      }
-    } catch { /* handle error */ }
+    confirmAction = relationship.blocking ? 'unblock' : 'block';
   }
 
-  async function handleMute() {
+  function handleMute() {
     if (!account || !relationship) return;
+    confirmAction = relationship.muting ? 'unmute' : 'mute';
+  }
+
+  async function executeConfirmedAction() {
+    if (!account || !relationship || !confirmAction) return;
     try {
-      if (relationship.muting) {
-        relationship = await unmute(account.id);
-      } else {
-        relationship = await mute(account.id);
+      switch (confirmAction) {
+        case 'block':
+          relationship = await block(account.id);
+          break;
+        case 'unblock':
+          relationship = await unblock(account.id);
+          break;
+        case 'mute':
+          relationship = await mute(account.id);
+          break;
+        case 'unmute':
+          relationship = await unmute(account.id);
+          break;
       }
     } catch { /* handle error */ }
+    confirmAction = null;
   }
+
+  const confirmMessages: Record<string, { title: string; message: string; button: string }> = {
+    block: { title: 'Block this account?', message: 'They will not be able to see your posts or interact with you. You can unblock them at any time.', button: 'Block' },
+    unblock: { title: 'Unblock this account?', message: 'They will be able to see your posts and interact with you again.', button: 'Unblock' },
+    mute: { title: 'Mute this account?', message: 'Their posts will be hidden from your feeds. They will not be notified.', button: 'Mute' },
+    unmute: { title: 'Unmute this account?', message: 'Their posts will appear in your feeds again.', button: 'Unmute' },
+  };
 
   function handleMessage() {
     if (account) {
@@ -193,6 +228,34 @@
       onedit={handleEdit}
     />
 
+    {#if familiarFollowers.length > 0}
+      <div class="familiar-followers">
+        <div class="familiar-avatars">
+          {#each familiarFollowers.slice(0, 3) as ff (ff.id)}
+            <a href="/@{ff.handle}" class="familiar-avatar-link">
+              {#if ff.avatar_url}
+                <img src={ff.avatar_url} alt={ff.display_name || ff.handle} class="familiar-avatar" />
+              {:else}
+                <div class="familiar-avatar familiar-avatar-placeholder">
+                  {(ff.display_name || ff.handle).charAt(0).toUpperCase()}
+                </div>
+              {/if}
+            </a>
+          {/each}
+        </div>
+        <span class="familiar-text">
+          Followed by
+          {#each familiarFollowers.slice(0, 2) as ff, i (ff.id)}
+            {#if i > 0}, {/if}
+            <a href="/@{ff.handle}" class="familiar-link">{ff.display_name || ff.handle}</a>
+          {/each}
+          {#if familiarFollowers.length > 2}
+            and {familiarFollowers.length - 2} more you follow
+          {/if}
+        </span>
+      </div>
+    {/if}
+
     {#if $isStaffMember && !isOwnProfile}
       <AdminProfileActions {account} />
     {/if}
@@ -212,6 +275,25 @@
     </div>
   {/if}
 </div>
+
+{#if confirmAction}
+  <div class="dialog-overlay" onclick={() => confirmAction = null} role="dialog" aria-modal="true" aria-label={confirmMessages[confirmAction].title}>
+    <div class="dialog-panel" onclick={(e) => e.stopPropagation()}>
+      <h3 class="dialog-title">{confirmMessages[confirmAction].title}</h3>
+      <p class="dialog-message">{confirmMessages[confirmAction].message}</p>
+      <div class="dialog-actions">
+        <button type="button" class="dialog-cancel" onclick={() => confirmAction = null}>Cancel</button>
+        <button
+          type="button"
+          class={confirmAction === 'block' || confirmAction === 'mute' ? 'dialog-confirm-danger' : 'dialog-confirm'}
+          onclick={executeConfirmedAction}
+        >
+          {confirmMessages[confirmAction].button}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .profile-page {
@@ -262,5 +344,147 @@
   .error-message {
     font-size: var(--text-sm);
     color: var(--color-text-secondary);
+  }
+
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--space-4);
+  }
+
+  .dialog-panel {
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    max-width: 400px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .dialog-title {
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .dialog-message {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+  }
+
+  .dialog-cancel {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .dialog-cancel:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .dialog-confirm-danger {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    border: none;
+    background: var(--color-danger);
+    color: white;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .dialog-confirm-danger:hover {
+    opacity: 0.9;
+  }
+
+  .dialog-confirm {
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-md);
+    border: none;
+    background: var(--color-primary);
+    color: white;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .dialog-confirm:hover {
+    opacity: 0.9;
+  }
+
+  /* Familiar followers */
+  .familiar-followers {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+  }
+
+  .familiar-avatars {
+    display: flex;
+  }
+
+  .familiar-avatar-link {
+    margin-inline-end: -8px;
+  }
+
+  .familiar-avatar-link:last-child {
+    margin-inline-end: 0;
+  }
+
+  .familiar-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-surface-container-lowest);
+  }
+
+  .familiar-avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-size: 0.6rem;
+    font-weight: 700;
+  }
+
+  .familiar-text {
+    line-height: 1.3;
+  }
+
+  .familiar-link {
+    color: var(--color-text);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .familiar-link:hover {
+    text-decoration: underline;
   }
 </style>

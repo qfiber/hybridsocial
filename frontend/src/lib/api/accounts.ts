@@ -17,6 +17,7 @@ export function updateAccount(data: {
   is_locked?: boolean;
   is_bot?: boolean;
   show_badge?: boolean;
+  default_visibility?: string;
 }): Promise<Identity> {
   return api.patch('/api/v1/accounts/update', data);
 }
@@ -70,7 +71,7 @@ export function getRelationships(ids: string[]): Promise<Relationship[]> {
 }
 
 export function getRelationship(id: string): Promise<Relationship> {
-  return api.get('/api/v1/accounts/relationships', { id }).then((rels: Relationship[]) => {
+  return api.get<Relationship[]>('/api/v1/accounts/relationships', { id }).then((rels) => {
     return rels[0] || { id, following: false, followed_by: false, blocking: false, muting: false };
   });
 }

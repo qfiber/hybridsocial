@@ -9,5 +9,5 @@ export interface PublicSitePage {
 }
 
 export function getPublicSitePage(slug: string): Promise<PublicSitePage> {
-  return api.get(`/api/v1/pages/site/${slug}`).then((r: { data: PublicSitePage }) => r.data);
+  return api.get<{ data: PublicSitePage }>(`/api/v1/pages/site/${slug}`).then((r) => r.data);
 }

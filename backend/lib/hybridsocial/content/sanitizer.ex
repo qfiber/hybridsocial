@@ -74,8 +74,6 @@ defmodule Hybridsocial.Content.Sanitizer do
     |> String.replace("&", "&amp;")
     |> String.replace("<", "&lt;")
     |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
-    |> String.replace("'", "&#39;")
   end
 
   # Escape for use inside HTML attribute values (double-quoted)

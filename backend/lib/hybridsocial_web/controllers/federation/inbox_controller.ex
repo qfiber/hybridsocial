@@ -4,6 +4,8 @@ defmodule HybridsocialWeb.Federation.InboxController do
   alias Hybridsocial.Federation
   alias Hybridsocial.Federation.{Inbox, ActivityMapper}
 
+  plug HybridsocialWeb.Plugs.DigestPlug
+
   require Logger
 
   @doc """

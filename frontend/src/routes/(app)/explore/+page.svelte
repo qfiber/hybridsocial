@@ -5,13 +5,17 @@
   import { search } from '$lib/api/search.js';
   import { getTrending } from '$lib/api/instance.js';
   import { getPublicTimeline } from '$lib/api/timelines.js';
+  import { api } from '$lib/api/client.js';
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import FeedList from '$lib/components/feed/FeedList.svelte';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
 
+  type ExploreTab = 'local' | 'global' | 'trending';
+
   let query = $state('');
-  let activeTab = $state('posts');
+  let exploreTab = $state<ExploreTab>('local');
+  let searchTab = $state('posts');
   let searching = $state(false);
   let hasSearched = $state(false);
 
@@ -20,15 +24,13 @@
   let searchAccounts: Identity[] = $state([]);
   let searchHashtags: TrendingTag[] = $state([]);
 
-  // Trending / public timeline
-  let trendingTags: TrendingTag[] = $state([]);
-  let publicPosts: Post[] = $state([]);
-  let publicLoading = $state(true);
-  let publicHasMore = $state(true);
-  let publicCursor: string | null = $state(null);
-  let trendingLoading = $state(true);
+  // Feed state per tab
+  let feedPosts: Post[] = $state([]);
+  let feedLoading = $state(true);
+  let feedHasMore = $state(true);
+  let feedCursor: string | null = $state(null);
 
-  const tabs = [
+  const searchTabs = [
     { id: 'posts', label: 'Posts' },
     { id: 'accounts', label: 'Accounts' },
     { id: 'hashtags', label: 'Hashtags' },
@@ -45,17 +47,16 @@
     hasSearched = true;
     try {
       const results = await search(q, { resolve: true });
-      searchPosts = results.statuses || results.posts || [];
+      searchPosts = results.posts || (results as any).statuses || [];
       searchAccounts = results.accounts || [];
       searchHashtags = results.hashtags || [];
 
-      // Auto-switch to the tab that has results
       if (searchAccounts.length > 0 && searchPosts.length === 0) {
-        activeTab = 'accounts';
+        searchTab = 'accounts';
       } else if (searchHashtags.length > 0 && searchPosts.length === 0 && searchAccounts.length === 0) {
-        activeTab = 'hashtags';
+        searchTab = 'hashtags';
       } else {
-        activeTab = 'posts';
+        searchTab = 'posts';
       }
     } catch {
       // Handle silently
@@ -69,48 +70,69 @@
     handleSearch();
   }
 
-  async function loadPublicTimeline(reset = false) {
-    if (reset) {
-      publicPosts = [];
-      publicCursor = null;
-      publicHasMore = true;
+  let searchDebounce: ReturnType<typeof setTimeout> | null = null;
+
+  function handleSearchInput() {
+    if (searchDebounce) clearTimeout(searchDebounce);
+    const q = query.trim();
+    if (!q) {
+      hasSearched = false;
+      return;
     }
-    publicLoading = true;
+    searchDebounce = setTimeout(handleSearch, 300);
+  }
+
+  async function loadFeed(reset = false) {
+    if (reset) {
+      feedPosts = [];
+      feedCursor = null;
+      feedHasMore = true;
+    }
+    feedLoading = true;
     try {
-      const params: { cursor?: string } = {};
-      if (publicCursor) params.cursor = publicCursor;
-      const result = await getPublicTimeline(params);
-      if (reset) {
-        publicPosts = result.data;
+      const params: Record<string, string> = {};
+      if (feedCursor) params.max_id = feedCursor;
+
+      let endpoint: string;
+      if (exploreTab === 'local') {
+        endpoint = '/api/v1/timelines/public?local=true';
+      } else if (exploreTab === 'global') {
+        endpoint = '/api/v1/timelines/global';
       } else {
-        publicPosts = [...publicPosts, ...result.data];
+        endpoint = '/api/v1/timelines/public?algorithm=trending';
       }
-      publicCursor = result.next_cursor;
-      publicHasMore = !!result.next_cursor;
+
+      if (feedCursor) endpoint += (endpoint.includes('?') ? '&' : '?') + `max_id=${feedCursor}`;
+
+      const items: Post[] = await api.get(endpoint);
+      const result = Array.isArray(items) ? items : [];
+
+      if (reset) {
+        feedPosts = result;
+      } else {
+        feedPosts = [...feedPosts, ...result];
+      }
+      feedCursor = result.length > 0 ? result[result.length - 1]?.id : null;
+      feedHasMore = result.length >= 20;
     } catch {
       // Handle silently
     } finally {
-      publicLoading = false;
+      feedLoading = false;
     }
   }
 
-  async function loadTrending() {
-    trendingLoading = true;
-    try {
-      trendingTags = await getTrending();
-    } catch {
-      // Handle silently
-    } finally {
-      trendingLoading = false;
+  function switchTab(tab: ExploreTab) {
+    if (tab !== exploreTab) {
+      exploreTab = tab;
+      loadFeed(true);
     }
   }
 
   onMount(() => {
-    loadTrending();
-    loadPublicTimeline(true);
+    loadFeed(true);
   });
 
-  // React to URL query param changes (header search navigates here with ?q=)
+  // React to URL query param changes
   let lastUrlQuery = '';
 
   $effect(() => {
@@ -145,6 +167,7 @@
       class="search-input"
       placeholder="Search posts, people, and hashtags..."
       bind:value={query}
+      oninput={handleSearchInput}
     />
     {#if searching}
       <div class="search-bar-spinner">
@@ -163,7 +186,7 @@
   </form>
 
   {#if hasSearched}
-    <Tabs {tabs} bind:active={activeTab}>
+    <Tabs tabs={searchTabs} bind:active={searchTab}>
       {#if searching}
         <div class="search-loading">
           <div class="search-spinner">
@@ -179,7 +202,7 @@
             <Skeleton width="100%" height="56px" />
           </div>
         </div>
-      {:else if activeTab === 'posts'}
+      {:else if searchTab === 'posts'}
         {#if searchPosts.length === 0}
           <div class="empty-results">
             <p>No posts found for "{query}"</p>
@@ -187,7 +210,7 @@
         {:else}
           <FeedList posts={searchPosts} loading={false} hasMore={false} />
         {/if}
-      {:else if activeTab === 'accounts'}
+      {:else if searchTab === 'accounts'}
         {#if searchAccounts.length === 0}
           <div class="empty-results">
             <p>No accounts found for "{query}"</p>
@@ -208,7 +231,7 @@
             {/each}
           </div>
         {/if}
-      {:else if activeTab === 'hashtags'}
+      {:else if searchTab === 'hashtags'}
         {#if searchHashtags.length === 0}
           <div class="empty-results">
             <p>No hashtags found for "{query}"</p>
@@ -228,45 +251,50 @@
       {/if}
     </Tabs>
   {:else}
-    <!-- Trending + Public Timeline -->
-    {#if trendingTags.length > 0}
-      <div class="trending-section">
-        <h2 class="section-heading">Trending</h2>
-        <div class="trending-list">
-          {#each trendingTags.slice(0, 5) as tag (tag.name)}
-            <a href="/tags/{tag.name}" class="trending-item">
-              <span class="trending-name">#{tag.name}</span>
-              {#if (tag.history || []).length > 0}
-                <span class="trending-stat">{(tag.history || [])[0].uses} posts &middot; {(tag.history || [])[0].accounts} people</span>
-              {/if}
-            </a>
-          {/each}
-        </div>
-      </div>
-    {:else if trendingLoading}
-      <div class="trending-section">
-        <h2 class="section-heading">Trending</h2>
-        <div class="trending-list">
-          {#each Array(3) as _}
-            <div class="trending-skeleton">
-              <Skeleton width="120px" height="16px" />
-              <Skeleton width="80px" height="12px" />
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
-
-    <div class="public-section">
-      <h2 class="section-heading">Public Timeline</h2>
-      <FeedList
-        posts={publicPosts}
-        loading={publicLoading}
-        hasMore={publicHasMore}
-        onloadmore={() => loadPublicTimeline(false)}
-        emptyMessage="No public posts yet"
-      />
+    <!-- Explore tabs: Local / Global / Trending -->
+    <div class="explore-tabs" role="tablist" aria-label="Explore feeds">
+      <button
+        type="button"
+        role="tab"
+        class="explore-tab"
+        class:explore-tab-active={exploreTab === 'local'}
+        aria-selected={exploreTab === 'local'}
+        onclick={() => switchTab('local')}
+      >
+        <span class="material-symbols-outlined tab-icon">home</span>
+        Local
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="explore-tab"
+        class:explore-tab-active={exploreTab === 'global'}
+        aria-selected={exploreTab === 'global'}
+        onclick={() => switchTab('global')}
+      >
+        <span class="material-symbols-outlined tab-icon">public</span>
+        Global
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="explore-tab"
+        class:explore-tab-active={exploreTab === 'trending'}
+        aria-selected={exploreTab === 'trending'}
+        onclick={() => switchTab('trending')}
+      >
+        <span class="material-symbols-outlined tab-icon">trending_up</span>
+        Trending
+      </button>
     </div>
+
+    <FeedList
+      posts={feedPosts}
+      loading={feedLoading}
+      hasMore={feedHasMore}
+      onloadmore={() => loadFeed(false)}
+      emptyMessage={exploreTab === 'local' ? 'No local posts yet' : exploreTab === 'global' ? 'No posts from the fediverse yet' : 'Nothing trending right now'}
+    />
   {/if}
 </div>
 
@@ -463,62 +491,49 @@
     color: var(--color-text-tertiary);
   }
 
-  /* Trending section */
-  .trending-section {
-    background: var(--color-surface-raised);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-4);
-  }
-
-  .section-heading {
-    font-size: var(--text-lg);
-    font-weight: 700;
-    color: var(--color-text);
-    margin-block-end: var(--space-3);
-  }
-
-  .trending-list {
+  /* Explore tabs */
+  .explore-tabs {
     display: flex;
-    flex-direction: column;
-  }
-
-  .trending-item {
-    display: flex;
-    flex-direction: column;
     gap: 2px;
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-md);
-    text-decoration: none;
-    transition: background var(--transition-fast);
+    background: var(--color-surface-container-lowest);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    padding: 3px;
   }
 
-  .trending-item:hover {
-    background: var(--color-surface);
-    text-decoration: none;
-  }
-
-  .trending-name {
-    font-size: var(--text-sm);
+  .explore-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 11px;
+    font-size: 0.875rem;
     font-weight: 600;
-    color: var(--color-primary);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 150ms ease;
   }
 
-  .trending-stat {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
+  .explore-tab:hover {
+    color: var(--color-text);
+    background: var(--color-surface);
   }
 
-  .trending-skeleton {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-3);
+  .explore-tab-active {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
   }
 
-  .public-section {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
+  .explore-tab-active:hover {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  .tab-icon {
+    font-size: 18px;
   }
 </style>

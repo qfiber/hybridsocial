@@ -476,9 +476,15 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
   # ── Accounts ─────────────────────────────────────────────────────────
 
-  def list_accounts(conn, _params) do
+  def list_accounts(conn, params) do
     with :ok <- require_permission(conn, "users.view") do
-      accounts = Accounts.list_identities()
+      opts = case params["local"] do
+        "true" -> [local: true]
+        "false" -> [local: false]
+        _ -> []
+      end
+
+      accounts = Accounts.list_identities(opts)
 
       conn
       |> put_status(:ok)
@@ -521,9 +527,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp handle_account_action(conn, identity, "suspend", admin_id, _params) do
-    case identity
-         |> Hybridsocial.Accounts.Identity.suspend_changeset()
-         |> Hybridsocial.Repo.update() do
+    case Hybridsocial.Accounts.suspend_identity(identity) do
       {:ok, updated} ->
         Moderation.log(admin_id, "account.suspended", "identity", identity.id, %{})
         conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
@@ -534,9 +538,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp handle_account_action(conn, identity, "unsuspend", admin_id, _params) do
-    case identity
-         |> Hybridsocial.Accounts.Identity.unsuspend_changeset()
-         |> Hybridsocial.Repo.update() do
+    case Hybridsocial.Accounts.unsuspend_identity(identity) do
       {:ok, updated} ->
         Moderation.log(admin_id, "account.unsuspended", "identity", identity.id, %{})
         conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
@@ -1832,11 +1834,29 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   defp serialize_account(identity) do
+    local_host = URI.parse(HybridsocialWeb.Endpoint.url()).host
+    {domain, remote_handle} = extract_remote_info(identity, local_host)
+    is_local = is_nil(domain)
+
+    # For remote users, extract the real handle from the AP URL
+    display_handle = if is_local, do: identity.handle, else: (remote_handle || identity.handle)
+
+    acct =
+      if is_local do
+        identity.handle
+      else
+        "#{display_handle}@#{domain}"
+      end
+
     %{
       id: identity.id,
-      handle: identity.handle,
+      handle: display_handle,
+      acct: acct,
       display_name: identity.display_name,
+      avatar_url: identity.avatar_url,
       type: identity.type,
+      domain: domain,
+      is_local: is_local,
       is_suspended: identity.is_suspended,
       is_silenced: identity.is_silenced,
       silenced_until: identity.silenced_until,
@@ -1847,6 +1867,33 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       trust_level: identity.trust_level,
       created_at: identity.inserted_at
     }
+  end
+
+  defp extract_remote_info(identity, local_host) do
+    case identity.ap_actor_url do
+      url when is_binary(url) and url != "" ->
+        uri = URI.parse(url)
+        host = uri.host
+
+        if is_binary(host) and host != local_host do
+          # Extract handle from AP URL path (e.g., /users/ahmad -> ahmad)
+          remote_handle =
+            case uri.path do
+              "/users/" <> handle -> handle
+              "/u/" <> handle -> handle
+              "/@" <> handle -> handle
+              path when is_binary(path) -> path |> String.split("/") |> List.last()
+              _ -> nil
+            end
+
+          {host, remote_handle}
+        else
+          {nil, nil}
+        end
+
+      _ ->
+        {nil, nil}
+    end
   end
 
   defp serialize_filter(filter) do
@@ -2043,4 +2090,195 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       {:error, perm} -> deny(conn, perm)
     end
   end
+
+  # --- User action wrappers (map /users/:id/<action> to account_action) ---
+
+  def show_account(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.view") do
+      case Accounts.get_identity(id) do
+        nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+        identity -> conn |> put_status(:ok) |> json(serialize_account(identity))
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def suspend_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "suspend"))
+  def unsuspend_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "unsuspend"))
+  def warn_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "warn"))
+  def silence_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "silence"))
+  def unsilence_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "unsilence"))
+  def shadow_ban_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "shadow_ban"))
+  def unshadow_ban_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "unshadow_ban"))
+  def force_sensitive_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "force_sensitive"))
+  def unforce_sensitive_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "unforce_sensitive"))
+  def revoke_sessions(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "revoke_all_sessions"))
+
+  def list_notes(conn, %{"id" => _account_id}) do
+    with :ok <- require_permission(conn, "users.view") do
+      conn |> put_status(:ok) |> json([])
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_note(conn, %{"id" => _account_id}) do
+    with :ok <- require_permission(conn, "users.moderate") do
+      conn |> put_status(:created) |> json(%{status: "ok"})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Account Approval Queue ---
+
+  def pending_accounts(conn, _params) do
+    with :ok <- require_permission(conn, "users.view") do
+      pending = Accounts.pending_accounts()
+      conn |> json(%{data: Enum.map(pending, fn %{identity: i} -> serialize_account(i) end)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def approve_account(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.edit") do
+      case Accounts.approve_account(id) do
+        {:ok, _} ->
+          admin_id = conn.assigns.current_identity.id
+          Moderation.log(admin_id, "account.approved", "identity", id, %{})
+          json(conn, %{status: "ok"})
+        {:error, _} ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def reject_account(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.suspend") do
+      case Accounts.reject_account(id) do
+        {:ok, _} ->
+          admin_id = conn.assigns.current_identity.id
+          Moderation.log(admin_id, "account.rejected", "identity", id, %{})
+          json(conn, %{status: "ok"})
+        {:error, _} ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Suggested Users Curation ---
+
+  def suggest_user(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.edit") do
+      case Accounts.get_identity(id) do
+        nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+        identity ->
+          {:ok, _} = Accounts.admin_update_identity(identity, %{"is_suggested" => true})
+          json(conn, %{status: "ok"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def unsuggest_user(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.edit") do
+      case Accounts.get_identity(id) do
+        nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+        identity ->
+          {:ok, _} = Accounts.admin_update_identity(identity, %{"is_suggested" => false})
+          json(conn, %{status: "ok"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Name Revocation ---
+
+  def revoke_name(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.moderate") do
+      case Accounts.get_identity(id) do
+        nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+        identity ->
+          {:ok, updated} = Accounts.admin_update_identity(identity, %{
+            "is_name_revoked" => true,
+            "display_name" => nil
+          })
+          admin_id = conn.assigns.current_identity.id
+          Moderation.log(admin_id, "account.name_revoked", "identity", id, %{})
+          json(conn, %{status: "ok", data: serialize_account(updated)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Promotions Management ---
+
+  def list_promotions(conn, params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      opts = [
+        status: params["status"],
+        limit: parse_int(params["limit"], 50),
+        offset: parse_int(params["offset"], 0)
+      ]
+      promos = Hybridsocial.Promotions.list_all_promotions(opts)
+      json(conn, %{data: Enum.map(promos, &serialize_promotion/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def admin_create_promotion(conn, %{"identity_id" => identity_id} = params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      duration = parse_int(params["duration_days"], 0)
+      case Hybridsocial.Promotions.admin_promote(identity_id, duration_days: duration) do
+        {:ok, promo} ->
+          promo = Hybridsocial.Repo.preload(promo, :identity)
+          conn |> put_status(:created) |> json(serialize_promotion(promo))
+        {:error, reason} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: inspect(reason)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def cancel_promotion(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Hybridsocial.Promotions.admin_cancel_promotion(id) do
+        {:ok, _} -> json(conn, %{status: "ok"})
+        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "promotion.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp serialize_promotion(promo) do
+    %{
+      id: promo.id,
+      identity_id: promo.identity_id,
+      status: promo.status,
+      amount_cents: promo.amount_cents,
+      currency: promo.currency,
+      duration_days: promo.duration_days,
+      starts_at: promo.starts_at,
+      expires_at: promo.expires_at,
+      payment_provider: promo.payment_provider,
+      created_at: promo.inserted_at,
+      account: case promo.identity do
+        %Hybridsocial.Accounts.Identity{} = i -> %{id: i.id, handle: i.handle, display_name: i.display_name, avatar_url: i.avatar_url}
+        _ -> nil
+      end
+    }
+  end
+
 end

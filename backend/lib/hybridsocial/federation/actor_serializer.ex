@@ -50,6 +50,8 @@ defmodule Hybridsocial.Federation.ActorSerializer do
   end
 
   defp actor_type("organization"), do: "Organization"
+  defp actor_type("bot"), do: "Service"
+  defp actor_type("group"), do: "Group"
   defp actor_type(_), do: "Person"
 
   defp maybe_add_icon(actor, %{avatar_url: nil}), do: actor

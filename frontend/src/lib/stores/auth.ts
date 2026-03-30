@@ -215,6 +215,11 @@ api.setOnTokenRefresh((access, refresh) => {
   }));
 });
 
-api.setOnAuthFailure(() => {
-  clearAuth();
+api.setOnAuthFailure(async () => {
+  try {
+    const { markSessionExpired } = await import('$lib/stores/health.js');
+    markSessionExpired();
+  } catch { /* */ }
+  // Delay clearAuth so the banner shows briefly
+  setTimeout(() => clearAuth(), 3000);
 });
