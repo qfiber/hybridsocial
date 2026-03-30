@@ -78,12 +78,12 @@ defmodule Hybridsocial.Media.Backends.S3 do
 
   @impl true
   def url(storage_path) do
-    media_host = Hybridsocial.Config.get("media_host", "")
+    case Application.get_env(:hybridsocial, :media_host) do
+      host when is_binary(host) and host != "" ->
+        "#{String.trim_trailing(host, "/")}/#{storage_path}"
 
-    if media_host != "" do
-      "#{String.trim_trailing(media_host, "/")}/#{storage_path}"
-    else
-      s3_url(storage_path)
+      _ ->
+        s3_url(storage_path)
     end
   end
 

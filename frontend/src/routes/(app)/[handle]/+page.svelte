@@ -27,6 +27,9 @@
   let isOwnProfile = $state(false);
   let confirmAction: 'block' | 'unblock' | 'mute' | 'unmute' | null = $state(null);
   let familiarFollowers = $state<Identity[]>([]);
+  let vouchStatus = $state<{ count: number; required: number; vouches: any[] } | null>(null);
+  let hasVouched = $state(false);
+  let vouchLoading = $state(false);
 
   const unsub = page.subscribe(($page) => {
     handle = $page.params.handle!;
@@ -60,10 +63,17 @@
 
       if (!isOwnProfile && auth.user) {
         relationship = await getRelationship(account.id);
-        // Load familiar followers
+        // Load familiar followers and vouch status
         try {
           familiarFollowers = await api.get<Identity[]>(`/api/v1/accounts/${account.id}/familiar_followers`);
         } catch { familiarFollowers = []; }
+        try {
+          const vs = await api.get<{ count: number; required: number; vouches: any[] }>(`/api/v1/verification/vouches/${account.id}`);
+          if (vs.count > 0 || vs.vouches?.length > 0) {
+            vouchStatus = vs;
+            hasVouched = vs.vouches?.some((v: any) => v.voucher?.id === auth.user?.id) ?? false;
+          }
+        } catch { vouchStatus = null; }
       }
 
       await loadPosts(true);
@@ -114,6 +124,19 @@
 
   function handleTabChange() {
     loadPosts(true);
+  }
+
+  async function handleVouch() {
+    if (!account) return;
+    vouchLoading = true;
+    try {
+      const result = await api.post<{ status: string; vouch_count: number; required: number }>(`/api/v1/verification/vouch/${account.id}`);
+      hasVouched = true;
+      if (vouchStatus) {
+        vouchStatus = { ...vouchStatus, count: result.vouch_count };
+      }
+    } catch { /* already vouched or error */ }
+    finally { vouchLoading = false; }
   }
 
   async function handleFollow() {
@@ -256,6 +279,25 @@
       </div>
     {/if}
 
+    {#if vouchStatus && !isOwnProfile}
+      <div class="vouch-banner card">
+        <div class="vouch-info">
+          <span class="material-symbols-outlined vouch-icon">verified</span>
+          <div>
+            <strong>{account.display_name || account.handle}</strong> is requesting peer verification
+            <span class="vouch-progress">{vouchStatus.count} / {vouchStatus.required} vouches</span>
+          </div>
+        </div>
+        {#if hasVouched}
+          <span class="vouch-done">You vouched</span>
+        {:else}
+          <button class="btn btn-outline btn-sm" type="button" onclick={handleVouch} disabled={vouchLoading}>
+            {vouchLoading ? 'Vouching...' : 'Vouch for identity'}
+          </button>
+        {/if}
+      </div>
+    {/if}
+
     {#if $isStaffMember && !isOwnProfile}
       <AdminProfileActions {account} />
     {/if}
@@ -302,6 +344,45 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .vouch-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .vouch-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    color: var(--color-on-surface);
+  }
+
+  .vouch-icon {
+    color: var(--color-primary);
+    font-size: 20px;
+  }
+
+  .vouch-progress {
+    color: var(--color-on-surface-variant);
+    margin-inline-start: var(--space-1);
+  }
+
+  .vouch-done {
+    font-size: var(--text-sm);
+    color: var(--color-success, #22c55e);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .btn-sm {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+    white-space: nowrap;
   }
 
   .profile-skeleton {

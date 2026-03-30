@@ -18,8 +18,8 @@
 
   onMount(async () => {
     try {
-      const res = await api.get<{ data: MutedAccount[] }>('/api/v1/accounts/mutes');
-      mutedAccounts = res.data;
+      const res = await api.get<MutedAccount[]>('/api/v1/accounts/mutes');
+      mutedAccounts = Array.isArray(res) ? res : [];
     } catch {
       addToast('Failed to load muted accounts', 'error');
     } finally {

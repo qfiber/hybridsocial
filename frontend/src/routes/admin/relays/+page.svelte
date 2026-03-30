@@ -103,7 +103,9 @@
               <code class="relay-url">{relay.inbox_url}</code>
               <div class="relay-meta">
                 <span class="relay-status {statusClass(relay.status)}">{relay.status}</span>
-                <span class="relay-date">Added {formatDate(relay.created_at)}</span>
+                {#if relay.created_at}
+                  <span class="relay-date">Added {formatDate(relay.created_at)}</span>
+                {/if}
               </div>
             </div>
             <button

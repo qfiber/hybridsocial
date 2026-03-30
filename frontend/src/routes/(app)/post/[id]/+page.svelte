@@ -113,11 +113,9 @@
         <PostCard {post} detail />
       </div>
 
-      {#if descendants.length > 0}
-        <div class="thread-replies">
-          <ThreadedReplies {descendants} rootPostId={post.id} />
-        </div>
-      {/if}
+      <div class="thread-replies">
+        <ThreadedReplies {descendants} rootPostId={post.id} />
+      </div>
     </div>
   {:else}
     <div class="page-error">

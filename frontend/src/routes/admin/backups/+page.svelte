@@ -10,6 +10,17 @@
   let passphrase = $state('');
   let showPassphrase = $state(false);
 
+  function generatePassphrase(): string {
+    const words = ['alpha','bravo','coral','delta','eagle','frost','grove','haven','ivory','jewel','karma','lunar','maple','noble','ocean','pearl','quest','ridge','solar','tiger','ultra','vivid','waker','xenon','yield','zephyr'];
+    const parts: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      parts.push(words[Math.floor(Math.random() * words.length)]);
+    }
+    // Add a random 2-digit number for entropy
+    parts.push(String(Math.floor(Math.random() * 90) + 10));
+    return parts.join('-');
+  }
+
   onMount(async () => {
     try {
       backups = await getBackups();
@@ -44,8 +55,8 @@
     });
   }
 
-  function formatSize(bytes: number | null): string {
-    if (bytes === null) return '-';
+  function formatSize(bytes: number | null | undefined): string {
+    if (bytes == null) return '-';
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -88,6 +99,11 @@
             type="button"
             onclick={() => (showPassphrase = !showPassphrase)}
           >{showPassphrase ? 'Hide' : 'Show'}</button>
+          <button
+            class="btn btn-ghost btn-sm"
+            type="button"
+            onclick={() => { passphrase = generatePassphrase(); showPassphrase = true; }}
+          >Generate</button>
         </div>
       </div>
       <button class="btn btn-primary" type="submit" disabled={creating}>
@@ -114,7 +130,7 @@
                 {backup.status.replace(/_/g, ' ')}
               </span>
               <span class="backup-date">{formatDate(backup.created_at)}</span>
-              <span class="backup-size">{formatSize(backup.size)}</span>
+              <span class="backup-size">{formatSize(backup.file_size ?? backup.size)}</span>
             </div>
             <div class="backup-actions">
               {#if backup.status === 'completed' && backup.download_url}

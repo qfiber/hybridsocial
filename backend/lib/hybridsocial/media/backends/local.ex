@@ -61,12 +61,12 @@ defmodule Hybridsocial.Media.Backends.Local do
 
   @impl true
   def url(storage_path) do
-    media_host = Hybridsocial.Config.get("media_host", "")
+    case Application.get_env(:hybridsocial, :media_host) do
+      host when is_binary(host) and host != "" ->
+        "#{String.trim_trailing(host, "/")}/uploads/#{storage_path}"
 
-    if media_host != "" do
-      "#{String.trim_trailing(media_host, "/")}/uploads/#{storage_path}"
-    else
-      "/uploads/#{storage_path}"
+      _ ->
+        "#{HybridsocialWeb.Endpoint.url()}/uploads/#{storage_path}"
     end
   end
 

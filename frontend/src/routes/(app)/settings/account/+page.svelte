@@ -2,35 +2,52 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { clearAuth } from '$lib/stores/auth.js';
+  import { switchLocale, availableLocales, locale } from '$lib/stores/i18n.js';
+  import { addToast } from '$lib/stores/toast.js';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import VerifiedBadge from '$lib/components/ui/VerifiedBadge.svelte';
 
+  let selectedLocale = $state('en');
+  let localeSaving = $state(false);
+
   let showDeleteModal = $state(false);
   let deleteConfirmText = $state('');
   let deleting = $state(false);
-  let exporting = $state(false);
-  let exportSuccess = $state(false);
-  let importFile: HTMLInputElement | undefined = $state();
-  let importing = $state(false);
-  let importSuccess = $state(false);
   let error: string | null = $state(null);
 
   // Verification state
   interface VerificationStatus {
-    status: 'none' | 'pending' | 'verified' | 'rejected';
+    status: 'none' | 'pending' | 'approved' | 'rejected';
+    type?: string;
     verified_at: string | null;
+    vouch_count?: number;
   }
 
   let verification = $state<VerificationStatus>({ status: 'none', verified_at: null });
   let verificationLoading = $state(true);
   let showVerificationForm = $state(false);
-  let verificationType = $state<'domain' | 'manual'>('domain');
+  let verificationType = $state<'manual' | 'peer_vouch'>('manual');
   let verificationSubmitting = $state(false);
   let verificationError = $state('');
   let verificationSuccess = $state('');
 
+  async function saveLocale() {
+    localeSaving = true;
+    try {
+      await api.patch('/api/v1/accounts/update_credentials', { locale: selectedLocale });
+      await switchLocale(selectedLocale);
+      addToast('Language updated', 'success');
+    } catch {
+      addToast('Failed to save language', 'error');
+    } finally { localeSaving = false; }
+  }
+
   onMount(async () => {
+    // Set current locale from store
+    const unsub = locale.subscribe(v => { selectedLocale = v; });
+    unsub();
+
     try {
       verification = await api.get<VerificationStatus>('/api/v1/verification/status');
     } catch {
@@ -49,7 +66,7 @@
         type: verificationType,
         metadata: {},
       });
-      verification = { status: 'pending', verified_at: null };
+      verification = { status: 'pending', type: verificationType, verified_at: null };
       showVerificationForm = false;
       verificationSuccess = 'Your verification application has been submitted.';
       setTimeout(() => { verificationSuccess = ''; }, 5000);
@@ -62,51 +79,12 @@
 
   let canDelete = $derived(deleteConfirmText === 'DELETE');
 
-  async function handleExport() {
-    exporting = true;
-    error = null;
-    try {
-      const data = await api.get<Blob>('/api/v1/accounts/export');
-      // Trigger download
-      const url = URL.createObjectURL(data as unknown as Blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'hybridsocial-export.json';
-      a.click();
-      URL.revokeObjectURL(url);
-      exportSuccess = true;
-      setTimeout(() => { exportSuccess = false; }, 3000);
-    } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to export data';
-    } finally {
-      exporting = false;
-    }
-  }
-
-  async function handleImport(e: Event) {
-    const input = e.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    importing = true;
-    error = null;
-    try {
-      await api.upload('/api/v1/accounts/import', file);
-      importSuccess = true;
-      setTimeout(() => { importSuccess = false; }, 3000);
-    } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to import data';
-    } finally {
-      importing = false;
-    }
-  }
-
   async function handleDeleteAccount() {
     if (!canDelete) return;
     deleting = true;
     error = null;
     try {
-      await api.delete('/api/v1/accounts');
+      await api.delete('/api/v1/accounts/delete');
       clearAuth();
       window.location.href = '/';
     } catch (e) {
@@ -117,6 +95,24 @@
 </script>
 
 <div class="settings-sections">
+  <!-- Language -->
+  <div class="settings-section">
+    <h2 class="section-title">Language</h2>
+    <div class="settings-form">
+      <p class="section-desc">Choose your preferred language. The interface will switch immediately and this preference will be remembered.</p>
+      <div class="language-row">
+        <select class="language-select" bind:value={selectedLocale}>
+          {#each $availableLocales as loc (loc.code)}
+            <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
+          {/each}
+        </select>
+        <button type="button" class="save-locale-btn" onclick={saveLocale} disabled={localeSaving}>
+          {localeSaving ? 'Saving...' : 'Save'}
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Verification -->
   <div class="settings-section">
     <h2 class="section-title">Verification</h2>
@@ -126,7 +122,7 @@
           <Spinner size={16} />
           <span>Checking verification status...</span>
         </div>
-      {:else if verification.status === 'verified'}
+      {:else if verification.status === 'approved'}
         <div class="verification-status verification-verified">
           <VerifiedBadge size="md" />
           <div class="verification-info">
@@ -144,8 +140,13 @@
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
           <div class="verification-info">
-            <span class="verification-label">Your verification is under review</span>
-            <span class="verification-date">We'll notify you when a decision has been made.</span>
+            {#if verification.type === 'peer_vouch'}
+              <span class="verification-label">Waiting for peer vouches</span>
+              <span class="verification-date">{verification.vouch_count || 0} of 3 vouches received. Share your profile and ask people who know you to vouch for your identity.</span>
+            {:else}
+              <span class="verification-label">Your verification is under review</span>
+              <span class="verification-date">We'll notify you when a decision has been made.</span>
+            {/if}
           </div>
         </div>
       {:else}
@@ -168,18 +169,18 @@
             <div class="form-group">
               <label class="form-label" for="verification-type">Verification type</label>
               <select id="verification-type" class="input" bind:value={verificationType}>
-                <option value="domain">Domain verification</option>
                 <option value="manual">Manual review</option>
+                <option value="peer_vouch">Peer vouching</option>
               </select>
             </div>
 
-            {#if verificationType === 'domain'}
+            {#if verificationType === 'peer_vouch'}
               <div class="verification-instructions">
-                <p class="instruction-text">To verify via domain ownership:</p>
+                <p class="instruction-text">Get verified by having 3 other users vouch for your identity:</p>
                 <ol class="instruction-steps">
-                  <li>Add a TXT record to your domain's DNS settings</li>
-                  <li>Set the record value to your profile URL</li>
-                  <li>Submit your application and we'll check the record</li>
+                  <li>Submit your application to create a vouch request</li>
+                  <li>Share your profile with people who can confirm your identity</li>
+                  <li>Once 3 users vouch for you, you're automatically verified</li>
                 </ol>
               </div>
             {:else}
@@ -206,60 +207,6 @@
           </div>
         {/if}
       {/if}
-    </div>
-  </div>
-
-  <!-- Export / Import -->
-  <div class="settings-section">
-    <h2 class="section-title">Data</h2>
-    <div class="settings-form">
-      <div class="data-row">
-        <div class="data-info">
-          <span class="data-label">Export your data</span>
-          <span class="data-description">Download a copy of your posts, follows, and account data</span>
-        </div>
-        <button class="btn btn-outline" type="button" onclick={handleExport} disabled={exporting}>
-          {#if exporting}
-            <Spinner size={16} />
-          {/if}
-          Export
-        </button>
-      </div>
-
-      {#if exportSuccess}
-        <div class="form-success">Export started. Your download will begin shortly.</div>
-      {/if}
-
-      <div class="data-divider"></div>
-
-      <div class="data-row">
-        <div class="data-info">
-          <span class="data-label">Import follows</span>
-          <span class="data-description">Upload a CSV file of accounts to follow</span>
-        </div>
-        <button class="btn btn-outline" type="button" onclick={() => importFile?.click()} disabled={importing}>
-          {#if importing}
-            <Spinner size={16} />
-          {/if}
-          Import CSV
-        </button>
-        <input bind:this={importFile} type="file" accept=".csv" class="visually-hidden" onchange={handleImport} />
-      </div>
-
-      {#if importSuccess}
-        <div class="form-success">Import successful. Follows are being processed.</div>
-      {/if}
-    </div>
-  </div>
-
-  <!-- Account Migration -->
-  <div class="settings-section">
-    <h2 class="section-title">Account Migration</h2>
-    <div class="settings-form">
-      <p class="form-description">
-        Account migration lets you move your followers to a new account on a different server.
-        This feature is coming soon.
-      </p>
     </div>
   </div>
 
@@ -347,6 +294,49 @@
     padding: var(--space-4) var(--space-6);
     border-block-end: 1px solid var(--color-border);
   }
+
+  .section-desc {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    margin-block-end: var(--space-3);
+    line-height: 1.4;
+  }
+
+  .language-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .language-select {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.875rem;
+    color: var(--color-text);
+    background: var(--color-surface);
+  }
+
+  .language-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+  }
+
+  .save-locale-btn {
+    padding: 10px 20px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .save-locale-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .save-locale-btn:hover:not(:disabled) { opacity: 0.9; }
 
   .section-title-danger {
     color: var(--color-danger);

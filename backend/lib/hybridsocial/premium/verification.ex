@@ -5,7 +5,7 @@ defmodule Hybridsocial.Premium.Verification do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @valid_types ~w(manual domain paid)
+  @valid_types ~w(manual peer_vouch)
   @valid_statuses ~w(pending approved rejected expired)
 
   schema "verifications" do
@@ -16,6 +16,7 @@ defmodule Hybridsocial.Premium.Verification do
     field :metadata, :map, default: %{}
 
     belongs_to :identity, Hybridsocial.Accounts.Identity
+    has_many :vouches, Hybridsocial.Premium.VerificationVouch
 
     timestamps(type: :utc_datetime_usec)
   end

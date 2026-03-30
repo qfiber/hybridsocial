@@ -12,6 +12,7 @@ defmodule Hybridsocial.Accounts.Bot do
     field :description, :string
     field :source_code_url, :string
     field :is_active, :boolean, default: true
+    field :posts_per_hour, :integer  # nil = use global default
 
     belongs_to :identity, Hybridsocial.Accounts.Identity,
       foreign_key: :identity_id,
@@ -23,7 +24,8 @@ defmodule Hybridsocial.Accounts.Bot do
 
   def changeset(bot, attrs) do
     bot
-    |> cast(attrs, [:webhook_url, :auto_approve_follows, :description, :source_code_url, :is_active])
+    |> cast(attrs, [:webhook_url, :auto_approve_follows, :description, :source_code_url, :is_active, :posts_per_hour])
+    |> validate_number(:posts_per_hour, greater_than: 0, less_than_or_equal_to: 1000)
     |> validate_url(:webhook_url)
     |> validate_url(:source_code_url)
     |> validate_length(:description, max: 1000)

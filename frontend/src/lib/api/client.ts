@@ -16,31 +16,16 @@ interface RequestOptions {
   body?: unknown;
   params?: Record<string, string>;
   headers?: Record<string, string>;
+  rawBody?: boolean;
 }
 
 class ApiClient {
-  private accessToken: string | null = null;
-  private refreshToken: string | null = null;
   private refreshPromise: Promise<void> | null = null;
-  private onTokenRefresh: ((access: string, refresh: string) => void) | null = null;
   private onAuthFailure: (() => void) | null = null;
+  private onTokenRefreshed: (() => void) | null = null;
 
-  setTokens(access: string, refresh: string): void {
-    this.accessToken = access;
-    this.refreshToken = refresh;
-  }
-
-  clearTokens(): void {
-    this.accessToken = null;
-    this.refreshToken = null;
-  }
-
-  getAccessToken(): string | null {
-    return this.accessToken;
-  }
-
-  setOnTokenRefresh(callback: (access: string, refresh: string) => void): void {
-    this.onTokenRefresh = callback;
+  setOnTokenRefreshed(callback: () => void): void {
+    this.onTokenRefreshed = callback;
   }
 
   setOnAuthFailure(callback: () => void): void {
@@ -60,37 +45,41 @@ class ApiClient {
       ...options?.headers
     };
 
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
+    let fetchBody: BodyInit | undefined;
     if (options?.body !== undefined) {
-      headers['Content-Type'] = 'application/json';
+      if (options.rawBody) {
+        // FormData — let browser set Content-Type with boundary
+        fetchBody = options.body as BodyInit;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        fetchBody = JSON.stringify(options.body);
+      }
     }
 
-    let response = await fetch(url.toString(), {
-      method,
-      headers,
-      credentials: 'include',
-      body: options?.body !== undefined ? JSON.stringify(options.body) : undefined
-    });
-
-    // Auto-refresh on 401 (cookie or in-memory token)
-    if (response.status === 401 && !path.startsWith('/api/v1/auth/')) {
-      await this.doRefresh();
-      // Retry with new token
-      if (this.accessToken) {
-        headers['Authorization'] = `Bearer ${this.accessToken}`;
-      }
-      response = await fetch(url.toString(), {
+    const doFetch = () =>
+      fetch(url.toString(), {
         method,
         headers,
         credentials: 'include',
-        body: options?.body !== undefined ? JSON.stringify(options.body) : undefined
+        body: fetchBody
       });
+
+    let response = await doFetch();
+
+    // Auto-refresh on 401 (httpOnly cookie sent automatically)
+    if (response.status === 401 && !path.startsWith('/api/v1/auth/')) {
+      await this.doRefresh();
+      response = await doFetch();
     }
 
     if (!response.ok) {
+      // Rate limit — show toast and throw
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('retry-after');
+        const waitSec = retryAfter ? parseInt(retryAfter, 10) : 10;
+        this.showRateLimitToast(waitSec);
+      }
+
       let body: ApiErrorBody;
       try {
         body = await response.json();
@@ -115,38 +104,27 @@ class ApiClient {
 
     this.refreshPromise = (async () => {
       try {
-        // Send refresh token in body if available, otherwise rely on httpOnly cookie
-        const body: Record<string, string> = {};
-        if (this.refreshToken) {
-          body.refresh_token = this.refreshToken;
-        }
-
+        // Rely on httpOnly cookie for refresh — no token in body
         const response = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify(body)
+          body: JSON.stringify({})
         });
 
         if (response.status === 401 || response.status === 403) {
-          // Refresh token is genuinely invalid — user must re-login
-          this.clearTokens();
           this.onAuthFailure?.();
           return;
         }
 
         if (!response.ok) {
-          // Server error (500, 502, etc.) — don't log out, just fail silently
           return;
         }
 
-        const data = await response.json();
-        this.accessToken = data.access_token;
-        this.refreshToken = data.refresh_token;
-        this.onTokenRefresh?.(data.access_token, data.refresh_token);
+        // New cookies set by the response automatically
+        this.onTokenRefreshed?.();
       } catch {
-        // Network error (server down, DNS failure, etc.) — NOT an auth failure
-        // Don't clear tokens or log out — the server might just be restarting
+        // Network error — don't log out
         console.warn('Token refresh failed due to network error, will retry later');
       } finally {
         this.refreshPromise = null;
@@ -154,6 +132,25 @@ class ApiClient {
     })();
 
     return this.refreshPromise;
+  }
+
+  private rateLimitToastCooldown = false;
+
+  private showRateLimitToast(waitSec: number): void {
+    if (this.rateLimitToastCooldown) return;
+    this.rateLimitToastCooldown = true;
+    // Cooldown so we don't spam toasts on burst failures
+    setTimeout(() => { this.rateLimitToastCooldown = false; }, 5000);
+
+    try {
+      window.dispatchEvent(new CustomEvent('toast', {
+        detail: {
+          message: 'Slow down — too many requests',
+          description: `Please wait ${waitSec} seconds before trying again.`,
+          type: 'warning',
+        }
+      }));
+    } catch { /* not in browser */ }
   }
 
   get<T>(path: string, params?: Record<string, string>): Promise<T> {
@@ -176,8 +173,7 @@ class ApiClient {
     return this.request<T>('DELETE', path, { body });
   }
 
-  async upload<T>(path: string, file: File, fields?: Record<string, string>): Promise<T> {
-    const url = new URL(`${API_BASE}${path}`);
+  upload<T>(path: string, file: File, fields?: Record<string, string>): Promise<T> {
     const formData = new FormData();
     formData.append('file', file);
     if (fields) {
@@ -185,30 +181,7 @@ class ApiClient {
         formData.append(key, value);
       }
     }
-
-    const headers: Record<string, string> = {};
-    if (this.accessToken) {
-      headers['Authorization'] = `Bearer ${this.accessToken}`;
-    }
-
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body: formData
-    });
-
-    if (!response.ok) {
-      let body: ApiErrorBody;
-      try {
-        body = await response.json();
-      } catch {
-        body = { error: 'upload_failed', error_description: response.statusText };
-      }
-      throw new ApiError(response.status, body);
-    }
-
-    return response.json();
+    return this.request<T>('POST', path, { body: formData, rawBody: true });
   }
 }
 

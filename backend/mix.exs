@@ -55,6 +55,8 @@ defmodule Hybridsocial.MixProject do
       {:joken, "~> 2.6"},
       # 2FA / TOTP
       {:nimble_totp, "~> 1.0"},
+      # WebAuthn / FIDO2
+      {:wax_, "~> 0.6"},
       # Utilities
       {:ecto_enum, "~> 1.4"},
       # S3 storage

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
+  import { reloadFilters } from '$lib/stores/content-filters.js';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
   interface ContentFilter {
@@ -50,6 +51,7 @@
       filters = [f, ...filters];
       newPhrase = '';
       newWholeWord = false;
+      reloadFilters();
       addToast('Filter added', 'success');
     } catch {
       addToast('Failed to add filter', 'error');
@@ -60,6 +62,7 @@
     try {
       await api.delete(`/api/v1/accounts/filters/${id}`);
       filters = filters.filter(f => f.id !== id);
+      reloadFilters();
       addToast('Filter removed', 'success');
     } catch {
       addToast('Failed to remove filter', 'error');

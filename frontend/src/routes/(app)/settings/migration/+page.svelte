@@ -18,23 +18,11 @@
   let migrateError: string | null = $state(null);
   let confirmMigrate = $state(false);
 
-  onMount(async () => {
-    try {
-      const state = get(authStore);
-      const user = state.user as any;
-      aliases = user?.also_known_as ?? [];
-    } catch {
-      // Fall back to API
-    }
-
-    try {
-      const res = await api.get<{ data: { also_known_as: string[] } }>('/api/v1/accounts/aliases');
-      aliases = res.data.also_known_as ?? [];
-    } catch {
-      // Non-critical, we may already have aliases from auth state
-    } finally {
-      aliasesLoading = false;
-    }
+  onMount(() => {
+    const state = get(authStore);
+    const user = state.user as any;
+    aliases = user?.also_known_as ?? [];
+    aliasesLoading = false;
   });
 
   async function handleAddAlias(e: Event) {
@@ -44,7 +32,7 @@
 
     addingAlias = true;
     try {
-      await api.post('/api/v1/accounts/aliases', { alias });
+      await api.post('/api/v1/accounts/also_known_as', { alias });
       aliases = [...aliases, alias];
       newAlias = '';
       addToast('Alias added', 'success');
@@ -58,7 +46,7 @@
   async function handleRemoveAlias(alias: string) {
     removingAlias = alias;
     try {
-      await api.delete('/api/v1/accounts/aliases', { alias });
+      await api.delete('/api/v1/accounts/also_known_as', { alias });
       aliases = aliases.filter(a => a !== alias);
       addToast('Alias removed', 'success');
     } catch {

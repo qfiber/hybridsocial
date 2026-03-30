@@ -5,24 +5,11 @@
     size?: 'sm' | 'md';
   } = $props();
 
-  let iconSize = $derived(size === 'sm' ? 14 : 18);
+  let imgSize = $derived(size === 'sm' ? 14 : 18);
 </script>
 
 <span class="verified-badge verified-{size}" title="Verified" aria-label="Verified account">
-  <svg
-    width={iconSize}
-    height={iconSize}
-    viewBox="0 0 24 24"
-    fill="var(--color-primary)"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="12" fill="var(--color-primary)" />
-    <path
-      d="M9.5 16.5L5 12l1.41-1.41L9.5 13.67l8.09-8.09L19 7l-9.5 9.5z"
-      fill="white"
-      stroke="none"
-    />
-  </svg>
+  <img src="/badges/BasicBadge.svg" alt="Verified" width={imgSize} height={imgSize} class="verified-img" />
 </span>
 
 <style>
@@ -33,6 +20,10 @@
     flex-shrink: 0;
     vertical-align: middle;
     line-height: 1;
+  }
+
+  .verified-img {
+    display: block;
   }
 
   .verified-sm {

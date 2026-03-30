@@ -6,18 +6,18 @@
 
   interface ExportEntry {
     id: string;
-    type: string;
     status: string;
-    created_at: string;
-    download_url: string | null;
+    file_size: number | null;
+    requested_at: string;
+    completed_at: string | null;
   }
 
   let exports: ExportEntry[] = $state([]);
   let exportsLoading = $state(true);
-  let exportingFollows = $state(false);
-  let exportingBlocks = $state(false);
+  let exporting = $state(false);
   let importing = $state(false);
   let importFile: File | null = $state(null);
+  let importType = $state('follows');
   let fileInput: HTMLInputElement | undefined = $state();
 
   onMount(async () => {
@@ -26,8 +26,8 @@
 
   async function loadExports() {
     try {
-      const res = await api.get<{ data: ExportEntry[] }>('/api/v1/export');
-      exports = res.data;
+      const res = await api.get<{ exports: ExportEntry[] }>('/api/v1/export');
+      exports = Array.isArray(res.exports) ? res.exports : [];
     } catch {
       addToast('Failed to load exports', 'error');
     } finally {
@@ -35,19 +35,16 @@
     }
   }
 
-  async function handleExport(type: string) {
-    if (type === 'follows') exportingFollows = true;
-    else exportingBlocks = true;
-
+  async function handleExport() {
+    exporting = true;
     try {
-      const res = await api.post<ExportEntry>('/api/v1/export', { type });
+      const res = await api.post<ExportEntry>('/api/v1/export');
       exports = [res, ...exports];
-      addToast(`Export of ${type} started`, 'success');
+      addToast('Export started — it will be ready to download shortly', 'success');
     } catch {
-      addToast(`Failed to export ${type}`, 'error');
+      addToast('Failed to start export', 'error');
     } finally {
-      if (type === 'follows') exportingFollows = false;
-      else exportingBlocks = false;
+      exporting = false;
     }
   }
 
@@ -62,8 +59,12 @@
 
     importing = true;
     try {
-      await api.upload('/api/v1/import', importFile);
-      addToast('Import started successfully', 'success');
+      // Read CSV file and parse into array of handles
+      const text = await importFile.text();
+      const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+
+      await api.post('/api/v1/import', { type: importType, data: lines });
+      addToast('Import completed successfully', 'success');
       importFile = null;
       if (fileInput) fileInput.value = '';
     } catch {
@@ -83,7 +84,8 @@
     });
   }
 
-  function formatType(type: string): string {
+  function formatType(type: string | undefined): string {
+    if (!type) return 'Full export';
     return type.charAt(0).toUpperCase() + type.slice(1);
   }
 
@@ -117,29 +119,19 @@
     <div class="stitch-section-content">
       <div class="stitch-form">
         <p class="stitch-description">
-          Export your follows or blocks as CSV files. You can use these to migrate to another instance or as a backup.
+          Download a copy of your profile, posts, follows, followers, blocks, mutes, bookmarks, and lists.
         </p>
 
         <div class="stitch-export-buttons">
           <button
-            class="stitch-btn-outline"
-            onclick={() => handleExport('follows')}
-            disabled={exportingFollows}
+            class="stitch-btn-primary"
+            onclick={handleExport}
+            disabled={exporting}
           >
-            {#if exportingFollows}
-              <Spinner size={14} />
+            {#if exporting}
+              <Spinner size={14} color="#fff" />
             {/if}
-            Export Follows
-          </button>
-          <button
-            class="stitch-btn-outline"
-            onclick={() => handleExport('blocks')}
-            disabled={exportingBlocks}
-          >
-            {#if exportingBlocks}
-              <Spinner size={14} />
-            {/if}
-            Export Blocks
+            Export All Data
           </button>
         </div>
 
@@ -150,16 +142,20 @@
             {#each exports as entry (entry.id)}
               <div class="stitch-list-item">
                 <div class="stitch-list-info">
-                  <div class="stitch-list-name">{formatType(entry.type)}</div>
+                  <div class="stitch-list-name">Full export</div>
                   <div class="stitch-list-meta-row">
                     <span class="stitch-export-status" style="color: {statusColor(entry.status)}">{entry.status}</span>
                     <span class="stitch-list-dot">&middot;</span>
-                    <span>{formatDate(entry.created_at)}</span>
+                    <span>{formatDate(entry.completed_at || entry.requested_at)}</span>
+                    {#if entry.file_size}
+                      <span class="stitch-list-dot">&middot;</span>
+                      <span>{(entry.file_size / 1024).toFixed(1)} KB</span>
+                    {/if}
                   </div>
                 </div>
-                {#if entry.download_url && entry.status === 'completed'}
+                {#if entry.status === 'completed'}
                   <a
-                    href={entry.download_url}
+                    href="{import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/v1/export/{entry.id}/download"
                     class="stitch-btn-primary stitch-btn-sm"
                     download
                   >
@@ -192,6 +188,14 @@
         </p>
 
         <form class="stitch-import-form" onsubmit={handleImport}>
+          <div class="stitch-field">
+            <label class="stitch-label" for="import-type">IMPORT TYPE</label>
+            <select id="import-type" class="stitch-input" bind:value={importType}>
+              <option value="follows">Follows</option>
+              <option value="blocks">Blocks</option>
+            </select>
+          </div>
+
           <div class="stitch-field">
             <label class="stitch-label" for="import-file">CSV FILE</label>
             <input

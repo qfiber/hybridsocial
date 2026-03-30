@@ -5,10 +5,84 @@
   import type { TwoFactorSetup } from '$lib/api/types.js';
   import { authStore, setUser } from '$lib/stores/auth.js';
   import { addToast } from '$lib/stores/toast.js';
-  import { getSessions, revokeSession, revokeOtherSessions } from '$lib/api/sessions.js';
-  import type { Session } from '$lib/api/sessions.js';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import QRCode from 'qrcode';
+
+  import { api } from '$lib/api/client.js';
+
+  // WebAuthn / Security Keys
+  interface WebauthnCred { id: string; name: string; credential_id: string; sign_count: number; last_used_at: string | null; created_at: string; }
+  let securityKeys = $state<WebauthnCred[]>([]);
+  let keysLoading = $state(true);
+  let keyName = $state('');
+  let keyRegistering = $state(false);
+
+  async function loadKeys() {
+    try {
+      securityKeys = await api.get<WebauthnCred[]>('/api/v1/auth/webauthn/credentials');
+    } catch { /* */ }
+    finally { keysLoading = false; }
+  }
+
+  async function registerKey() {
+    if (!navigator.credentials) {
+      addToast('WebAuthn not supported in this browser', 'error');
+      return;
+    }
+    keyRegistering = true;
+    try {
+      // 1. Get challenge from server
+      const options = await api.post<any>('/api/v1/auth/webauthn/register/challenge');
+
+      // 2. Convert challenge and user.id to ArrayBuffer
+      const publicKey = {
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        rp: options.rp,
+        user: {
+          id: Uint8Array.from(atob(options.user.id.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+          name: options.user.name,
+          displayName: options.user.displayName,
+        },
+        pubKeyCredParams: options.pubKeyCredParams,
+        timeout: options.timeout,
+        attestation: options.attestation as AttestationConveyancePreference,
+        authenticatorSelection: options.authenticatorSelection,
+      };
+
+      // 3. Create credential via browser
+      const credential = await navigator.credentials.create({ publicKey }) as PublicKeyCredential;
+      if (!credential) throw new Error('No credential returned');
+
+      const response = credential.response as AuthenticatorAttestationResponse;
+
+      // 4. Send to server
+      await api.post('/api/v1/auth/webauthn/register/verify', {
+        credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+        public_key: btoa(String.fromCharCode(...new Uint8Array(response.getPublicKey?.() || new ArrayBuffer(0)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+        name: keyName || 'Security Key',
+        response: {
+          attestationObject: btoa(String.fromCharCode(...new Uint8Array(response.attestationObject))),
+          clientDataJSON: btoa(String.fromCharCode(...new Uint8Array(response.clientDataJSON))),
+        }
+      });
+
+      keyName = '';
+      addToast('Security key registered', 'success');
+      await loadKeys();
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : 'Failed to register key', 'error');
+    } finally { keyRegistering = false; }
+  }
+
+  async function deleteKey(id: string) {
+    try {
+      await api.delete(`/api/v1/auth/webauthn/credentials/${id}`);
+      securityKeys = securityKeys.filter(k => k.id !== id);
+      addToast('Security key removed', 'success');
+    } catch {
+      addToast('Failed to remove key', 'error');
+    }
+  }
 
   // Password change
   let currentPassword = $state('');
@@ -18,61 +92,15 @@
   let passwordSaved = $state(false);
   let passwordError: string | null = $state(null);
 
-  // Sessions
-  let sessions: Session[] = $state([]);
-  let sessionsLoading = $state(true);
-  let revokingAll = $state(false);
-
   // 2FA — load from user state
   let twoFactorEnabled = $state(false);
 
   onMount(async () => {
     const state = get(authStore);
     twoFactorEnabled = !!(state.user as any)?.two_factor_enabled;
-
-    try {
-      sessions = await getSessions();
-    } catch {
-      // Non-critical
-    } finally {
-      sessionsLoading = false;
-    }
+    loadKeys();
   });
 
-  async function handleRevokeSession(id: string) {
-    try {
-      await revokeSession(id);
-      sessions = sessions.filter(s => s.id !== id);
-      addToast('Session revoked', 'success');
-    } catch {
-      addToast('Failed to revoke session', 'error');
-    }
-  }
-
-  async function handleRevokeOthers() {
-    revokingAll = true;
-    try {
-      const result = await revokeOtherSessions();
-      sessions = sessions.filter(s => s.current);
-      addToast(`Revoked ${result.count} other session${result.count === 1 ? '' : 's'}`, 'success');
-    } catch {
-      addToast('Failed to revoke sessions', 'error');
-    } finally {
-      revokingAll = false;
-    }
-  }
-
-  function timeAgo(iso: string | null): string {
-    if (!iso) return 'Never';
-    const diff = Date.now() - new Date(iso).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
-  }
   let twoFactorSetup: TwoFactorSetup | null = $state(null);
   let verifyCode = $state('');
   let disableCode = $state('');
@@ -374,89 +402,59 @@
     </div>
   </section>
 
-  <!-- Active Sessions -->
+  <!-- Security Keys (WebAuthn/FIDO2) -->
   <section class="stitch-section">
     <div class="stitch-section-heading">
       <span class="stitch-section-icon" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
         </svg>
       </span>
-      <h2 class="stitch-section-title">Active Sessions</h2>
+      <div>
+        <h2 class="stitch-section-title">Security Keys</h2>
+        <p class="stitch-section-desc">Use a hardware security key, biometric, or passkey (e.g. YubiKey, Bitwarden, Touch ID) for secure login.</p>
+      </div>
     </div>
-
     <div class="stitch-section-content">
-      <div class="stitch-form">
-        <p class="stitch-description">
-          These are the devices currently logged into your account. Revoke any session you don't recognise.
-        </p>
-
-        {#if sessionsLoading}
-          <div class="stitch-sessions-loading"><Spinner size={20} /> Loading sessions...</div>
-        {:else if sessions.length === 0}
-          <p class="stitch-description">No active sessions found.</p>
-        {:else}
-          <div class="stitch-sessions-list">
-            {#each sessions as session (session.id)}
-              <div class="stitch-session" class:stitch-session-current={session.current}>
-                <div class="stitch-session-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    {#if session.device_name?.includes('Android') || session.device_name?.includes('iOS')}
-                      <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>
-                    {:else}
-                      <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-                    {/if}
-                  </svg>
-                </div>
-                <div class="stitch-session-info">
-                  <div class="stitch-session-name">
-                    {session.device_name}
-                    {#if session.current}
-                      <span class="stitch-session-badge">This device</span>
-                    {/if}
-                  </div>
-                  <div class="stitch-session-meta">
-                    {#if session.location}
-                      <span>{session.location}</span>
-                      <span class="stitch-session-dot">&middot;</span>
-                    {/if}
-                    {#if session.ip_address}
-                      <span>{session.ip_address}</span>
-                      <span class="stitch-session-dot">&middot;</span>
-                    {/if}
-                    <span>Active {timeAgo(session.last_active_at)}</span>
+      {#if keysLoading}
+        <div style="padding: 16px; text-align: center"><Spinner /></div>
+      {:else}
+        {#if securityKeys.length > 0}
+          <div class="keys-list">
+            {#each securityKeys as key (key.id)}
+              <div class="key-item">
+                <div class="key-info">
+                  <span class="material-symbols-outlined key-icon">key</span>
+                  <div>
+                    <span class="key-name">{key.name}</span>
+                    <span class="key-meta">
+                      Added {new Date(key.created_at).toLocaleDateString()}
+                      {#if key.last_used_at}
+                         &middot; Last used {new Date(key.last_used_at).toLocaleDateString()}
+                      {/if}
+                      &middot; Used {key.sign_count} times
+                    </span>
                   </div>
                 </div>
-                {#if !session.current}
-                  <button
-                    class="stitch-session-revoke"
-                    onclick={() => handleRevokeSession(session.id)}
-                  >
-                    Revoke
-                  </button>
-                {/if}
+                <button type="button" class="key-remove" onclick={() => deleteKey(key.id)}>
+                  <span class="material-symbols-outlined" style="font-size: 18px">delete</span>
+                </button>
               </div>
             {/each}
           </div>
-
-          {#if sessions.length > 1}
-            <div class="stitch-actions">
-              <button
-                class="stitch-btn-danger stitch-btn-sm"
-                onclick={handleRevokeOthers}
-                disabled={revokingAll}
-              >
-                {#if revokingAll}
-                  <Spinner size={14} color="#fff" />
-                {/if}
-                Revoke all other sessions
-              </button>
-            </div>
-          {/if}
         {/if}
-      </div>
+
+        <div class="key-add-form">
+          <input type="text" class="key-name-input" bind:value={keyName} placeholder="Key name (e.g. YubiKey, Bitwarden)" />
+          <button type="button" class="key-add-btn" onclick={registerKey} disabled={keyRegistering}>
+            <span class="material-symbols-outlined" style="font-size: 18px">add</span>
+            {keyRegistering ? 'Waiting for key...' : 'Add Security Key'}
+          </button>
+        </div>
+      {/if}
     </div>
   </section>
+
 </div>
 
 <style>
@@ -648,99 +646,6 @@
     user-select: all;
   }
 
-  /* ---- Sessions ---- */
-  .stitch-sessions-loading {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.875rem;
-    color: #6b7280;
-  }
-
-  .stitch-sessions-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: rgba(0, 0, 0, 0.06);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .stitch-session {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: #e6e8e9;
-  }
-
-  .stitch-session-current {
-    background: rgba(var(--color-primary-rgb, 59, 130, 246), 0.08);
-  }
-
-  .stitch-session-icon {
-    color: #6b7280;
-    flex-shrink: 0;
-  }
-
-  .stitch-session-current .stitch-session-icon {
-    color: var(--color-primary);
-  }
-
-  .stitch-session-info {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .stitch-session-name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-text);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .stitch-session-badge {
-    font-size: 0.625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--color-primary);
-    background: white;
-    padding: 1px 8px;
-    border-radius: 9999px;
-  }
-
-  .stitch-session-meta {
-    font-size: 0.75rem;
-    color: #9ca3af;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .stitch-session-dot {
-    font-size: 0.75rem;
-  }
-
-  .stitch-session-revoke {
-    flex-shrink: 0;
-    padding: 4px 12px;
-    background: transparent;
-    border: none;
-    border-radius: 9999px;
-    color: #dc2626;
-    font-size: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-  }
-
-  .stitch-session-revoke:hover {
-    background: #fef2f2;
-  }
-
   /* ---- Error / Success ---- */
   .stitch-error {
     padding: 12px 16px;
@@ -882,4 +787,39 @@
       gap: 12px;
     }
   }
+
+  /* Security Keys */
+  .keys-list { display: flex; flex-direction: column; gap: 8px; margin-block-end: 16px; }
+
+  .key-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--color-surface); border-radius: 10px;
+  }
+
+  .key-info { display: flex; align-items: center; gap: 12px; }
+  .key-icon { font-size: 24px; color: var(--color-primary); }
+  .key-name { display: block; font-size: 0.875rem; font-weight: 600; }
+  .key-meta { display: block; font-size: 0.7rem; color: var(--color-text-tertiary); }
+
+  .key-remove {
+    background: none; border: none; color: var(--color-text-tertiary); cursor: pointer;
+    padding: 4px; border-radius: 50%;
+  }
+  .key-remove:hover { color: var(--color-danger); background: rgba(239,68,68,0.1); }
+
+  .key-add-form { display: flex; gap: 8px; }
+
+  .key-name-input {
+    flex: 1; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 10px;
+    font-size: 0.875rem; background: var(--color-surface); color: var(--color-text);
+  }
+  .key-name-input:focus { outline: none; border-color: var(--color-primary); }
+
+  .key-add-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 18px; background: var(--color-primary); color: white; border: none;
+    border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  .key-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .key-add-btn:hover:not(:disabled) { opacity: 0.9; }
 </style>

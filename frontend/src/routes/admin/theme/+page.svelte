@@ -133,7 +133,7 @@
   }
 
   function hexToRgb(hex: string): [number, number, number] {
-    const h = hex.replace('#', '');
+    const h = (hex || '#000000').replace('#', '');
     return [
       parseInt(h.substring(0, 2), 16) / 255,
       parseInt(h.substring(2, 4), 16) / 255,
@@ -165,7 +165,11 @@
   onMount(async () => {
     try {
       const serverTheme = await getAdminTheme();
-      theme = { ...defaults, ...serverTheme };
+      // Filter out null/undefined values so defaults aren't overridden
+      const cleaned = Object.fromEntries(
+        Object.entries(serverTheme).filter(([_, v]) => v != null && v !== '')
+      );
+      theme = { ...defaults, ...cleaned };
     } catch {
       // Use defaults
     } finally {

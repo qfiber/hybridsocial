@@ -145,7 +145,7 @@
               <span>Expires: {invite.expires_at ? formatDate(invite.expires_at) : 'Never'}</span>
               <span>Created: {formatDate(invite.created_at)}</span>
               {#if invite.created_by}
-                <span>By: @{invite.created_by.handle}</span>
+                <span>By: @{typeof invite.created_by === 'string' ? invite.created_by : invite.created_by.handle || invite.created_by}</span>
               {/if}
             </div>
           </div>

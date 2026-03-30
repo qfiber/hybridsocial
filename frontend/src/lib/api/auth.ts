@@ -24,8 +24,9 @@ export function register(data: RegisterRequest): Promise<AuthTokens> {
   return api.post('/api/v1/auth/register', data);
 }
 
-export function refreshTokens(refreshToken: string): Promise<AuthTokens> {
-  return api.post('/api/v1/auth/refresh', { refresh_token: refreshToken });
+export function refreshTokens(): Promise<AuthTokens> {
+  // Refresh token sent via httpOnly cookie automatically
+  return api.post('/api/v1/auth/refresh', {});
 }
 
 export function logout(): Promise<void> {
@@ -45,7 +46,7 @@ export function verifyTwoFactor(code: string): Promise<{ success: boolean }> {
 }
 
 export function disableTwoFactor(code: string): Promise<void> {
-  return api.post('/api/v1/auth/2fa/disable', { code });
+  return api.delete('/api/v1/auth/2fa', { code });
 }
 
 export function requestPasswordReset(email: string): Promise<void> {

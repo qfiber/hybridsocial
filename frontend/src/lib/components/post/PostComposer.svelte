@@ -142,6 +142,9 @@
 
   function openComposer() {
     isOpen = true;
+    hasOpened = false;
+    // Mark opened after pop-in animation completes
+    setTimeout(() => { hasOpened = true; }, 250);
     // Focus textarea on next tick
     setTimeout(() => textareaEl?.focus(), 50);
   }
@@ -153,8 +156,22 @@
     resetComposer();
   }
 
+  let isClosing = $state(false);
+  let isNudging = $state(false);
+  let hasOpened = $state(false);
+
+  function nudgeComposer() {
+    if (isNudging) return;
+    isNudging = true;
+    setTimeout(() => { isNudging = false; }, 400);
+  }
+
   function resetComposer() {
-    isOpen = false;
+    isClosing = true;
+    setTimeout(() => {
+      isClosing = false;
+      isOpen = false;
+    }, 200);
     content = '';
     spoilerText = '';
     showCW = false;
@@ -505,10 +522,18 @@
         pending: true,
       };
 
+      // Capture parent ID before reset clears it
+      const parentId = replyTo?.id;
+
       // Show optimistic post immediately
       window.dispatchEvent(new CustomEvent('new-post', { detail: optimisticPost }));
       clearDraft();
       resetComposer();
+
+      // Increment parent's reply count immediately
+      if (parentId) {
+        window.dispatchEvent(new CustomEvent('reply-count-update', { detail: { postId: parentId, delta: 1 } }));
+      }
 
       // Send to server, then replace optimistic with real
       const newPost = await api.post('/api/v1/statuses', body);
@@ -565,15 +590,22 @@
 
 <!-- Composer panel -->
 {#if isOpen}
-  <div class="composer-backdrop" onclick={closeComposer} role="presentation"></div>
+  <div class="composer-backdrop" class:composer-fadeout={isClosing} role="presentation" onclick={nudgeComposer}></div>
   <div
     class="composer-panel"
+    class:composer-opened={hasOpened}
+    class:composer-panel-fadeout={isClosing}
+    class:composer-nudge={isNudging}
     role="dialog"
     aria-label="Compose post"
     aria-modal="true"
     onkeydown={handleKeydown}
     onclick={handleEmojiClickOutside}
   >
+    <button type="button" class="composer-close" onclick={closeComposer} aria-label="Close composer">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+
     {#if replyTo}
       <div class="composer-reply-context">
         Replying to <strong>@{replyTo.account.handle}</strong>
@@ -602,13 +634,7 @@
     <div class="composer-body">
       <!-- Avatar -->
       <div class="composer-avatar">
-        {#if $currentUser?.avatar_url}
-          <img src={$currentUser.avatar_url} alt="" class="composer-avatar-img" />
-        {:else}
-          <div class="composer-avatar-placeholder" aria-hidden="true">
-            {($currentUser?.display_name || $currentUser?.handle || 'U').charAt(0).toUpperCase()}
-          </div>
-        {/if}
+        <img src={$currentUser?.avatar_url || '/images/default-avatar.svg'} alt="" class="composer-avatar-img" />
       </div>
 
       <!-- Text area -->
@@ -985,9 +1011,41 @@
     animation: fade-in 0.15s ease;
   }
 
+  .composer-backdrop.composer-fadeout {
+    animation: fade-out 0.2s ease forwards;
+  }
+
   @keyframes fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
+  }
+
+  @keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  /* ---- Close button ---- */
+  .composer-close {
+    position: absolute;
+    top: 12px;
+    inset-inline-end: 12px;
+    background: none;
+    border: none;
+    color: var(--color-on-surface-variant);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+
+  .composer-close:hover {
+    background: var(--color-surface-container);
+    color: var(--color-on-surface);
   }
 
   /* ---- Composer Card ---- */
@@ -1005,12 +1063,36 @@
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
     z-index: var(--z-modal);
     overflow: visible;
-    animation: pop-in 0.2s ease;
+    animation: pop-in 0.2s ease both;
+  }
+
+  .composer-panel.composer-opened {
+    animation: none;
+  }
+
+  .composer-panel.composer-nudge {
+    animation: nudge 0.35s ease both;
+  }
+
+  .composer-panel.composer-panel-fadeout {
+    animation: pop-out 0.2s ease forwards;
   }
 
   @keyframes pop-in {
     from { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
     to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  @keyframes pop-out {
+    from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    to { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+  }
+
+  @keyframes nudge {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    25% { transform: translate(-50%, -50%) scale(0.96); }
+    55% { transform: translate(-50%, -50%) scale(1.02); }
+    100% { transform: translate(-50%, -50%) scale(1); }
   }
 
   @media (min-width: 640px) {

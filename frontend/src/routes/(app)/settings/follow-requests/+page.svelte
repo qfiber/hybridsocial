@@ -18,8 +18,8 @@
 
   onMount(async () => {
     try {
-      const res = await api.get<{ data: FollowRequest[] }>('/api/v1/accounts/follow_requests');
-      requests = res.data;
+      const res = await api.get<FollowRequest[]>('/api/v1/accounts/follow_requests');
+      requests = Array.isArray(res) ? res : [];
     } catch {
       addToast('Failed to load follow requests', 'error');
     } finally {

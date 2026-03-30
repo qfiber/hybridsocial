@@ -10,6 +10,8 @@ defmodule Hybridsocial.Accounts.User do
     field :password_hash, :string
     field :locale, :string, default: "en"
     field :timezone, :string
+    field :default_visibility, :string, default: "public"
+    field :preferences, :map, default: %{}
     field :last_login_at, :utc_datetime_usec
     field :confirmed_at, :utc_datetime_usec
     field :confirmation_token, :string

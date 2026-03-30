@@ -39,6 +39,7 @@ defmodule Hybridsocial.Accounts.Identity do
     field :deleted_at, :utc_datetime_usec
     field :is_suggested, :boolean, default: false
     field :is_name_revoked, :boolean, default: false
+    field :force_bot, :boolean, default: false
     field :birthday, :date
 
     # Subaccount hierarchy: bots, groups, and organizations belong to a parent user
@@ -59,6 +60,7 @@ defmodule Hybridsocial.Accounts.Identity do
     |> validate_required([:type, :handle])
     |> validate_inclusion(:type, @valid_types)
     |> validate_subaccount_type()
+    |> reject_bot_on_main_account()
     |> validate_handle()
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
@@ -79,19 +81,26 @@ defmodule Hybridsocial.Accounts.Identity do
     :birthday
   ]
 
+  # Subaccounts can also toggle is_bot
+  @subaccount_update_fields @update_fields ++ [:is_bot]
+
   def update_changeset(identity, attrs) do
+    fields = if is_subaccount?(identity), do: @subaccount_update_fields, else: @update_fields
+
     identity
-    |> cast(attrs, @update_fields)
+    |> cast(attrs, fields)
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
     |> validate_length(:avatar_url, max: 2048)
     |> validate_length(:header_url, max: 2048)
     |> reject_display_name_change_if_verified()
+    |> reject_bot_change_if_forced(identity)
+    |> reject_type_change_on_main_account(identity)
   end
 
   def admin_update_changeset(identity, attrs) do
     identity
-    |> cast(attrs, @update_fields ++ [:verification_tier, :trust_level])
+    |> cast(attrs, @update_fields ++ [:verification_tier, :trust_level, :is_bot, :force_bot, :is_suggested, :is_name_revoked, :is_suspended, :is_silenced, :is_shadow_banned, :force_sensitive, :metadata, :is_admin])
     |> validate_length(:display_name, max: 50)
     |> validate_length(:bio, max: 500)
     |> validate_length(:avatar_url, max: 2048)
@@ -111,6 +120,41 @@ defmodule Hybridsocial.Accounts.Identity do
        do: true
 
   defp verified_tier?(_), do: false
+
+  defp reject_bot_change_if_forced(changeset, identity) do
+    if identity.force_bot && get_change(changeset, :is_bot) == false do
+      delete_change(changeset, :is_bot)
+    else
+      changeset
+    end
+  end
+
+  defp reject_type_change_on_main_account(changeset, identity) do
+    # Main accounts (no parent) cannot change their type to bot/group/organization
+    if not is_subaccount?(identity) do
+      case get_change(changeset, :type) do
+        nil -> changeset
+        "user" -> changeset
+        _ -> add_error(changeset, :type, "main accounts must remain as user type")
+      end
+    else
+      changeset
+    end
+  end
+
+  defp is_subaccount?(%{parent_identity_id: pid}) when is_binary(pid), do: true
+  defp is_subaccount?(_), do: false
+
+  defp reject_bot_on_main_account(changeset) do
+    parent_id = get_field(changeset, :parent_identity_id)
+    is_bot = get_field(changeset, :is_bot)
+
+    if is_nil(parent_id) && is_bot == true do
+      add_error(changeset, :is_bot, "main accounts cannot be marked as bot")
+    else
+      changeset
+    end
+  end
 
   def suspend_changeset(identity) do
     identity

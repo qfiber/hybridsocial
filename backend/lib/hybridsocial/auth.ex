@@ -27,7 +27,7 @@ defmodule Hybridsocial.Auth do
     end
   end
 
-  defp issue_tokens(user, session_info \\ %{}) do
+  def issue_tokens(user, session_info \\ %{}) do
     with {:ok, access_token, _claims} <- Token.generate_access_token(user.identity_id),
          {refresh_token, refresh_hash} <- Token.generate_refresh_token(),
          {:ok, _oauth_token} <-

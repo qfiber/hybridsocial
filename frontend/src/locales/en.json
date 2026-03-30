@@ -118,5 +118,6 @@
   "error.promotions.already_active": "You already have an active promotion",
 
   "error.page.not_found": "This page could not be found",
+  "error.rate_limit.exceeded": "Slow down — too many requests. Please wait a moment.",
   "error.unknown": "Something went wrong. Please try again."
 }

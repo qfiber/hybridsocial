@@ -16,13 +16,13 @@ export const chatEvents = derived(events, ($e) => $e);
  * Connect to the user streaming endpoint and listen for chat events.
  * Events: chat.new_message, chat.read, chat.reaction_added, chat.reaction_removed
  */
-export function connectChatStream(apiBase: string, token: string): void {
+export function connectChatStream(apiBase: string): void {
   if (!browser) return;
   disconnectChatStream();
 
   try {
-    const url = `${apiBase}/api/v1/streaming/user?access_token=${encodeURIComponent(token)}`;
-    eventSource = new EventSource(url);
+    const url = `${apiBase}/api/v1/streaming/user`;
+    eventSource = new EventSource(url, { withCredentials: true });
 
     // Chat events come as SSE events with "chat.*" event names
     const chatEventTypes = [

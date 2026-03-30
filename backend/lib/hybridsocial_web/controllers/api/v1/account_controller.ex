@@ -22,6 +22,35 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   def update(conn, params) do
     identity = conn.assigns.current_identity
 
+    # Update user-level fields if provided
+    user_updates =
+      %{}
+      |> then(fn m -> if params["locale"], do: Map.put(m, :locale, params["locale"]), else: m end)
+      |> then(fn m -> if params["default_visibility"], do: Map.put(m, :default_visibility, params["default_visibility"]), else: m end)
+
+    # Merge preferences map if provided
+    user_updates =
+      if is_map(params["preferences"]) do
+        case Hybridsocial.Repo.get_by(Hybridsocial.Accounts.User, identity_id: identity.id) do
+          nil -> user_updates
+          user ->
+            merged = Map.merge(user.preferences || %{}, params["preferences"])
+            Map.put(user_updates, :preferences, merged)
+        end
+      else
+        user_updates
+      end
+
+    if map_size(user_updates) > 0 do
+      case Hybridsocial.Repo.get_by(Hybridsocial.Accounts.User, identity_id: identity.id) do
+        nil -> :ok
+        user ->
+          user
+          |> Ecto.Changeset.change(user_updates)
+          |> Hybridsocial.Repo.update()
+      end
+    end
+
     case Accounts.update_identity(identity, params) do
       {:ok, updated} ->
         conn
@@ -343,6 +372,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       is_locked: identity.is_locked,
       is_bot: identity.is_bot,
       is_admin: identity.is_admin,
+      show_badge: identity.show_badge,
       badges: Hybridsocial.Badges.instance_badges(identity),
       created_at: identity.inserted_at
     }

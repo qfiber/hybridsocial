@@ -3,6 +3,7 @@
   import type { Post, FeedEntry, BoostEntry } from '$lib/api/types.js';
   import PostCard from '$lib/components/post/PostCard.svelte';
   import SkeletonPost from './SkeletonPost.svelte';
+  import { matchFilters } from '$lib/stores/content-filters.js';
 
   function isBoostEntry(entry: FeedEntry): entry is BoostEntry {
     return entry.type === 'boost';
@@ -14,6 +15,7 @@
     hasMore = true,
     compact = false,
     emptyMessage = 'No posts yet',
+    filterContext = 'home',
     onloadmore,
   }: {
     posts?: FeedEntry[];
@@ -21,6 +23,7 @@
     hasMore?: boolean;
     compact?: boolean;
     emptyMessage?: string;
+    filterContext?: string;
     onloadmore?: () => void;
   } = $props();
 
@@ -31,7 +34,12 @@
   let deletingIds = $state(new Set<string>());
   let hiddenIds = $state(new Set<string>());
 
-  let visiblePosts: FeedEntry[] = $derived(posts.filter(p => !hiddenIds.has(p.id)));
+  let visiblePosts: FeedEntry[] = $derived(posts.filter(p => {
+    if (hiddenIds.has(p.id)) return false;
+    const post = isBoostEntry(p) ? p.post : p;
+    const result = matchFilters(post.content, post.spoiler_text, filterContext);
+    return !result || result.action !== 'hide';
+  }));
 
   // Non-reactive tracker — avoids $effect infinite loop
   let _knownIds = new Set<string>();
@@ -149,7 +157,7 @@
             <span>{boost.account?.display_name || boost.account?.handle || 'Someone'} boosted</span>
           </div>
         {/if}
-        <PostCard {post} {compact} />
+        <PostCard {post} {compact} {filterContext} />
       </div>
     {/if}
   {/each}

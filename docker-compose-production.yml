@@ -78,6 +78,16 @@ services:
 
   # ---- Application ----
 
+  # Generate instance actor keys on first startup
+  init-keys:
+    image: alpine:3.19
+    container_name: hs_init_keys
+    volumes:
+      - ./docker/generate-instance-keys.sh:/generate-keys.sh:ro
+      - ./.env:/app/.env
+    command: sh /generate-keys.sh /app/.env
+    restart: "no"
+
   backend-migrate:
     build:
       context: ./backend
@@ -104,6 +114,8 @@ services:
     container_name: hs_backend
     restart: unless-stopped
     depends_on:
+      init-keys:
+        condition: service_completed_successfully
       backend-migrate:
         condition: service_completed_successfully
     environment:
@@ -123,12 +135,17 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-noreply@${DOMAIN}}
+      # Media domain — separate origin for user uploads (security)
+      MEDIA_HOST: ${MEDIA_HOST:-}
       # S3 (optional)
       S3_BUCKET: ${S3_BUCKET:-}
       S3_REGION: ${S3_REGION:-}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
+      # Instance actor keys (for federation signing)
+      INSTANCE_PUBLIC_KEY: ${INSTANCE_PUBLIC_KEY:-}
+      INSTANCE_PRIVATE_KEY: ${INSTANCE_PRIVATE_KEY:-}
     volumes:
       - uploads:/app/uploads
     depends_on:
@@ -172,6 +189,9 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in .env}
+      MEDIA_DOMAIN: ${MEDIA_DOMAIN:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

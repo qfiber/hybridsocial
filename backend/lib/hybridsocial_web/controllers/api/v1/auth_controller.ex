@@ -239,7 +239,9 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       email: identity.user && identity.user.email,
       confirmed: identity.user && identity.user.confirmed_at != nil,
       two_factor_enabled: identity.user && identity.user.otp_enabled,
-      locale: identity.user && identity.user.locale
+      locale: identity.user && identity.user.locale,
+      default_visibility: identity.user && identity.user.default_visibility,
+      preferences: (identity.user && identity.user.preferences) || %{}
     })
   end
 
@@ -512,5 +514,91 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       {:ok, _} -> json(conn, %{status: "ok"})
       {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "webauthn.not_found"})
     end
+  end
+
+  # --- Passwordless Login with Security Key (public, no auth) ---
+
+  def webauthn_login_challenge(conn, %{"email" => email}) do
+    case Hybridsocial.Accounts.get_user_by_email(email) do
+      nil ->
+        # Always return a valid-looking challenge — don't reveal if email exists
+        fake_challenge = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+        rp_id = URI.parse(HybridsocialWeb.Endpoint.url()).host
+        json(conn, %{challenge: fake_challenge, rpId: rp_id, timeout: 300_000, userVerification: "preferred", allowCredentials: []})
+
+      user ->
+        identity_id = user.identity_id
+
+        if Webauthn.has_credentials?(identity_id) do
+          challenge = Webauthn.authentication_challenge(identity_id)
+          json(conn, challenge)
+        else
+          # No keys registered — return same shape as no-user to avoid leaking info
+          fake_challenge = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+          rp_id = URI.parse(HybridsocialWeb.Endpoint.url()).host
+          json(conn, %{challenge: fake_challenge, rpId: rp_id, timeout: 300_000, userVerification: "preferred", allowCredentials: []})
+        end
+    end
+  end
+
+  def webauthn_login_challenge(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "email_required"})
+  end
+
+  def webauthn_login_verify(conn, %{"email" => email} = params) do
+    case Hybridsocial.Accounts.get_user_by_email(email) do
+      nil ->
+        conn |> put_status(:unauthorized) |> json(%{error: "auth.invalid_credentials"})
+
+      user ->
+        identity_id = user.identity_id
+        credential_id = params["credential_id"] || params["id"]
+
+        case Webauthn.verify_authentication(identity_id, %{
+          "credential_id" => credential_id,
+          "sign_count" => params["sign_count"]
+        }) do
+          {:ok, _cred} ->
+            # Issue tokens — same as normal login
+            ip = to_string(:inet_parse.ntoa(conn.remote_ip))
+            ua = Plug.Conn.get_req_header(conn, "user-agent") |> List.first() || ""
+            session_info = %{ip_address: ip, user_agent: ua}
+
+            # Preload user with identity for token issuing
+            user_with_identity = Hybridsocial.Repo.preload(user, :identity)
+
+            case Hybridsocial.Auth.issue_tokens(user_with_identity, session_info) do
+              {:ok, tokens} ->
+                # Update last login
+                user
+                |> Ecto.Changeset.change(last_login_at: DateTime.utc_now() |> DateTime.truncate(:microsecond))
+                |> Hybridsocial.Repo.update()
+
+                conn
+                |> set_auth_cookies(tokens)
+                |> put_status(:ok)
+                |> json(%{
+                  access_token: tokens.access_token,
+                  refresh_token: tokens.refresh_token,
+                  expires_in: tokens.expires_in,
+                  token_type: "Bearer",
+                  identity_id: identity_id
+                })
+
+              {:error, _} ->
+                conn |> put_status(:internal_server_error) |> json(%{error: "auth.token_failed"})
+            end
+
+          {:error, :challenge_expired} ->
+            conn |> put_status(:unauthorized) |> json(%{error: "webauthn.challenge_expired"})
+
+          {:error, _} ->
+            conn |> put_status(:unauthorized) |> json(%{error: "auth.invalid_credentials"})
+        end
+    end
+  end
+
+  def webauthn_login_verify(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "email_required"})
   end
 end

@@ -67,7 +67,7 @@ async function loadLocaleFile(locale: string): Promise<Translations> {
     loadedLocales[locale] = data;
     return data;
   } catch {
-    console.warn(`[i18n] Failed to load locale "${locale}"`);
+    // Locale file not available — fall back to English silently
     return {};
   }
 }

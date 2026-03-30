@@ -1,31 +1,33 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getNotificationPreferences, updateNotificationPreferences } from '$lib/api/notifications.js';
+  import { api } from '$lib/api/client.js';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
-  let follows = $state(true);
-  let reactions = $state(true);
-  let boosts = $state(true);
-  let mentions = $state(true);
-  let polls = $state(true);
-  let groupInvites = $state(true);
+  const notifTypes = ['follow', 'mention', 'reaction', 'boost', 'poll', 'group_invite'] as const;
 
+  let prefs = $state<Record<string, { email: boolean; push: boolean; in_app: boolean }>>({});
   let saving = $state(false);
   let saved = $state(false);
   let loading = $state(true);
   let error: string | null = $state(null);
 
+  function isEnabled(type: string): boolean {
+    return prefs[type]?.in_app ?? true;
+  }
+
+  function toggle(type: string, value: boolean) {
+    if (!prefs[type]) {
+      prefs[type] = { email: true, push: true, in_app: value };
+    } else {
+      prefs[type] = { ...prefs[type], in_app: value };
+    }
+  }
+
   onMount(async () => {
     try {
-      const prefs = await getNotificationPreferences();
-      follows = prefs.follows ?? true;
-      reactions = prefs.favourites ?? true;
-      boosts = prefs.boosts ?? true;
-      mentions = prefs.mentions ?? true;
-      polls = prefs.polls ?? true;
-      groupInvites = prefs.group_invites ?? true;
+      prefs = await api.get<Record<string, any>>('/api/v1/notification_preferences');
     } catch {
-      // Use defaults
+      // Use defaults — all enabled
     } finally {
       loading = false;
     }
@@ -36,14 +38,16 @@
     error = null;
     saved = false;
     try {
-      await updateNotificationPreferences({
-        follows,
-        favourites: reactions,
-        boosts,
-        mentions,
-        polls,
-        group_invites: groupInvites,
-      });
+      // Save each type individually
+      for (const type of notifTypes) {
+        const p = prefs[type] || { email: true, push: true, in_app: true };
+        await api.patch('/api/v1/notification_preferences', {
+          type,
+          email: p.email,
+          push: p.push,
+          in_app: p.in_app,
+        });
+      }
       saved = true;
       setTimeout(() => { saved = false; }, 3000);
     } catch (e) {
@@ -82,65 +86,29 @@
         <form class="stitch-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
           <p class="stitch-description">Choose which notifications you want to receive.</p>
 
-          <div class="stitch-check-row">
-            <label class="stitch-checkbox-label">
-              <input type="checkbox" bind:checked={follows} class="stitch-checkbox" />
-              <div class="stitch-check-info">
-                <span class="stitch-check-name">Follows</span>
-                <span class="stitch-check-desc">Someone follows you or sends a follow request</span>
-              </div>
-            </label>
-          </div>
-
-          <div class="stitch-check-row">
-            <label class="stitch-checkbox-label">
-              <input type="checkbox" bind:checked={mentions} class="stitch-checkbox" />
-              <div class="stitch-check-info">
-                <span class="stitch-check-name">Mentions</span>
-                <span class="stitch-check-desc">Someone mentions you in a post</span>
-              </div>
-            </label>
-          </div>
-
-          <div class="stitch-check-row">
-            <label class="stitch-checkbox-label">
-              <input type="checkbox" bind:checked={reactions} class="stitch-checkbox" />
-              <div class="stitch-check-info">
-                <span class="stitch-check-name">Reactions</span>
-                <span class="stitch-check-desc">Someone reacts to or favourites your post</span>
-              </div>
-            </label>
-          </div>
-
-          <div class="stitch-check-row">
-            <label class="stitch-checkbox-label">
-              <input type="checkbox" bind:checked={boosts} class="stitch-checkbox" />
-              <div class="stitch-check-info">
-                <span class="stitch-check-name">Boosts</span>
-                <span class="stitch-check-desc">Someone boosts your post</span>
-              </div>
-            </label>
-          </div>
-
-          <div class="stitch-check-row">
-            <label class="stitch-checkbox-label">
-              <input type="checkbox" bind:checked={polls} class="stitch-checkbox" />
-              <div class="stitch-check-info">
-                <span class="stitch-check-name">Polls</span>
-                <span class="stitch-check-desc">A poll you voted in has ended</span>
-              </div>
-            </label>
-          </div>
-
-          <div class="stitch-check-row">
-            <label class="stitch-checkbox-label">
-              <input type="checkbox" bind:checked={groupInvites} class="stitch-checkbox" />
-              <div class="stitch-check-info">
-                <span class="stitch-check-name">Group invites</span>
-                <span class="stitch-check-desc">Someone invites you to a group</span>
-              </div>
-            </label>
-          </div>
+          {#each [
+            { type: 'follow', name: 'Follows', desc: 'Someone follows you or sends a follow request' },
+            { type: 'mention', name: 'Mentions', desc: 'Someone mentions you in a post' },
+            { type: 'reaction', name: 'Reactions', desc: 'Someone reacts to your post' },
+            { type: 'boost', name: 'Boosts', desc: 'Someone boosts your post' },
+            { type: 'poll', name: 'Polls', desc: 'A poll you voted in has ended' },
+            { type: 'group_invite', name: 'Group invites', desc: 'Someone invites you to a group' },
+          ] as item (item.type)}
+            <div class="stitch-check-row">
+              <label class="stitch-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={isEnabled(item.type)}
+                  onchange={(e) => toggle(item.type, (e.target as HTMLInputElement).checked)}
+                  class="stitch-checkbox"
+                />
+                <div class="stitch-check-info">
+                  <span class="stitch-check-name">{item.name}</span>
+                  <span class="stitch-check-desc">{item.desc}</span>
+                </div>
+              </label>
+            </div>
+          {/each}
 
           {#if error}
             <div class="stitch-error">{error}</div>

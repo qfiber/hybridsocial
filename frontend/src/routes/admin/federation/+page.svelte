@@ -46,7 +46,7 @@
   let newPolicyReason = $state('');
 
   // Delivery Queue
-  let deliveryStats: DeliveryQueueStats | null = $state(null);
+  let deliveryStats: any | null = $state(null);
   let deliveryLoading = $state(false);
   let retrying = $state(false);
 
@@ -65,9 +65,10 @@
     instancesLoading = true;
     try {
       const result = await getKnownInstances();
-      instances = result.data;
+      instances = Array.isArray(result.data) ? result.data : [];
     } catch {
       addToast('Failed to load instances', 'error');
+      instances = [];
     } finally {
       instancesLoading = false;
     }
@@ -81,6 +82,7 @@
       addToast('Failed to load policies', 'error');
     } finally {
       policiesLoading = false;
+      policiesLoaded = true;
     }
   }
 
@@ -92,13 +94,17 @@
       addToast('Failed to load delivery stats', 'error');
     } finally {
       deliveryLoading = false;
+      deliveryLoaded = true;
     }
   }
 
+  let policiesLoaded = $state(false);
+  let deliveryLoaded = $state(false);
+
   $effect(() => {
-    if (activeTab === 'policies' && policies.length === 0 && !policiesLoading) {
+    if (activeTab === 'policies' && !policiesLoaded && !policiesLoading) {
       loadPolicies();
-    } else if (activeTab === 'delivery' && !deliveryStats && !deliveryLoading) {
+    } else if (activeTab === 'delivery' && !deliveryLoaded && !deliveryLoading) {
       loadDelivery();
     }
   });
@@ -251,6 +257,29 @@
         <button class="btn btn-primary" type="submit">Add Policy</button>
       </form>
 
+      <div class="policy-help">
+        <div class="policy-help-item">
+          <strong>Allow</strong>
+          <span>Explicitly allow federation with this domain, overriding any global restrictions.</span>
+        </div>
+        <div class="policy-help-item">
+          <strong>Silence</strong>
+          <span>Posts from this domain won't appear in public timelines or search, but existing followers can still see them.</span>
+        </div>
+        <div class="policy-help-item">
+          <strong>Suspend</strong>
+          <span>Completely block all communication. No posts, follows, or messages from this domain.</span>
+        </div>
+        <div class="policy-help-item">
+          <strong>Force NSFW</strong>
+          <span>All media from this domain is automatically marked as sensitive and hidden behind a content warning.</span>
+        </div>
+        <div class="policy-help-item">
+          <strong>Block Media</strong>
+          <span>Strip all images, videos, and audio from posts. Text content is still federated.</span>
+        </div>
+      </div>
+
       <div class="list-items">
         {#each policies as policy (policy.id)}
           <div class="list-item card">
@@ -289,27 +318,48 @@
       {:else if deliveryStats}
         <div class="delivery-grid">
           <div class="delivery-stat card">
-            <div class="delivery-label">Pending</div>
-            <div class="delivery-value">{deliveryStats.pending.toLocaleString()}</div>
+            <div class="delivery-label">NATS</div>
+            <div class="delivery-value" class:delivery-ok={deliveryStats.nats?.connected} class:delivery-failed={!deliveryStats.nats?.connected}>
+              {deliveryStats.nats?.connected ? 'Connected' : 'Disconnected'}
+            </div>
           </div>
           <div class="delivery-stat card">
-            <div class="delivery-label">Failed</div>
-            <div class="delivery-value delivery-failed">{deliveryStats.failed.toLocaleString()}</div>
+            <div class="delivery-label">Active Tasks</div>
+            <div class="delivery-value">{deliveryStats.tasks?.active ?? 0}</div>
           </div>
           <div class="delivery-stat card">
-            <div class="delivery-label">Retrying</div>
-            <div class="delivery-value delivery-retrying">{deliveryStats.retrying.toLocaleString()}</div>
+            <div class="delivery-label">Processes</div>
+            <div class="delivery-value">{deliveryStats.system?.process_count?.toLocaleString() ?? '—'}</div>
+          </div>
+          <div class="delivery-stat card">
+            <div class="delivery-label">Memory</div>
+            <div class="delivery-value">{deliveryStats.system?.memory_total_mb ?? '—'} MB</div>
+          </div>
+          <div class="delivery-stat card">
+            <div class="delivery-label">Uptime</div>
+            <div class="delivery-value">{deliveryStats.system?.uptime_seconds ? Math.floor(deliveryStats.system.uptime_seconds / 3600) + 'h ' + Math.floor((deliveryStats.system.uptime_seconds % 3600) / 60) + 'm' : '—'}</div>
+          </div>
+          <div class="delivery-stat card">
+            <div class="delivery-label">Schedulers</div>
+            <div class="delivery-value">{deliveryStats.system?.scheduler_count ?? '—'}</div>
           </div>
         </div>
+
+        {#if deliveryStats.workers?.length > 0}
+          <h3 style="margin: var(--space-4) 0 var(--space-2); font-size: var(--text-sm); font-weight: 600;">Workers</h3>
+          <div class="delivery-grid">
+            {#each deliveryStats.workers as worker}
+              <div class="delivery-stat card">
+                <div class="delivery-label">{worker.name}</div>
+                <div class="delivery-value" class:delivery-ok={worker.alive} class:delivery-failed={!worker.alive}>
+                  {worker.alive ? 'Running' : 'Stopped'}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {/if}
+
         <div class="delivery-actions">
-          <button
-            class="btn btn-primary"
-            type="button"
-            disabled={retrying}
-            onclick={handleRetryDelivery}
-          >
-            {retrying ? 'Retrying...' : 'Retry Failed Deliveries'}
-          </button>
           <button class="btn btn-outline" type="button" onclick={loadDelivery}>
             Refresh
           </button>
@@ -357,6 +407,33 @@
 <style>
   .federation-page {
     max-width: 1100px;
+  }
+
+  .policy-help {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: var(--space-4);
+    background: var(--color-surface-container-low, #f5f5f5);
+    border-radius: var(--radius-lg);
+    margin-block-end: var(--space-4);
+  }
+
+  .policy-help-item {
+    display: flex;
+    gap: 8px;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+  }
+
+  .policy-help-item strong {
+    flex-shrink: 0;
+    min-width: 90px;
+    color: var(--color-text);
+  }
+
+  .policy-help-item span {
+    color: var(--color-text-secondary);
   }
 
   .page-title {
@@ -484,12 +561,12 @@
     font-weight: 700;
   }
 
-  .delivery-failed {
-    color: var(--color-danger);
+  .delivery-ok {
+    color: #16a34a;
   }
 
-  .delivery-retrying {
-    color: var(--color-warning);
+  .delivery-failed {
+    color: var(--color-danger);
   }
 
   .delivery-actions {

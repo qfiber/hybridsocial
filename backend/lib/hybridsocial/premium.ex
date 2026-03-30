@@ -4,7 +4,7 @@ defmodule Hybridsocial.Premium do
   """
   import Ecto.Query
   alias Hybridsocial.Repo
-  alias Hybridsocial.Premium.{Verification, Subscription, CryptoAddress}
+  alias Hybridsocial.Premium.{Verification, VerificationVouch, Subscription, CryptoAddress}
 
   @premium_features ~w(markdown extended_post_length extra_reactions scheduled_posts post_analytics hd_video)a
 
@@ -90,77 +90,78 @@ defmodule Hybridsocial.Premium do
     |> Repo.aggregate(:count)
   end
 
-  @doc "Verify domain ownership by checking for a DNS TXT record or rel=me link."
-  def verify_domain(identity_id, domain) do
-    identity = Hybridsocial.Accounts.get_identity(identity_id)
+  # --- Peer Vouching ---
 
-    if is_nil(identity) do
-      {:error, :not_found}
-    else
-      handle = identity.handle
-      expected_proof = "hybridsocial-verify=#{handle}"
+  @vouches_required 3
 
-      # Check DNS TXT record
-      dns_verified = check_dns_txt(domain, expected_proof)
+  @doc "Vouch for a user's verification. Returns {:ok, vouch} or auto-approves if threshold met."
+  def vouch_for(verification_id, voucher_id) do
+    with verification when not is_nil(verification) <- Repo.get(Verification, verification_id),
+         true <- verification.type == "peer_vouch",
+         true <- verification.status == "pending",
+         false <- verification.identity_id == voucher_id do
+      # Check voucher hasn't already vouched
+      existing =
+        VerificationVouch
+        |> where([v], v.verification_id == ^verification_id and v.voucher_id == ^voucher_id)
+        |> Repo.one()
 
-      # Check rel=me link on the domain's homepage
-      rel_me_verified = if dns_verified, do: false, else: check_rel_me(domain, identity)
-
-      if dns_verified or rel_me_verified do
-        apply_for_verification(identity_id, "domain", %{
-          "domain" => domain,
-          "method" => if(dns_verified, do: "dns_txt", else: "rel_me"),
-          "verified_automatically" => true
-        })
-        |> case do
-          {:ok, verification} ->
-            # Auto-approve domain verifications
-            approve_verification(verification.id, nil)
-
-          error ->
-            error
-        end
+      if existing do
+        {:error, :already_vouched}
       else
-        {:error, :domain_not_verified}
+        {:ok, vouch} =
+          %VerificationVouch{}
+          |> VerificationVouch.changeset(%{verification_id: verification_id, voucher_id: voucher_id})
+          |> Repo.insert()
+
+        # Check if threshold is met
+        vouch_count =
+          VerificationVouch
+          |> where([v], v.verification_id == ^verification_id)
+          |> Repo.aggregate(:count)
+
+        if vouch_count >= @vouches_required do
+          approve_verification(verification_id, nil)
+        end
+
+        {:ok, vouch}
       end
+    else
+      nil -> {:error, :not_found}
+      false -> {:error, :cannot_vouch_self}
+      true -> {:error, :invalid_verification_type}
     end
   end
 
-  defp check_dns_txt(domain, expected_proof) do
-    try do
-      case :inet_res.lookup(to_charlist(domain), :in, :txt) do
-        records when is_list(records) ->
-          Enum.any?(records, fn record ->
-            txt = record |> List.flatten() |> to_string()
-            String.contains?(txt, expected_proof)
-          end)
-
-        _ ->
-          false
-      end
-    rescue
-      _ -> false
-    end
+  @doc "Get vouches for a verification request."
+  def get_vouches(verification_id) do
+    VerificationVouch
+    |> where([v], v.verification_id == ^verification_id)
+    |> Repo.all()
+    |> Repo.preload(:voucher)
   end
 
-  defp check_rel_me(domain, identity) do
-    url = "https://#{domain}"
+  @doc "Get the vouch count for a verification."
+  def vouch_count(verification_id) do
+    VerificationVouch
+    |> where([v], v.verification_id == ^verification_id)
+    |> Repo.aggregate(:count)
+  end
 
-    try do
-      case HTTPoison.get(url, [], recv_timeout: 5_000, timeout: 5_000, follow_redirect: true) do
-        {:ok, %{status_code: 200, body: body}} ->
-          instance_url = HybridsocialWeb.Endpoint.url()
-          profile_url = "#{instance_url}/@#{identity.handle}"
+  @doc "Check if a user has already vouched for a verification."
+  def has_vouched?(verification_id, voucher_id) do
+    VerificationVouch
+    |> where([v], v.verification_id == ^verification_id and v.voucher_id == ^voucher_id)
+    |> Repo.exists?()
+  end
 
-          # Check for <a rel="me" href="https://instance/@handle">
-          String.contains?(body, "rel=\"me\"") and String.contains?(body, profile_url)
-
-        _ ->
-          false
-      end
-    rescue
-      _ -> false
-    end
+  @doc "Find a pending peer_vouch verification for an identity (for vouch links)."
+  def get_peer_verification(identity_id) do
+    Verification
+    |> where([v], v.identity_id == ^identity_id and v.type == "peer_vouch" and v.status == "pending")
+    |> order_by([v], desc: v.inserted_at)
+    |> limit(1)
+    |> Repo.one()
   end
 
   # --- Subscription ---

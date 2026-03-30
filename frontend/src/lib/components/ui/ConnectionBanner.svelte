@@ -1,16 +1,14 @@
 <script lang="ts">
-  import { serverReachable, sessionValid } from '$lib/stores/health.js';
   import { goto } from '$app/navigation';
-  import { clearAuth } from '$lib/stores/auth.js';
+  import { clearAuth, sessionExpired, serverReachable } from '$lib/stores/auth.js';
 
+  let expired = $state(false);
   let reachable = $state(true);
-  let validSession = $state(true);
 
   serverReachable.subscribe((v) => (reachable = v));
-  sessionValid.subscribe((v) => {
-    validSession = v;
-    if (!v) {
-      // Session expired — redirect to login after a short delay
+  sessionExpired.subscribe((v) => {
+    expired = v;
+    if (v) {
       setTimeout(() => {
         clearAuth();
         goto('/login?expired=1');
@@ -24,10 +22,10 @@
     <span class="material-symbols-outlined banner-icon">cloud_off</span>
     <div class="banner-text">
       <strong>Connection lost</strong>
-      <span>Unable to reach the server. Retrying...</span>
+      <span>Unable to reach the server. Reconnecting...</span>
     </div>
   </div>
-{:else if !validSession}
+{:else if expired}
   <div class="connection-banner connection-expired" role="alert">
     <span class="material-symbols-outlined banner-icon">lock_clock</span>
     <div class="banner-text">

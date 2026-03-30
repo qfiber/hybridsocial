@@ -10,7 +10,8 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
     identity = conn.assigns.current_identity
     limits = TierLimits.limits_for(identity)
 
-    with :ok <- validate_tier_limits(params, limits) do
+    with :ok <- validate_tier_limits(params, limits),
+         :ok <- check_bot_rate_limit(identity) do
       case Posts.create_post(identity.id, params, identity) do
         {:ok, post} ->
           post = Hybridsocial.Repo.preload(post, [:identity, :quote])
@@ -478,6 +479,47 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       edited_at: revision.edited_at,
       revision_number: revision.revision_number
     }
+  end
+
+  defp check_bot_rate_limit(identity) do
+    import Ecto.Query
+
+    # Priority: per-user override > bot-specific > global bot default > global user default
+    limit =
+      cond do
+        # Admin per-user override (stored in identity metadata)
+        is_map(identity.metadata) and is_integer(identity.metadata["posts_per_hour"]) ->
+          identity.metadata["posts_per_hour"]
+
+        # Bot-specific limit
+        identity.is_bot ->
+          bot = Hybridsocial.Repo.get(Hybridsocial.Accounts.Bot, identity.id)
+          cond do
+            bot && bot.posts_per_hour -> bot.posts_per_hour
+            true -> Hybridsocial.Config.get("bot_posts_per_hour", 30)
+          end
+
+        # Global user limit (0 = unlimited, default)
+        true ->
+          Hybridsocial.Config.get("user_posts_per_hour", 0)
+      end
+
+    # 0 or nil = unlimited
+    if is_nil(limit) or limit == 0 do
+      :ok
+    else
+      one_hour_ago = DateTime.add(DateTime.utc_now(), -3600, :second)
+      count =
+        Hybridsocial.Social.Post
+        |> where([p], p.identity_id == ^identity.id and p.inserted_at > ^one_hour_ago and is_nil(p.deleted_at))
+        |> Hybridsocial.Repo.aggregate(:count)
+
+      if count >= limit do
+        {:error, "limits.post_rate_limit", limit}
+      else
+        :ok
+      end
+    end
   end
 
   defp validate_tier_limits(params, limits) do

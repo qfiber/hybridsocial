@@ -1,3 +1,27 @@
+# Media domain — serves user uploads from a separate origin for security
+# Set MEDIA_DOMAIN env var to enable (e.g. media.hybridsocial.com)
+{$MEDIA_DOMAIN:} {
+	# Only serve uploads — no cookies, no scripts
+	header {
+		X-Content-Type-Options nosniff
+		Content-Security-Policy "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'none'; script-src 'none'"
+		X-Frame-Options DENY
+		-Server
+		-Set-Cookie
+	}
+
+	handle /uploads/* {
+		reverse_proxy backend:4000
+	}
+
+	# Block everything else
+	handle {
+		respond "Not Found" 404
+	}
+
+	encode gzip zstd
+}
+
 {$DOMAIN:localhost} {
 	# Frontend (SvelteKit)
 	handle /api/* {

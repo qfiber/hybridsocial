@@ -115,32 +115,32 @@ export function deleteIpBlock(id: string): Promise<void> {
 }
 
 // Federation
-export function getKnownInstances(params?: Record<string, string>): Promise<PaginatedResponse<KnownInstance>> {
-  return api.get('/api/v1/admin/instances', params);
+export function getKnownInstances(): Promise<{ data: KnownInstance[] }> {
+  return api.get('/api/v1/admin/known_instances');
 }
 
 export function getFederationPolicies(): Promise<FederationPolicy[]> {
-  return api.get('/api/v1/admin/federation/policies');
+  return api.get<{ data: FederationPolicy[] }>('/api/v1/admin/instance_policies').then(r => r.data || []);
 }
 
 export function createFederationPolicy(policy: Omit<FederationPolicy, 'id' | 'created_at' | 'updated_at'>): Promise<FederationPolicy> {
-  return api.post('/api/v1/admin/federation/policies', policy);
+  return api.post('/api/v1/admin/instance_policies', policy);
 }
 
 export function updateFederationPolicy(id: string, policy: Partial<FederationPolicy>): Promise<FederationPolicy> {
-  return api.put(`/api/v1/admin/federation/policies/${id}`, policy);
+  return api.put(`/api/v1/admin/instance_policies/${id}`, policy);
 }
 
 export function deleteFederationPolicy(id: string): Promise<void> {
-  return api.delete(`/api/v1/admin/federation/policies/${id}`);
+  return api.delete(`/api/v1/admin/instance_policies/${id}`);
 }
 
 export function getDeliveryQueueStats(): Promise<DeliveryQueueStats> {
-  return api.get('/api/v1/admin/federation/delivery');
+  return api.get('/api/v1/admin/queue_stats');
 }
 
 export function retryDeliveryQueue(): Promise<void> {
-  return api.post('/api/v1/admin/federation/delivery/retry');
+  return api.post('/api/v1/admin/queue_stats');
 }
 
 // Settings
@@ -171,11 +171,11 @@ export function uploadFavicon(file: File): Promise<{ url: string }> {
 
 // Backups
 export function getBackups(): Promise<Backup[]> {
-  return api.get('/api/v1/admin/backups');
+  return api.get<any>('/api/v1/admin/backups').then(r => Array.isArray(r) ? r : r.data || []);
 }
 
 export function createBackup(passphrase?: string): Promise<Backup> {
-  return api.post('/api/v1/admin/backups', { passphrase });
+  return api.post<any>('/api/v1/admin/backup', { passphrase }).then(r => r.data || r);
 }
 
 // Audit Log
@@ -185,11 +185,11 @@ export function getAuditLog(params?: Record<string, string>): Promise<PaginatedR
 
 // Relays
 export function getRelays(): Promise<Relay[]> {
-  return api.get('/api/v1/admin/relays');
+  return api.get<{ data: Relay[] }>('/api/v1/admin/relays').then(r => r.data || []);
 }
 
 export function addRelay(inboxUrl: string): Promise<Relay> {
-  return api.post('/api/v1/admin/relays', { inbox_url: inboxUrl });
+  return api.post<{ data: Relay }>('/api/v1/admin/relays', { inbox_url: inboxUrl }).then(r => r.data);
 }
 
 export function removeRelay(id: string): Promise<void> {
@@ -281,15 +281,15 @@ export function seedSitePages(): Promise<SitePage[]> {
 
 // Webhooks
 export function getWebhooks(): Promise<Webhook[]> {
-  return api.get('/api/v1/admin/webhooks');
+  return api.get<any>('/api/v1/admin/webhooks').then(r => r.data || r);
 }
 
 export function createWebhook(webhook: { url: string; events: string[]; secret?: string; enabled?: boolean }): Promise<Webhook> {
-  return api.post('/api/v1/admin/webhooks', webhook);
+  return api.post<any>('/api/v1/admin/webhooks', webhook).then(r => r.data || r);
 }
 
 export function updateWebhook(id: string, webhook: Partial<{ url: string; events: string[]; secret: string; enabled: boolean }>): Promise<Webhook> {
-  return api.put(`/api/v1/admin/webhooks/${id}`, webhook);
+  return api.put<any>(`/api/v1/admin/webhooks/${id}`, webhook).then(r => r.data || r);
 }
 
 export function deleteWebhook(id: string): Promise<void> {
@@ -298,24 +298,24 @@ export function deleteWebhook(id: string): Promise<void> {
 
 // Appeals
 export function getAppeals(params?: Record<string, string>): Promise<Appeal[]> {
-  return api.get('/api/v1/admin/appeals', params);
+  return api.get<{ data: Appeal[] }>('/api/v1/admin/appeals', params).then(r => r.data || []);
 }
 
 export function approveAppeal(id: string, response?: string): Promise<Appeal> {
-  return api.post(`/api/v1/admin/appeals/${id}/approve`, { response });
+  return api.post<{ data: Appeal }>(`/api/v1/admin/appeals/${id}/approve`, { response }).then(r => r.data);
 }
 
 export function rejectAppeal(id: string, response?: string): Promise<Appeal> {
-  return api.post(`/api/v1/admin/appeals/${id}/reject`, { response });
+  return api.post<{ data: Appeal }>(`/api/v1/admin/appeals/${id}/reject`, { response }).then(r => r.data);
 }
 
 // Moderation Notes
 export function getModerationNotes(accountId: string): Promise<ModerationNote[]> {
-  return api.get(`/api/v1/admin/users/${accountId}/notes`);
+  return api.get<any>(`/api/v1/admin/users/${accountId}/notes`).then(r => r.data || r);
 }
 
 export function createModerationNote(accountId: string, content: string): Promise<ModerationNote> {
-  return api.post(`/api/v1/admin/users/${accountId}/notes`, { content });
+  return api.post<any>(`/api/v1/admin/users/${accountId}/notes`, { content }).then(r => r.data || r);
 }
 
 export function deleteModerationNote(id: string): Promise<void> {
@@ -324,32 +324,32 @@ export function deleteModerationNote(id: string): Promise<void> {
 
 // Moderation Queue
 export function getModerationQueue(params?: Record<string, string>): Promise<ModerationQueueItem[]> {
-  return api.get('/api/v1/admin/moderation_queue', params);
+  return api.get<{ data: ModerationQueueItem[] }>('/api/v1/admin/moderation_queue', params).then(r => r.data || []);
 }
 
 export function getModerationQueueStats(): Promise<ModerationQueueStats> {
-  return api.get('/api/v1/admin/moderation_queue/stats');
+  return api.get<{ data: ModerationQueueStats }>('/api/v1/admin/moderation_queue/stats').then(r => r.data);
 }
 
 export function approveQueueItem(id: string): Promise<ModerationQueueItem> {
-  return api.post(`/api/v1/admin/moderation_queue/${id}/approve`);
+  return api.post<{ data: ModerationQueueItem }>(`/api/v1/admin/moderation_queue/${id}/approve`).then(r => r.data);
 }
 
 export function rejectQueueItem(id: string, reason?: string): Promise<ModerationQueueItem> {
-  return api.post(`/api/v1/admin/moderation_queue/${id}/reject`, { reason });
+  return api.post<{ data: ModerationQueueItem }>(`/api/v1/admin/moderation_queue/${id}/reject`, { reason }).then(r => r.data);
 }
 
 export function escalateQueueItem(id: string): Promise<ModerationQueueItem> {
-  return api.post(`/api/v1/admin/moderation_queue/${id}/escalate`);
+  return api.post<{ data: ModerationQueueItem }>(`/api/v1/admin/moderation_queue/${id}/escalate`).then(r => r.data);
 }
 
 // Invite Codes
 export function getInvites(): Promise<InviteCode[]> {
-  return api.get('/api/v1/admin/invites');
+  return api.get<any>('/api/v1/admin/invites').then(r => r.data || r);
 }
 
 export function createInvite(params: { max_uses?: number; expires_at?: string }): Promise<InviteCode> {
-  return api.post('/api/v1/admin/invites', params);
+  return api.post<any>('/api/v1/admin/invites', params).then(r => r.data || r);
 }
 
 export function deleteInvite(id: string): Promise<void> {
@@ -387,12 +387,12 @@ export function banMediaFromPost(postId: string): Promise<void> {
 }
 
 // Instance Purge
-export function purgeInstancePreview(domain: string): Promise<InstancePurgePreview> {
-  return api.get(`/api/v1/admin/instances/${encodeURIComponent(domain)}/purge_preview`);
+export function purgeInstancePreview(policyId: string): Promise<InstancePurgePreview> {
+  return api.post(`/api/v1/admin/instance_policies/${policyId}/purge_preview`);
 }
 
-export function purgeInstanceContent(domain: string): Promise<void> {
-  return api.post(`/api/v1/admin/instances/${encodeURIComponent(domain)}/purge`);
+export function purgeInstanceContent(policyId: string): Promise<void> {
+  return api.post(`/api/v1/admin/instance_policies/${policyId}/purge`);
 }
 
 // Admin Post Actions

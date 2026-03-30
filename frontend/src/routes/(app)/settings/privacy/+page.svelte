@@ -4,9 +4,9 @@
   import { authStore, setUser } from '$lib/stores/auth.js';
   import { updateAccount } from '$lib/api/accounts.js';
   import { api } from '$lib/api/client.js';
+  import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
   import Toggle from '$lib/components/ui/Toggle.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
-  import type { UserPreferences } from '$lib/api/types.js';
 
   let isLocked: boolean = $state(false);
   let dmPreference: string = $state('everyone');
@@ -22,10 +22,15 @@
     if (state.user) {
       isLocked = state.user.is_locked ?? false;
     }
+
+    // Load default visibility from local preferences
+    const prefs = get(preferencesStore);
+    defaultVisibility = prefs.default_visibility || 'public';
+
     try {
-      const prefs = await api.get<any>('/api/v1/dm_preferences');
-      dmPreference = prefs.allow_dms_from || prefs.dm_preference || 'everyone';
-      groupDmOptIn = prefs.allow_group_dms ?? prefs.group_dm_opt_in ?? false;
+      const dmPrefs = await api.get<any>('/api/v1/dm_preferences');
+      dmPreference = dmPrefs.allow_dms_from || 'everyone';
+      groupDmOptIn = dmPrefs.allow_group_dms ?? false;
     } catch {
       // Use defaults
     }
@@ -41,11 +46,12 @@
       setUser(updated);
 
       await api.patch('/api/v1/dm_preferences', {
-        dm_preference: dmPreference,
-        group_dm_opt_in: groupDmOptIn,
+        allow_dms_from: dmPreference,
+        allow_group_dms: groupDmOptIn,
       });
 
-      await updateAccount({ default_visibility: defaultVisibility });
+      // Save default visibility (syncs to server automatically)
+      updatePreferences({ default_visibility: defaultVisibility as any });
 
       saved = true;
       setTimeout(() => { saved = false; }, 3000);

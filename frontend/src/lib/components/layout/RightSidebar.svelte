@@ -6,12 +6,12 @@
   import type { PromotedUser, PromotionPricing } from '$lib/api/promotions.js';
 
   let {
-    trending = [],
     suggestions = []
   }: {
-    trending?: { tag: string; count: number }[];
     suggestions?: { handle: string; display_name: string; avatar_url: string | null }[];
   } = $props();
+
+  let trending: { tag: string; count: number }[] = $state([]);
 
   let promotedUsers: PromotedUser[] = $state([]);
   let pricing: PromotionPricing | null = $state(null);
@@ -65,14 +65,18 @@
 
   onMount(async () => {
     try {
-      const [users, pricingData, newUsersData] = await Promise.all([
+      const [users, pricingData, newUsersData, trendingData] = await Promise.all([
         getPromotedUsers().catch(() => [] as PromotedUser[]),
         getPromotionPricing().catch(() => null),
         api.get<NewUser[]>('/api/v1/directory/new').catch(() => [] as NewUser[]),
+        api.get<{ name: string; score: number; metadata: { post_count?: number } }[]>('/api/v1/trends/tags')
+          .then(tags => tags.map(t => ({ tag: t.name, count: t.metadata?.post_count ?? 0 })))
+          .catch(() => [] as { tag: string; count: number }[]),
       ]);
       promotedUsers = users;
       pricing = pricingData;
       newUsers = newUsersData;
+      trending = trendingData;
     } catch {
       // Sidebar is non-critical
     }
@@ -123,11 +127,7 @@
           <li class="suggestion-stagger" style="animation-delay: {i * 60}ms">
             <a href="/@{person.handle}" class="suggestion-item">
               <div class="suggestion-avatar">
-                {#if person.avatar_url}
-                  <img src={person.avatar_url} alt={person.display_name} class="suggestion-img" />
-                {:else}
-                  <span class="suggestion-initial">{person.display_name.charAt(0).toUpperCase()}</span>
-                {/if}
+                <img src={person.avatar_url || '/images/default-avatar.svg'} alt={person.display_name} class="suggestion-img" />
               </div>
               <div class="suggestion-info">
                 <span class="suggestion-name">
@@ -156,11 +156,7 @@
           <li>
             <a href="/@{user.handle}" class="new-user-item">
               <div class="new-user-avatar">
-                {#if user.avatar_url}
-                  <img src={user.avatar_url} alt="" class="new-user-img" />
-                {:else}
-                  <span class="new-user-initial">{(user.display_name || user.handle).charAt(0).toUpperCase()}</span>
-                {/if}
+                <img src={user.avatar_url || '/images/default-avatar.svg'} alt="" class="new-user-img" />
               </div>
               <div class="new-user-info">
                 <span class="new-user-name">{user.display_name || user.handle}</span>

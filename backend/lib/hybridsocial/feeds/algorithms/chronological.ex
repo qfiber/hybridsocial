@@ -63,7 +63,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
       |> Visibility.apply_shadow_ban_filter(identity_id)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
-      |> preload(:identity)
+      |> preload([:identity, :quote])
       |> Repo.all()
 
     # Boosts from followed accounts
@@ -75,7 +75,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
       |> apply_boost_cursor_filters(opts)
       |> order_by([b], desc: b.inserted_at)
       |> limit(^limit)
-      |> preload([b, p], post: {p, :identity})
+      |> preload([b, p], post: {p, [:identity, :quote]})
       |> preload(:identity)
       |> Repo.all()
 

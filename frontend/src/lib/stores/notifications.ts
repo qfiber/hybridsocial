@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { Notification } from '$lib/api/types.js';
 import { browser } from '$app/environment';
+import { serverReachable } from '$lib/stores/auth.js';
 
 interface NotificationState {
   items: Notification[];
@@ -44,16 +45,14 @@ export function clearAll(): void {
   notificationStore.set({ items: [], unreadCount: 0, loading: false });
 }
 
-export function connectNotificationStream(apiBase: string, token: string): void {
+export function connectNotificationStream(apiBase: string): void {
   if (!browser) return;
   disconnectNotificationStream();
 
-  // SSE streaming - use /api/v1/streaming/user endpoint
-  // Note: EventSource doesn't support custom headers, so token goes as query param
-  // This will fail silently if CORS or endpoint isn't ready - that's fine
+  // SSE streaming — auth via httpOnly cookie (withCredentials sends cookies cross-origin)
   try {
-    const url = `${apiBase}/api/v1/streaming/user?access_token=${encodeURIComponent(token)}`;
-    eventSource = new EventSource(url);
+    const url = `${apiBase}/api/v1/streaming/user`;
+    eventSource = new EventSource(url, { withCredentials: true });
 
     eventSource.addEventListener('notification', (event) => {
       try {
@@ -64,9 +63,15 @@ export function connectNotificationStream(apiBase: string, token: string): void 
       }
     });
 
+    eventSource.onopen = () => {
+      serverReachable.set(true);
+    };
+
     eventSource.onerror = () => {
-      // SSE connection failed — not critical, poll instead
+      serverReachable.set(false);
       disconnectNotificationStream();
+      // Attempt reconnect after 10s
+      setTimeout(() => connectNotificationStream(apiBase), 10_000);
     };
   } catch {
     // EventSource creation failed — silently ignore

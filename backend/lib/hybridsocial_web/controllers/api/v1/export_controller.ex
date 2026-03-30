@@ -46,6 +46,41 @@ defmodule HybridsocialWeb.Api.V1.ExportController do
     end
   end
 
+  # GET /api/v1/export/:id/download
+  def download(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+
+    case Portability.get_export(id, identity.id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "export.not_found"})
+
+      %{status: "completed", file_path: path} = export when is_binary(path) ->
+        if File.exists?(path) do
+          # Send the file, then delete it after download
+          conn =
+            conn
+            |> put_resp_content_type("application/gzip")
+            |> put_resp_header("content-disposition", "attachment; filename=\"hybridsocial-export.tar.gz\"")
+            |> send_file(200, path)
+
+          # Clean up: delete file and mark export as downloaded
+          Task.start(fn ->
+            File.rm(path)
+            export
+            |> Ecto.Changeset.change(file_path: nil)
+            |> Hybridsocial.Repo.update()
+          end)
+
+          conn
+        else
+          conn |> put_status(:gone) |> json(%{error: "export.file_deleted"})
+        end
+
+      %{status: status} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "export.not_ready", status: status})
+    end
+  end
+
   # POST /api/v1/import
   def import_data(conn, %{"type" => type, "data" => data}) do
     identity = conn.assigns.current_identity

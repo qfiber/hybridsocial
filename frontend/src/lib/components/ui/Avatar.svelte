@@ -19,15 +19,11 @@
   );
 
   let imgError = $state(false);
-  let showImage = $derived(!!src && !imgError);
+  let effectiveSrc = $derived(src && !imgError ? src : '/images/default-avatar.svg');
 </script>
 
 <div class="avatar avatar-{size}" aria-label={name ? `Avatar for ${name}` : 'Avatar'}>
-  {#if showImage}
-    <img {src} alt={name || 'Avatar'} class="avatar-img" onerror={() => (imgError = true)} />
-  {:else}
-    <span class="avatar-initials">{initials || '?'}</span>
-  {/if}
+  <img src={effectiveSrc} alt={name || 'Avatar'} class="avatar-img" onerror={() => (imgError = true)} />
 </div>
 
 <style>

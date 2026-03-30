@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="128mm"
+   height="128mm"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   sodipodi:docname="DefaultProfile.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="0.73071669"
+     inkscape:cx="214.17329"
+     inkscape:cy="472.13921"
+     inkscape:window-width="2560"
+     inkscape:window-height="1371"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(-49.995773,-62.193604)">
+    <path
+       id="path1"
+       style="fill:#115750;stroke-width:7.99999;paint-order:stroke fill markers;fill-opacity:1"
+       d="m 177.99577,126.1936 a 64,64 0 0 1 -64,64 64,64 0 0 1 -63.999997,-64 64,64 0 0 1 63.999997,-63.999996 64,64 0 0 1 64,63.999996 z" />
+    <g
+       id="g1"
+       style="fill:none;fill-opacity:1;stroke:#e4e4e4;stroke-opacity:1"
+       transform="translate(2.5841063,4.8893253)">
+      <circle
+         cx="111.41164"
+         cy="102.44721"
+         r="12.571375"
+         stroke="#1c274c"
+         stroke-width="4.71428"
+         id="circle1"
+         style="fill:none;fill-opacity:1;stroke:#e4e4e4;stroke-opacity:1" />
+      <path
+         d="m 136.54653,140.16134 c 0.008,-0.51605 0.008,-1.04028 0.008,-1.57142 0,-7.81091 -11.25673,-14.1428 -25.14276,-14.1428 -13.885958,0 -25.142743,6.33189 -25.142743,14.1428 0,7.81091 0,14.1428 25.142743,14.1428 7.01169,0 12.0679,-0.49249 15.71422,-1.37217"
+         stroke="#1c274c"
+         stroke-width="4.71428"
+         stroke-linecap="round"
+         id="path1-5"
+         style="fill:none;fill-opacity:1;stroke:#e4e4e4;stroke-opacity:1" />
+    </g>
+  </g>
+</svg>

@@ -19,15 +19,19 @@ export function updateAccount(data: {
   show_badge?: boolean;
   default_visibility?: string;
 }): Promise<Identity> {
-  return api.patch('/api/v1/accounts/update', data);
+  return api.patch('/api/v1/accounts/update_credentials', data);
 }
 
-export function updateAvatar(file: File): Promise<Identity> {
-  return api.upload('/api/v1/accounts/avatar', file);
+export async function updateAvatar(file: File): Promise<Identity> {
+  const { uploadMedia } = await import('./media.js');
+  const media = await uploadMedia(file);
+  return api.patch('/api/v1/accounts/update_credentials', { avatar_url: media.url });
 }
 
-export function updateHeader(file: File): Promise<Identity> {
-  return api.upload('/api/v1/accounts/header', file);
+export async function updateHeader(file: File): Promise<Identity> {
+  const { uploadMedia } = await import('./media.js');
+  const media = await uploadMedia(file);
+  return api.patch('/api/v1/accounts/update_credentials', { header_url: media.url });
 }
 
 export function getFollowers(id: string, cursor?: string): Promise<PaginatedResponse<Identity>> {

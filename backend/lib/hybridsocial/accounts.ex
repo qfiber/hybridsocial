@@ -817,6 +817,60 @@ defmodule Hybridsocial.Accounts do
     end
   end
 
+  # --- Public user access ---
+
+  @doc "Gets the User record for an identity_id."
+  def get_user_by_identity(identity_id) do
+    User
+    |> where([u], u.identity_id == ^identity_id)
+    |> Repo.one()
+  end
+
+  # --- Admin force password reset ---
+
+  @doc "Admin-only: sets a new password on the user, bypassing old password check."
+  def admin_force_password(identity_id, new_password) do
+    case Repo.get_by(User, identity_id: identity_id) do
+      nil ->
+        {:error, :not_found}
+
+      user ->
+        result =
+          user
+          |> User.password_changeset(%{
+            "password" => new_password,
+            "password_confirmation" => new_password
+          })
+          |> Repo.update()
+
+        case result do
+          {:ok, _} ->
+            revoke_all_tokens(identity_id)
+            result
+
+          error ->
+            error
+        end
+    end
+  end
+
+  # --- Admin change email ---
+
+  @doc "Admin-only: changes a user's email, bypassing password verification."
+  def admin_change_email(identity_id, new_email) do
+    case Repo.get_by(User, identity_id: identity_id) do
+      nil ->
+        {:error, :not_found}
+
+      user ->
+        user
+        |> Ecto.Changeset.change(email: new_email)
+        |> Ecto.Changeset.validate_format(:email, ~r/@/)
+        |> Ecto.Changeset.unique_constraint(:email)
+        |> Repo.update()
+    end
+  end
+
   # --- Change Email ---
 
   def change_email(identity_id, new_email, password) do

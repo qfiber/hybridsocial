@@ -2,11 +2,8 @@
   import { onMount } from 'svelte';
   import type { Post } from '$lib/api/types.js';
   import { getHomeTimeline } from '$lib/api/timelines.js';
-  import { authStore } from '$lib/stores/auth.js';
-  import { get } from 'svelte/store';
   import FeedList from '$lib/components/feed/FeedList.svelte';
   import FeedToggle, { type FeedTab } from '$lib/components/feed/FeedToggle.svelte';
-  import PostComposer from '$lib/components/post/PostComposer.svelte';
   import {
     queuedCount,
     flushQueue,
@@ -76,12 +73,9 @@
   onMount(() => {
     loadTimeline(true);
 
-    // Connect streaming
-    const auth = get(authStore);
-    if (auth.accessToken) {
-      const apiBase = window.location.origin;
-      connectTimelineStream(apiBase, auth.accessToken);
-    }
+    // Connect streaming (auth via httpOnly cookie)
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    connectTimelineStream(apiBase);
 
     // Listen for real-time updates when at top
     function handleTimelineUpdate(e: Event) {
@@ -139,8 +133,6 @@
 
 <div class="home-page">
   <FeedToggle active={feedType} onchange={handleFeedChange} />
-
-  <PostComposer />
 
   {#if $queuedCount > 0}
     <button type="button" class="new-posts-banner" onclick={mergeQueuedPosts}>

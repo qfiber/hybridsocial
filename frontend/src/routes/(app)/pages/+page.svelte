@@ -288,7 +288,7 @@
 
   .btn-primary {
     background: var(--color-primary);
-    color: var(--color-text-inverse);
+    color: var(--color-on-primary);
   }
 
   .btn-primary:hover {

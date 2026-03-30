@@ -24,6 +24,8 @@
     wow: '\u{1F92F}',
   };
 
+  import { onMount } from 'svelte';
+
   let isBoosted = $state(post.is_boosted);
   let boostCount = $state(post.boost_count);
   let replyCount = $state(post.reply_count);
@@ -39,6 +41,17 @@
   let reactionDetailTab = $state('all');
   let reactions = $state(post.reactions || []);
   let isPostMuted = $state(false);
+
+  onMount(() => {
+    function handleReplyCount(e: Event) {
+      const { postId, delta } = (e as CustomEvent).detail;
+      if (postId === post.id) {
+        replyCount = Math.max(0, replyCount + delta);
+      }
+    }
+    window.addEventListener('reply-count-update', handleReplyCount);
+    return () => window.removeEventListener('reply-count-update', handleReplyCount);
+  });
 
   let isOwnPost = $derived(() => {
     const state = get(authStore);
@@ -223,12 +236,6 @@
     // Fallback: copy link
     await navigator.clipboard.writeText(url);
     window.dispatchEvent(new CustomEvent('toast', { detail: { message: 'Link copied', type: 'success' } }));
-  }
-
-  function handleCopyLink(e: MouseEvent) {
-    e.stopPropagation();
-    navigator.clipboard.writeText(`${window.location.origin}/post/${post.id}`);
-    showMoreMenu = false;
   }
 
   async function handleBookmark(e: MouseEvent) {
@@ -548,10 +555,6 @@
         <button type="button" class="more-menu-item" role="menuitem" onclick={handleShare}>
           <span class="material-symbols-outlined menu-icon">share</span>
           Share
-        </button>
-        <button type="button" class="more-menu-item" role="menuitem" onclick={handleCopyLink}>
-          <span class="material-symbols-outlined menu-icon">link</span>
-          Copy link
         </button>
         <button type="button" class="more-menu-item" role="menuitem" onclick={handleBookmark}>
           <span class="material-symbols-outlined menu-icon">{post.is_bookmarked ? 'bookmark_remove' : 'bookmark'}</span>

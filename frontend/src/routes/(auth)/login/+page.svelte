@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { api, ApiError } from '$lib/api/client.js';
-  import { setTokens, setUser } from '$lib/stores/auth.js';
+  import { setUser } from '$lib/stores/auth.js';
   import { getCurrentUser } from '$lib/api/auth.js';
   import { subscribeToPush } from '$lib/utils/push.js';
   import { tError } from '$lib/utils/i18n.js';
@@ -12,6 +12,11 @@
   let otpCode = $state('');
   let error = $state('');
   let loading = $state(false);
+  let passkeyLoading = $state(false);
+  let passkeyMode = $state(false);
+  let passkeyEmail = $state('');
+  let passkeyStep = $state<'email' | 'key'>('email');
+  let passkeyError = $state('');
   let otpRequired = $state(false);
   let otpIdentityId = $state('');
   let otpCountdown = $state(60);
@@ -54,20 +59,14 @@
           code: otpCode
         });
 
-        if (result.access_token && result.refresh_token) {
+        if (result.access_token) {
           if (countdownInterval) clearInterval(countdownInterval);
-          setTokens({
-            access_token: result.access_token,
-            refresh_token: result.refresh_token,
-            expires_in: result.expires_in || 900,
-            token_type: 'Bearer',
-            identity_id: result.identity_id || ''
-          });
+          // Cookies set by response — just fetch user and redirect
           try {
             const user = await getCurrentUser();
             setUser(user);
           } catch {}
-          subscribeToPush(result.access_token);
+          subscribeToPush();
           await goto('/home');
         }
       } else {
@@ -87,19 +86,13 @@
           return;
         }
 
-        if (result.access_token && result.refresh_token) {
-          setTokens({
-            access_token: result.access_token,
-            refresh_token: result.refresh_token,
-            expires_in: result.expires_in || 900,
-            token_type: 'Bearer',
-            identity_id: result.identity_id || ''
-          });
+        if (result.access_token) {
+          // Cookies set by response — just fetch user and redirect
           try {
             const user = await getCurrentUser();
             setUser(user);
           } catch {}
-          subscribeToPush(result.access_token);
+          subscribeToPush();
           await goto('/home');
         }
       }
@@ -111,6 +104,83 @@
       }
     } finally {
       loading = false;
+    }
+  }
+
+  function openPasskeyMode() {
+    passkeyMode = true;
+    passkeyStep = 'email';
+    passkeyEmail = email.trim();  // pre-fill from main form if they typed it
+    passkeyError = '';
+  }
+
+  function closePasskeyMode() {
+    passkeyMode = false;
+    passkeyStep = 'email';
+    passkeyError = '';
+  }
+
+  async function passkeyNext() {
+    if (!passkeyEmail.trim()) {
+      passkeyError = 'Please enter your email.';
+      return;
+    }
+    passkeyStep = 'key';
+    passkeyError = '';
+    await loginWithPasskey();
+  }
+
+  async function loginWithPasskey() {
+    if (!navigator.credentials) {
+      passkeyError = 'WebAuthn is not supported in this browser.';
+      return;
+    }
+
+    passkeyLoading = true;
+    passkeyError = '';
+    try {
+      const options = await api.post<any>('/api/v1/auth/webauthn/login/challenge', { email: passkeyEmail.trim() });
+
+      // 2. Ask browser to authenticate with the key
+      const publicKey = {
+        challenge: Uint8Array.from(atob(options.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
+        rpId: options.rpId,
+        timeout: options.timeout,
+        userVerification: (options.userVerification || 'preferred') as UserVerificationRequirement,
+        allowCredentials: options.allowCredentials.map((c: any) => ({
+          type: c.type as 'public-key',
+          id: Uint8Array.from(atob(c.id.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0)),
+        })),
+      };
+
+      const assertion = await navigator.credentials.get({ publicKey }) as PublicKeyCredential;
+      if (!assertion) throw new Error('No assertion returned');
+
+      const response = assertion.response as AuthenticatorAssertionResponse;
+
+      // 3. Verify with server and get tokens
+      const result = await api.post<any>('/api/v1/auth/webauthn/login/verify', {
+        email: passkeyEmail.trim(),
+        credential_id: btoa(String.fromCharCode(...new Uint8Array(assertion.rawId))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
+        sign_count: new DataView(response.authenticatorData.slice(33, 37)).getUint32(0),
+      });
+
+      if (result.access_token) {
+        // Cookies set by response — just fetch user and redirect
+        const user = await getCurrentUser();
+        setUser(user);
+        subscribeToPush();
+        goto('/home');
+      }
+    } catch (e) {
+      passkeyStep = 'email';
+      if (e instanceof Error && e.name === 'NotAllowedError') {
+        passkeyError = 'Authentication was cancelled or no matching key found.';
+      } else {
+        passkeyError = 'Authentication failed. Please check your email and try again.';
+      }
+    } finally {
+      passkeyLoading = false;
     }
   }
 
@@ -273,9 +343,71 @@
       <span>or</span>
     </div>
 
+    <button type="button" class="auth-passkey-btn" onclick={openPasskeyMode}>
+      <span class="material-symbols-outlined" style="font-size: 20px">key</span>
+      Sign in with Security Key
+    </button>
+
     <a href="/register" class="auth-alt-btn">Create account</a>
   {/if}
 </div>
+
+<!-- Security Key Login Modal -->
+{#if passkeyMode}
+  <div class="passkey-overlay" onclick={closePasskeyMode} role="presentation">
+    <div class="passkey-modal" onclick={(e) => e.stopPropagation()}>
+      <button type="button" class="passkey-close" onclick={closePasskeyMode} aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+
+      <div class="passkey-icon-wrap">
+        <span class="material-symbols-outlined passkey-icon">key</span>
+      </div>
+
+      {#if passkeyStep === 'email'}
+        <h2 class="passkey-title">Sign in with Security Key</h2>
+        <p class="passkey-desc">Enter your email, then use your security key, passkey, or biometric to sign in.</p>
+
+        {#if passkeyError}
+          <div class="passkey-error">{passkeyError}</div>
+        {/if}
+
+        <form onsubmit={(e) => { e.preventDefault(); passkeyNext(); }}>
+          <input
+            type="email"
+            class="passkey-input"
+            placeholder="Email address"
+            bind:value={passkeyEmail}
+            autofocus
+          />
+          <button type="submit" class="passkey-next-btn" disabled={!passkeyEmail.trim()}>
+            Next
+          </button>
+        </form>
+      {:else}
+        <h2 class="passkey-title">Touch your security key</h2>
+        <p class="passkey-desc">
+          {#if passkeyLoading}
+            Waiting for your security key, passkey, or biometric...
+          {:else}
+            Ready to authenticate.
+          {/if}
+        </p>
+
+        {#if passkeyLoading}
+          <div class="passkey-waiting">
+            <div class="passkey-pulse"></div>
+          </div>
+        {/if}
+
+        <button type="button" class="passkey-back" onclick={() => { passkeyStep = 'email'; passkeyError = ''; }}>
+          <span class="material-symbols-outlined" style="font-size: 16px">arrow_back</span>
+          Use a different email
+        </button>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 {#if !otpRequired}
   <div class="auth-info-card">
@@ -562,6 +694,103 @@
   }
 
   /* ---- Create account ---- */
+  .auth-passkey-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 46px;
+    margin-block-end: 12px;
+    background: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+    transition: border-color 150ms ease, background 150ms ease;
+  }
+
+  .auth-passkey-btn:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft, rgba(0, 128, 128, 0.05));
+  }
+
+  .auth-passkey-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Passkey modal */
+  .passkey-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10000; animation: fade-in 0.15s ease;
+  }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+  .passkey-modal {
+    background: white; border-radius: 20px; padding: 32px;
+    max-width: 400px; width: 90%; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    animation: modal-in 0.2s cubic-bezier(0.22,1,0.36,1);
+    text-align: center;
+  }
+  @keyframes modal-in { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+  .passkey-close {
+    position: absolute; top: 16px; inset-inline-end: 16px;
+    background: none; border: none; color: #9ca3af; cursor: pointer;
+    padding: 4px; border-radius: 50%;
+  }
+  .passkey-close:hover { color: #374151; background: #f3f4f6; }
+
+  .passkey-icon-wrap { margin-bottom: 16px; }
+  .passkey-icon { font-size: 40px; color: var(--color-primary); }
+
+  .passkey-title { font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; }
+  .passkey-desc { font-size: 0.875rem; color: #6b7280; margin-bottom: 20px; line-height: 1.4; }
+
+  .passkey-error {
+    padding: 10px 14px; margin-bottom: 16px;
+    background: #fef2f2; border-radius: 10px; color: #dc2626;
+    font-size: 0.8125rem;
+  }
+
+  .passkey-input {
+    display: block; width: 100%; height: 46px;
+    padding: 0 16px; background: #e6e8e9; border: none; border-radius: 10px;
+    font-size: 0.875rem; color: #111; margin-bottom: 12px;
+  }
+  .passkey-input:focus { outline: none; background: white; box-shadow: 0 0 0 2px rgba(0,128,128,0.2); }
+
+  .passkey-next-btn {
+    display: block; width: 100%; height: 46px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-hover, var(--color-primary)));
+    color: white; border: none; border-radius: 9999px;
+    font-size: 0.875rem; font-weight: 600; cursor: pointer;
+  }
+  .passkey-next-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .passkey-next-btn:hover:not(:disabled) { box-shadow: 0 4px 14px rgba(0,128,128,0.25); }
+
+  .passkey-waiting { display: flex; justify-content: center; margin: 20px 0; }
+  .passkey-pulse {
+    width: 60px; height: 60px; border-radius: 50%;
+    background: var(--color-primary-soft, rgba(0,128,128,0.1));
+    animation: pulse-ring 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(0.8); opacity: 0.5; }
+  }
+
+  .passkey-back {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: none; border: none; color: #6b7280;
+    font-size: 0.8125rem; cursor: pointer; margin-top: 16px;
+  }
+  .passkey-back:hover { color: #374151; }
+
   .auth-alt-btn {
     display: flex;
     align-items: center;

@@ -22,6 +22,7 @@
     { href: '/settings/import-export', label: 'Import / Export', icon: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3' },
     { href: '/settings/migration', label: 'Migration', icon: 'M15 3l6 6-6 6M9 21l-6-6 6-6M21 9H14M3 15h7' },
     { href: '/settings/donations', label: 'Donations', icon: 'M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6' },
+    { href: '/settings/developers', label: 'Developers', icon: 'M16 18l6-6-6-6M8 6l-6 6 6 6' },
   ];
 
   function isActive(href: string): boolean {

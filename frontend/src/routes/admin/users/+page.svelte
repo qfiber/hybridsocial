@@ -45,6 +45,7 @@
 
   // Actions dropdown
   let openDropdownId: string | null = $state(null);
+  let dropdownPos = $state({ top: 0, left: 0 });
 
   const columns = [
     { key: 'handle', label: 'Handle', sortable: true },
@@ -268,8 +269,22 @@
     }
   }
 
-  function toggleDropdown(userId: string) {
-    openDropdownId = openDropdownId === userId ? null : userId;
+  function toggleDropdown(userId: string, e?: MouseEvent) {
+    if (openDropdownId === userId) {
+      openDropdownId = null;
+      return;
+    }
+    openDropdownId = userId;
+    if (e) {
+      const btn = (e.currentTarget as HTMLElement);
+      const rect = btn.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const menuHeight = 320; // approximate
+      dropdownPos = {
+        top: spaceBelow < menuHeight ? rect.top - menuHeight : rect.bottom + 4,
+        left: rect.right - 180,
+      };
+    }
   }
 
   function formatDate(iso: string): string {
@@ -396,7 +411,7 @@
             <button
               class="btn btn-sm btn-ghost"
               type="button"
-              onclick={() => toggleDropdown(row['id'] as string)}
+              onclick={(e) => toggleDropdown(row['id'] as string, e)}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="5" r="2" />
@@ -405,7 +420,7 @@
               </svg>
             </button>
             {#if openDropdownId === row['id']}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" style="top: {dropdownPos.top}px; left: {dropdownPos.left}px">
                 <button class="dropdown-item" type="button" onclick={() => openWarnModal(row as unknown as AdminUser)}>
                   Warn
                 </button>
@@ -680,12 +695,10 @@
   }
 
   .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    z-index: var(--z-dropdown, 50);
+    position: fixed;
+    z-index: 9999;
     min-width: 180px;
-    background: var(--color-surface-raised);
+    background: var(--color-surface-raised, white);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-lg);

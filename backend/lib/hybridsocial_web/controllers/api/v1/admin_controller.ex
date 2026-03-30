@@ -380,6 +380,339 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     }
   end
 
+  # ── Email ────────────────────────────────────────────────────────────
+
+  def get_email_config(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      config = %{
+        provider: Hybridsocial.Config.get("email_provider", "smtp"),
+        from_address: Hybridsocial.Config.get("email_from_address", ""),
+        smtp_host: Hybridsocial.Config.get("email_smtp_host", ""),
+        smtp_port: Hybridsocial.Config.get("email_smtp_port", 587),
+        smtp_username: Hybridsocial.Config.get("email_smtp_username", ""),
+        smtp_ssl: Hybridsocial.Config.get("email_smtp_ssl", true),
+        resend_api_key: mask_secret(Hybridsocial.Config.get("email_resend_api_key", ""))
+      }
+
+      json(conn, config)
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_email_config(conn, params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      if params["provider"], do: Hybridsocial.Config.set("email_provider", params["provider"])
+      if params["from_address"], do: Hybridsocial.Config.set("email_from_address", params["from_address"])
+      if params["smtp_host"], do: Hybridsocial.Config.set("email_smtp_host", params["smtp_host"])
+      if params["smtp_port"], do: Hybridsocial.Config.set("email_smtp_port", params["smtp_port"])
+      if params["smtp_username"], do: Hybridsocial.Config.set("email_smtp_username", params["smtp_username"])
+      if Map.has_key?(params, "smtp_ssl"), do: Hybridsocial.Config.set("email_smtp_ssl", params["smtp_ssl"])
+      if params["resend_api_key"] && !String.contains?(params["resend_api_key"] || "", "****"),
+        do: Hybridsocial.Config.set("email_resend_api_key", params["resend_api_key"])
+
+      get_email_config(conn, %{})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def send_test_email(conn, %{"to" => to}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Hybridsocial.Mailer.send_test(to) do
+        {:ok, _} -> json(conn, %{status: "sent"})
+        {:error, reason} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "email.send_failed", details: inspect(reason)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def send_test_email(conn, _), do: conn |> put_status(:bad_request) |> json(%{error: "email.to_required"})
+
+  defp mask_secret(nil), do: ""
+  defp mask_secret(""), do: ""
+  defp mask_secret(s) when is_binary(s) and byte_size(s) > 8, do: String.slice(s, 0, 4) <> "****" <> String.slice(s, -4, 4)
+  defp mask_secret(_), do: "****"
+
+  # ── Theme ────────────────────────────────────────────────────────────
+
+  @theme_keys ~w(
+    color_primary color_primary_hover color_primary_soft color_primary_contrast
+    color_secondary color_accent color_success color_warning color_danger color_info
+    color_bg color_surface color_border color_text color_text_secondary color_text_link
+    gradient_start gradient_end gradient_direction border_radius density font_family
+    logo_url favicon_url
+  )
+
+  def get_theme(conn, _params) do
+    with :ok <- require_permission(conn, "theme.manage") do
+      theme =
+        Map.new(@theme_keys, fn key ->
+          {key, Hybridsocial.Config.get("theme_#{key}")}
+        end)
+        |> Map.put("instance_name", Hybridsocial.Config.get("instance_name", "HybridSocial"))
+        |> Map.put("instance_description", Hybridsocial.Config.get("instance_description", ""))
+
+      json(conn, theme)
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_theme(conn, params) do
+    with :ok <- require_permission(conn, "theme.manage") do
+      for key <- @theme_keys, Map.has_key?(params, key) do
+        Hybridsocial.Config.set("theme_#{key}", params[key])
+      end
+
+      # instance_name and instance_description are top-level settings
+      if params["instance_name"], do: Hybridsocial.Config.set("instance_name", params["instance_name"])
+      if params["instance_description"], do: Hybridsocial.Config.set("instance_description", params["instance_description"])
+
+      get_theme(conn, %{})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def upload_logo(conn, %{"file" => %Plug.Upload{} = upload}) do
+    with :ok <- require_permission(conn, "theme.manage") do
+      case Hybridsocial.Media.upload(conn.assigns.current_identity.id, upload, nil) do
+        {:ok, media} ->
+          url = Hybridsocial.Media.media_url(media)
+          Hybridsocial.Config.set("theme_logo_url", url)
+          json(conn, %{url: url})
+
+        {:error, reason} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "upload.failed", details: inspect(reason)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def upload_logo(conn, _), do: conn |> put_status(:bad_request) |> json(%{error: "file_required"})
+
+  def upload_favicon(conn, %{"file" => %Plug.Upload{} = upload}) do
+    with :ok <- require_permission(conn, "theme.manage") do
+      case Hybridsocial.Media.upload(conn.assigns.current_identity.id, upload, nil) do
+        {:ok, media} ->
+          url = Hybridsocial.Media.media_url(media)
+          Hybridsocial.Config.set("theme_favicon_url", url)
+          json(conn, %{url: url})
+
+        {:error, reason} ->
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "upload.failed", details: inspect(reason)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def upload_favicon(conn, _), do: conn |> put_status(:bad_request) |> json(%{error: "file_required"})
+
+  # ── Instance Settings ────────────────────────────────────────────────
+
+  @hidden_settings ~w(vapid_public_key vapid_private_key instance_rules email_provider email_from_address email_smtp_host email_smtp_port email_smtp_username email_smtp_ssl email_resend_api_key)
+
+  def list_settings(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      settings =
+        Hybridsocial.Config.Setting
+        |> Hybridsocial.Repo.all()
+        |> Enum.reject(fn s -> s.key in @hidden_settings end)
+        |> Enum.map(fn s ->
+          %{
+            key: s.key,
+            value: get_in(s.value, ["value"]) || s.value,
+            type: s.type,
+            category: s.category,
+            description: s.description
+          }
+        end)
+
+      json(conn, settings)
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_settings(conn, %{"settings" => settings_list}) when is_list(settings_list) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      updated =
+        Enum.map(settings_list, fn %{"key" => key, "value" => value} ->
+          Hybridsocial.Config.set(key, value)
+
+          # Log the change
+          ip = conn.remote_ip |> :inet.ntoa() |> to_string()
+          Moderation.log(admin_id, "settings.updated", "setting", key, %{value: value}, ip)
+
+          setting = Hybridsocial.Repo.get(Hybridsocial.Config.Setting, key)
+
+          %{
+            key: setting.key,
+            value: get_in(setting.value, ["value"]) || setting.value,
+            type: setting.type,
+            category: setting.category,
+            description: setting.description
+          }
+        end)
+
+      json(conn, updated)
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_settings(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "settings.invalid_format"})
+  end
+
+  # ── Instance Rules ──────────────────────────────────────────────────
+
+  def list_rules(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      rules = Hybridsocial.Config.get("instance_rules", [])
+      rules = if is_list(rules), do: rules, else: []
+
+      indexed =
+        rules
+        |> Enum.with_index()
+        |> Enum.map(fn {rule, i} ->
+          %{
+            id: i,
+            text: rule["text"] || rule[:text] || "",
+            hint: rule["hint"] || rule[:hint] || ""
+          }
+        end)
+
+      json(conn, indexed)
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_rule(conn, %{"text" => text} = params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      rules = Hybridsocial.Config.get("instance_rules", [])
+      rules = if is_list(rules), do: rules, else: []
+
+      new_rule = %{"text" => text, "hint" => params["hint"] || ""}
+      Hybridsocial.Config.set("instance_rules", rules ++ [new_rule])
+
+      json(conn, %{id: length(rules), text: text, hint: params["hint"] || ""})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_rule(conn, %{"index" => index_str} = params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      index = String.to_integer(index_str)
+      rules = Hybridsocial.Config.get("instance_rules", [])
+      rules = if is_list(rules), do: rules, else: []
+
+      if index >= 0 and index < length(rules) do
+        updated = %{
+          "text" => params["text"] || Enum.at(rules, index)["text"],
+          "hint" => params["hint"] || Enum.at(rules, index)["hint"]
+        }
+
+        rules = List.replace_at(rules, index, updated)
+        Hybridsocial.Config.set("instance_rules", rules)
+
+        json(conn, %{id: index, text: updated["text"], hint: updated["hint"]})
+      else
+        conn |> put_status(:not_found) |> json(%{error: "rule.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_rule(conn, %{"index" => index_str}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      index = String.to_integer(index_str)
+      rules = Hybridsocial.Config.get("instance_rules", [])
+      rules = if is_list(rules), do: rules, else: []
+
+      if index >= 0 and index < length(rules) do
+        rules = List.delete_at(rules, index)
+        Hybridsocial.Config.set("instance_rules", rules)
+
+        json(conn, %{status: "ok"})
+      else
+        conn |> put_status(:not_found) |> json(%{error: "rule.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Announcements ───────────────────────────────────────────────────
+
+  alias Hybridsocial.Admin.Announcement
+
+  def list_announcements(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      announcements = Announcement.list_all()
+      json(conn, Enum.map(announcements, &serialize_announcement/1))
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_announcement(conn, params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      attrs = Map.put(params, "created_by", conn.assigns.current_identity.id)
+
+      case Announcement.create(attrs) do
+        {:ok, ann} -> conn |> put_status(:created) |> json(serialize_announcement(ann))
+        {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_announcement(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Announcement.update(id, params) do
+        {:ok, ann} -> json(conn, serialize_announcement(ann))
+        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "announcement.not_found"})
+        {:error, changeset} -> conn |> put_status(:unprocessable_entity) |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_announcement(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      case Announcement.delete(id) do
+        {:ok, _} -> json(conn, %{status: "ok"})
+        {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "announcement.not_found"})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp serialize_announcement(ann) do
+    %{
+      id: ann.id,
+      content: ann.content,
+      starts_at: ann.starts_at,
+      ends_at: ann.ends_at,
+      published: ann.published,
+      created_at: ann.inserted_at,
+      updated_at: ann.updated_at
+    }
+  end
+
   # ── Reports ──────────────────────────────────────────────────────────
 
   def list_reports(conn, params) do
@@ -843,6 +1176,45 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
         {:error, :not_found} ->
           conn |> put_status(:not_found) |> json(%{error: "relay.not_found"})
       end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # ── Known Instances ──────────────────────────────────────────────────
+
+  def list_known_instances(conn, _params) do
+    import Ecto.Query
+
+    with :ok <- require_permission(conn, "federation.view") do
+      local_host = URI.parse(HybridsocialWeb.Endpoint.url()).host
+
+      instances =
+        Hybridsocial.Accounts.Identity
+        |> where([i], not is_nil(i.ap_actor_url) and is_nil(i.deleted_at))
+        |> select([i], %{
+          domain: fragment("split_part(?, '/', 3)", i.ap_actor_url),
+          user_count: count(i.id),
+          last_activity_at: max(i.updated_at)
+        })
+        |> group_by([i], fragment("split_part(?, '/', 3)", i.ap_actor_url))
+        |> order_by([i], desc: max(i.updated_at))
+        |> Hybridsocial.Repo.all()
+        |> Enum.reject(fn i -> i.domain == local_host end)
+        |> Enum.map(fn i ->
+          # Check if there's a policy for this domain
+          policy = Hybridsocial.Repo.get_by(Hybridsocial.Federation.InstancePolicy, domain: i.domain)
+
+          %{
+            domain: i.domain,
+            user_count: i.user_count,
+            last_activity_at: i.last_activity_at,
+            status: if(policy, do: policy.policy, else: "none"),
+            software: nil
+          }
+        end)
+
+      json(conn, %{data: instances})
     else
       {:error, perm} -> deny(conn, perm)
     end
@@ -1864,6 +2236,8 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       is_shadow_banned: identity.is_shadow_banned,
       force_sensitive: identity.force_sensitive,
       is_admin: identity.is_admin,
+      is_bot: identity.is_bot,
+      force_bot: Map.get(identity, :force_bot, false),
       trust_level: identity.trust_level,
       created_at: identity.inserted_at
     }
@@ -2061,7 +2435,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
   # ── Trust Level ──────────────────────────────────────────────────
 
-  def set_trust_level(conn, %{"id" => id, "trust_level" => level}) do
+  def set_trust_level(conn, %{"id" => id} = params) do
+    level = params["trust_level"] || params["level"]
+    _ = level
     with :ok <- require_permission(conn, "users.manage") do
       admin_id = conn.assigns.current_identity.id
 
@@ -2115,21 +2491,8 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   def unforce_sensitive_account(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "unforce_sensitive"))
   def revoke_sessions(conn, %{"id" => _id} = p), do: account_action(conn, Map.put(p, "action", "revoke_all_sessions"))
 
-  def list_notes(conn, %{"id" => _account_id}) do
-    with :ok <- require_permission(conn, "users.view") do
-      conn |> put_status(:ok) |> json([])
-    else
-      {:error, perm} -> deny(conn, perm)
-    end
-  end
-
-  def create_note(conn, %{"id" => _account_id}) do
-    with :ok <- require_permission(conn, "users.moderate") do
-      conn |> put_status(:created) |> json(%{status: "ok"})
-    else
-      {:error, perm} -> deny(conn, perm)
-    end
-  end
+  def list_notes(conn, params), do: list_moderation_notes(conn, params)
+  def create_note(conn, params), do: create_moderation_note(conn, params)
 
   # --- Account Approval Queue ---
 
@@ -2231,6 +2594,76 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       ]
       promos = Hybridsocial.Promotions.list_all_promotions(opts)
       json(conn, %{data: Enum.map(promos, &serialize_promotion/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Force Bot ---
+
+  def force_bot(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.moderate") do
+      case Accounts.get_identity(id) do
+        nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+        identity ->
+          {:ok, updated} = Accounts.admin_update_identity(identity, %{"is_bot" => true, "force_bot" => true})
+          admin_id = conn.assigns.current_identity.id
+          Moderation.log(admin_id, "account.force_bot", "identity", id, %{})
+          json(conn, %{id: updated.id, is_bot: updated.is_bot, force_bot: updated.force_bot})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def unforce_bot(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.moderate") do
+      case Accounts.get_identity(id) do
+        nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+        identity ->
+          {:ok, updated} = Accounts.admin_update_identity(identity, %{"force_bot" => false})
+          admin_id = conn.assigns.current_identity.id
+          Moderation.log(admin_id, "account.unforce_bot", "identity", id, %{})
+          json(conn, %{id: updated.id, is_bot: updated.is_bot, force_bot: updated.force_bot})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # --- Rate Limits (bot + user) ---
+
+  def set_bot_rate_limit(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.moderate") do
+      limit = case params["posts_per_hour"] do
+        nil -> nil
+        "null" -> nil
+        val when is_binary(val) -> String.to_integer(val)
+        val when is_integer(val) -> val
+      end
+
+      identity = Accounts.get_identity(id)
+
+      cond do
+        is_nil(identity) ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+        identity.is_bot ->
+          # Set on bot record
+          case Hybridsocial.Repo.get(Hybridsocial.Accounts.Bot, id) do
+            nil ->
+              conn |> put_status(:not_found) |> json(%{error: "bot.not_found"})
+            bot ->
+              {:ok, updated} = bot |> Ecto.Changeset.change(posts_per_hour: limit) |> Hybridsocial.Repo.update()
+              json(conn, %{identity_id: id, posts_per_hour: updated.posts_per_hour, type: "bot", global_default: Hybridsocial.Config.get("bot_posts_per_hour", 30)})
+          end
+
+        true ->
+          # Set on identity metadata for regular users
+          metadata = (identity.metadata || %{}) |> Map.put("posts_per_hour", limit)
+          {:ok, _} = Accounts.admin_update_identity(identity, %{"metadata" => metadata})
+          json(conn, %{identity_id: id, posts_per_hour: limit, type: "user", global_default: Hybridsocial.Config.get("user_posts_per_hour", 0)})
+      end
     else
       {:error, perm} -> deny(conn, perm)
     end
@@ -2403,6 +2836,272 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     else
       {:error, perm} -> deny(conn, perm)
     end
+  end
+
+  # ── Admin User Management ─────────────────────────────────────────
+
+  @valid_tiers ~w(free verified_starter verified_creator verified_pro)
+
+  def edit_user_profile(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.edit") do
+      case Accounts.get_identity(id) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+        identity ->
+          profile_attrs =
+            params
+            |> Map.take(["display_name", "bio", "avatar_url", "header_url"])
+
+          case Accounts.admin_update_identity(identity, profile_attrs) do
+            {:ok, updated} ->
+              admin_id = conn.assigns.current_identity.id
+              Moderation.log(admin_id, "account.profile_edited", "identity", id, profile_attrs)
+              json(conn, %{data: serialize_account(updated)})
+
+            {:error, changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "account.profile_update_failed", details: changeset_errors(changeset)})
+          end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def reset_user_password(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      case Accounts.get_identity(id) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+        _identity ->
+          new_password = :crypto.strong_rand_bytes(15) |> Base.url_encode64(padding: false) |> binary_part(0, 20)
+
+          case Accounts.admin_force_password(id, new_password) do
+            {:ok, _user} ->
+              admin_id = conn.assigns.current_identity.id
+              Moderation.log(admin_id, "account.password_reset", "identity", id, %{})
+              json(conn, %{password: new_password})
+
+            {:error, :not_found} ->
+              conn |> put_status(:not_found) |> json(%{error: "account.user_not_found"})
+
+            {:error, changeset} ->
+              conn
+              |> put_status(:unprocessable_entity)
+              |> json(%{error: "account.password_reset_failed", details: changeset_errors(changeset)})
+          end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def view_user_email(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      case Accounts.get_identity(id) do
+        nil ->
+          conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+        _identity ->
+          case Accounts.get_user_by_identity(id) do
+            nil ->
+              conn |> put_status(:not_found) |> json(%{error: "account.user_not_found"})
+
+            user ->
+              admin_id = conn.assigns.current_identity.id
+              Moderation.log(admin_id, "account.email_viewed", "identity", id, %{})
+              json(conn, %{email: user.email})
+          end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def change_user_email(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      new_email = params["email"]
+
+      if is_nil(new_email) or new_email == "" do
+        conn |> put_status(:bad_request) |> json(%{error: "email.required"})
+      else
+        case Accounts.get_identity(id) do
+          nil ->
+            conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+          _identity ->
+            case Accounts.admin_change_email(id, new_email) do
+              {:ok, _user} ->
+                admin_id = conn.assigns.current_identity.id
+                Moderation.log(admin_id, "account.email_changed", "identity", id, %{new_email: new_email})
+                json(conn, %{status: "ok", email: new_email})
+
+              {:error, :not_found} ->
+                conn |> put_status(:not_found) |> json(%{error: "account.user_not_found"})
+
+              {:error, changeset} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "account.email_change_failed", details: changeset_errors(changeset)})
+            end
+        end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def change_user_tier(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      tier = params["tier"]
+
+      if tier not in @valid_tiers do
+        conn
+        |> put_status(:bad_request)
+        |> json(%{error: "tier.invalid", valid_tiers: @valid_tiers})
+      else
+        case Accounts.get_identity(id) do
+          nil ->
+            conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+          identity ->
+            case Accounts.admin_update_identity(identity, %{"verification_tier" => tier}) do
+              {:ok, updated} ->
+                admin_id = conn.assigns.current_identity.id
+                Moderation.log(admin_id, "account.tier_changed", "identity", id, %{tier: tier})
+                json(conn, %{data: serialize_account(updated)})
+
+              {:error, _} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "account.tier_update_failed"})
+            end
+        end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def set_admin(conn, %{"id" => id} = params) do
+    # Only owner-level users can change admin flags
+    current_identity = conn.assigns.current_identity
+
+    unless RBAC.has_permission?(current_identity.id, "owner") do
+      conn |> put_status(:forbidden) |> json(%{error: "permission.denied", required: "owner"})
+    else
+      is_admin = params["is_admin"]
+
+      is_admin =
+        cond do
+          is_boolean(is_admin) -> is_admin
+          is_admin == "true" -> true
+          is_admin == "false" -> false
+          true -> nil
+        end
+
+      if is_nil(is_admin) do
+        conn |> put_status(:bad_request) |> json(%{error: "is_admin.required"})
+      else
+        case Accounts.get_identity(id) do
+          nil ->
+            conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+          identity ->
+            case Accounts.admin_update_identity(identity, %{"is_admin" => is_admin}) do
+              {:ok, updated} ->
+                Moderation.log(current_identity.id, "account.admin_changed", "identity", id, %{
+                  is_admin: is_admin
+                })
+                json(conn, %{data: serialize_account(updated)})
+
+              {:error, _} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "account.admin_update_failed"})
+            end
+        end
+      end
+    end
+  end
+
+  def assign_user_role(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      role_name = params["role"]
+
+      if is_nil(role_name) or role_name == "" do
+        conn |> put_status(:bad_request) |> json(%{error: "role.required"})
+      else
+        case Accounts.get_identity(id) do
+          nil ->
+            conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+          _identity ->
+            admin_id = conn.assigns.current_identity.id
+
+            case RBAC.assign_role(id, role_name, admin_id) do
+              {:ok, _} ->
+                Moderation.log(admin_id, "account.role_assigned", "identity", id, %{role: role_name})
+                json(conn, %{status: "ok", role: role_name})
+
+              {:error, :not_found} ->
+                conn |> put_status(:not_found) |> json(%{error: "role.not_found"})
+
+              {:error, changeset} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "role.assign_failed", details: changeset_errors(changeset)})
+            end
+        end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def remove_user_role(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      role_name = params["role"]
+
+      if is_nil(role_name) or role_name == "" do
+        conn |> put_status(:bad_request) |> json(%{error: "role.required"})
+      else
+        case Accounts.get_identity(id) do
+          nil ->
+            conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+
+          _identity ->
+            admin_id = conn.assigns.current_identity.id
+
+            case RBAC.revoke_role(id, role_name, admin_id) do
+              {:ok, _} ->
+                Moderation.log(admin_id, "account.role_removed", "identity", id, %{role: role_name})
+                json(conn, %{status: "ok", role: role_name})
+
+              {:error, :not_found} ->
+                conn |> put_status(:not_found) |> json(%{error: "role.not_found"})
+
+              {:error, reason} ->
+                conn
+                |> put_status(:unprocessable_entity)
+                |> json(%{error: "role.remove_failed", details: inspect(reason)})
+            end
+        end
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+        opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+      end)
+    end)
   end
 
 end

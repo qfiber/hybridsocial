@@ -12,6 +12,7 @@
   let discoverGroups = $state<Group[]>([]);
   let loading = $state(true);
   let discoverLoading = $state(false);
+  let discoverLoaded = $state(false);
   let searchQuery = $state('');
   let searchTimeout: ReturnType<typeof setTimeout> | undefined;
   let myCursor = $state<string | null>(null);
@@ -37,7 +38,7 @@
   });
 
   $effect(() => {
-    if (activeTab === 'discover' && discoverGroups.length === 0 && !discoverLoading) {
+    if (activeTab === 'discover' && !discoverLoaded && !discoverLoading) {
       loadDiscover();
     }
   });
@@ -52,6 +53,7 @@
       // Error loading discover
     } finally {
       discoverLoading = false;
+      discoverLoaded = true;
     }
   }
 

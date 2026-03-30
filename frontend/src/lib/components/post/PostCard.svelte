@@ -55,16 +55,22 @@
     return paths;
   }
 
+  import { matchFilters, type FilterResult } from '$lib/stores/content-filters.js';
+
   let {
     post,
     compact = false,
     detail = false,
+    filterContext = 'home',
   }: {
     post: Post;
     compact?: boolean;
     detail?: boolean;
+    filterContext?: string;
   } = $props();
 
+  let filterMatch: FilterResult | null = $derived(matchFilters(post.content, post.spoiler_text, filterContext));
+  let filterRevealed = $state(false);
   let showSensitive = $state(false);
   let contentCollapsed = $state(!detail);
   let contentOverflows = $state(false);
@@ -232,13 +238,7 @@
   <div class="post-layout">
     <!-- Avatar column -->
     <div class="post-avatar">
-      {#if avatarUrl}
-        <img src={avatarUrl} alt="" class="avatar-img" loading="lazy" />
-      {:else}
-        <div class="avatar-placeholder" aria-hidden="true">
-          {displayName.charAt(0).toUpperCase()}
-        </div>
-      {/if}
+      <img src={avatarUrl || '/images/default-avatar.svg'} alt="" class="avatar-img" loading="lazy" />
     </div>
 
     <!-- Content column -->
@@ -286,8 +286,17 @@
         </div>
       {/if}
 
+      <!-- Content filter warning -->
+      {#if filterMatch?.action === 'warn' && !filterRevealed}
+        <div class="filter-warning">
+          <span class="material-symbols-outlined filter-icon">filter_alt</span>
+          <span class="filter-text">Filtered: <strong>{filterMatch.filter.phrase}</strong></span>
+          <button class="filter-reveal-btn" type="button" onclick={() => filterRevealed = true}>Show anyway</button>
+        </div>
+      {/if}
+
       <!-- Post body -->
-      <div class="post-body">
+      <div class="post-body" class:filter-hidden={filterMatch?.action === 'warn' && !filterRevealed}>
         <div class="nsfw-container" class:nsfw-active={post.sensitive && post.spoiler_text} class:nsfw-revealed={showSensitive}>
           <div class="nsfw-content">
           {#if post.content_html}
@@ -828,6 +837,47 @@
   }
 
   /* Post body */
+  .filter-warning {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    margin-block-start: var(--space-2);
+    background: var(--color-surface-container-low);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    color: var(--color-on-surface-variant);
+  }
+
+  .filter-icon {
+    font-size: 16px;
+    color: var(--color-on-surface-variant);
+  }
+
+  .filter-text {
+    flex: 1;
+  }
+
+  .filter-reveal-btn {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+    white-space: nowrap;
+  }
+
+  .filter-reveal-btn:hover {
+    background: var(--color-surface-container);
+  }
+
+  .filter-hidden {
+    display: none;
+  }
+
   .post-body {
     margin-block-start: 4px;
   }

@@ -36,13 +36,7 @@
   aria-label="Quoted post by {displayName}"
 >
   <div class="quote-header">
-    {#if post.account.avatar_url}
-      <img src={post.account.avatar_url} alt="" class="quote-avatar" loading="lazy" />
-    {:else}
-      <div class="quote-avatar-placeholder" aria-hidden="true">
-        {displayName.charAt(0).toUpperCase()}
-      </div>
-    {/if}
+    <img src={post.account.avatar_url || '/images/default-avatar.svg'} alt="" class="quote-avatar" loading="lazy" />
     <span class="quote-name">{displayName}</span>
     <span class="quote-handle">{handle}</span>
     <span class="quote-separator" aria-hidden="true">&middot;</span>

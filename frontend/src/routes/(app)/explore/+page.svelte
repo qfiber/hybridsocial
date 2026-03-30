@@ -208,7 +208,7 @@
             <p>No posts found for "{query}"</p>
           </div>
         {:else}
-          <FeedList posts={searchPosts} loading={false} hasMore={false} />
+          <FeedList posts={searchPosts} loading={false} hasMore={false} filterContext="public" />
         {/if}
       {:else if searchTab === 'accounts'}
         {#if searchAccounts.length === 0}
@@ -294,6 +294,7 @@
       hasMore={feedHasMore}
       onloadmore={() => loadFeed(false)}
       emptyMessage={exploreTab === 'local' ? 'No local posts yet' : exploreTab === 'global' ? 'No posts from the fediverse yet' : 'Nothing trending right now'}
+      filterContext="public"
     />
   {/if}
 </div>

@@ -94,11 +94,7 @@
 
 <div class="profile-header">
   <div class="profile-banner">
-    {#if account.header_url}
-      <img src={account.header_url} alt="" class="banner-img" />
-    {:else}
-      <div class="banner-gradient" aria-hidden="true"></div>
-    {/if}
+    <img src={account.header_url || '/images/default-cover.svg'} alt="" class="banner-img" />
   </div>
 
   <div class="profile-info-section">

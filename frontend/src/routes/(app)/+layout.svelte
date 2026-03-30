@@ -7,11 +7,11 @@
   import OnboardingModal from '$lib/components/ui/OnboardingModal.svelte';
   import { authStore, isLoggedIn } from '$lib/stores/auth.js';
   import { connectNotificationStream, disconnectNotificationStream } from '$lib/stores/notifications.js';
-  import { startHealthCheck, stopHealthCheck } from '$lib/stores/health.js';
   import { cookieConsent, hasConsented } from '$lib/stores/consent.js';
   import CookieBanner from '$lib/components/ui/CookieBanner.svelte';
-  import { api } from '$lib/api/client.js';
   import { subscribeToPush } from '$lib/utils/push.js';
+  import { loadFilters } from '$lib/stores/content-filters.js';
+  import PostComposer from '$lib/components/post/PostComposer.svelte';
   import { onMount } from 'svelte';
 
   let { children } = $props();
@@ -31,16 +31,11 @@
       return;
     }
 
-    // Connect notification SSE stream
-    const token = api.getAccessToken();
-    if (token) {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-      connectNotificationStream(apiBase, token);
-      subscribeToPush(token);
-    }
-
-    // Start health check polling
-    startHealthCheck();
+    // Connect notification SSE stream + push notifications (auth via httpOnly cookies)
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    connectNotificationStream(apiBase);
+    subscribeToPush();
+    loadFilters();
 
     // Show onboarding for new users (no display_name set yet)
     const authState = get(authStore);
@@ -50,7 +45,6 @@
 
     return () => {
       disconnectNotificationStream();
-      stopHealthCheck();
       unsub();
     };
   });
@@ -73,6 +67,7 @@
   <AppLayout>
     {@render children()}
   </AppLayout>
+  <PostComposer />
   {#if showOnboarding}
     <OnboardingModal onclose={() => { showOnboarding = false; localStorage.setItem('hs_onboarded', '1'); }} />
   {/if}

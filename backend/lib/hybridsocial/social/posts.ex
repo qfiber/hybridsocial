@@ -354,18 +354,23 @@ defmodule Hybridsocial.Social.Posts do
   def reacted_posts(identity_id, opts \\ []) do
     max_id = Keyword.get(opts, :max_id)
 
-    query =
+    # Get post IDs from reactions, ordered by reaction time
+    reaction_query =
       Reaction
       |> where([r], r.identity_id == ^identity_id)
-      |> join(:inner, [r], p in Post, on: p.id == r.post_id and is_nil(p.deleted_at))
       |> order_by([r], desc: r.inserted_at)
-      |> select([r, p], p)
+      |> select([r], r.post_id)
       |> limit(20)
-      |> preload([r, p], [:identity, :quote])
 
-    query = if max_id, do: where(query, [r], r.id < ^max_id), else: query
+    reaction_query = if max_id, do: where(reaction_query, [r], r.id < ^max_id), else: reaction_query
 
-    Repo.all(query)
+    post_ids = Repo.all(reaction_query)
+
+    Post
+    |> where([p], p.id in ^post_ids and is_nil(p.deleted_at))
+    |> preload([:identity, :quote])
+    |> Repo.all()
+    |> Enum.sort_by(fn p -> Enum.find_index(post_ids, &(&1 == p.id)) end)
   end
 
   def pinned_count(identity_id) do

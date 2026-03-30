@@ -43,13 +43,13 @@ export function flushQueue(): Post[] {
 /**
  * Connect to the streaming endpoint for home timeline updates.
  */
-export function connectTimelineStream(apiBase: string, token: string): void {
+export function connectTimelineStream(apiBase: string): void {
   if (!browser) return;
   disconnectTimelineStream();
 
   try {
-    const url = `${apiBase}/api/v1/streaming/user?access_token=${encodeURIComponent(token)}&stream=home`;
-    eventSource = new EventSource(url);
+    const url = `${apiBase}/api/v1/streaming/user?stream=home`;
+    eventSource = new EventSource(url, { withCredentials: true });
 
     state.update((s) => ({ ...s, connected: true }));
 

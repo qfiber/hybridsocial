@@ -29,6 +29,59 @@ defmodule HybridsocialWeb.Api.V1.OAuthController do
     end
   end
 
+  @doc "Create app + issue token in one step for developer convenience."
+  def create_app_with_token(conn, params) do
+    identity = conn.assigns.current_identity
+    ip = to_string(:inet_parse.ntoa(conn.remote_ip))
+    ua = Plug.Conn.get_req_header(conn, "user-agent") |> List.first() || ""
+
+    case OAuth.create_application(params, identity.id) do
+      {:ok, app, client_secret} ->
+        # Also issue an access token immediately
+        user = Hybridsocial.Repo.get_by(Hybridsocial.Accounts.User, identity_id: identity.id)
+        user_with_identity = Hybridsocial.Repo.preload(user, :identity)
+
+        case Hybridsocial.Auth.issue_tokens(user_with_identity, %{ip_address: ip, user_agent: ua, device_name: app.name}) do
+          {:ok, tokens} ->
+            conn
+            |> put_status(:created)
+            |> json(%{
+              app: %{
+                id: app.id,
+                name: app.name,
+                client_id: app.client_id,
+                client_secret: client_secret,
+                scopes: app.scopes,
+              },
+              access_token: tokens.access_token,
+              token_type: "Bearer",
+              note: "Save these credentials — the client secret cannot be shown again."
+            })
+
+          {:error, _} ->
+            # App was created but token failed — return app anyway
+            conn
+            |> put_status(:created)
+            |> json(%{
+              app: %{
+                id: app.id,
+                name: app.name,
+                client_id: app.client_id,
+                client_secret: client_secret,
+                scopes: app.scopes,
+              },
+              access_token: nil,
+              error: "Token generation failed — use the client credentials to request a token manually."
+            })
+        end
+
+      {:error, changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation.failed", details: format_errors(changeset)})
+    end
+  end
+
   def list_apps(conn, _params) do
     identity = conn.assigns.current_identity
     apps = OAuth.list_applications(identity.id)

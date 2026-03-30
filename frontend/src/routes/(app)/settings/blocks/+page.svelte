@@ -30,8 +30,8 @@
 
   async function loadBlockedAccounts() {
     try {
-      const res = await api.get<{ data: BlockedAccount[] }>('/api/v1/accounts/blocks');
-      blockedAccounts = res.data;
+      const res = await api.get<BlockedAccount[]>('/api/v1/accounts/blocks');
+      blockedAccounts = Array.isArray(res) ? res : [];
     } catch {
       addToast('Failed to load blocked accounts', 'error');
     } finally {
@@ -41,8 +41,8 @@
 
   async function loadDomainBlocks() {
     try {
-      const res = await api.get<{ data: string[] }>('/api/v1/accounts/domain_blocks');
-      domainBlocks = res.data;
+      const res = await api.get<{ id: string; domain: string }[]>('/api/v1/accounts/domain_blocks');
+      domainBlocks = Array.isArray(res) ? res.map(b => b.domain) : [];
     } catch {
       addToast('Failed to load domain blocks', 'error');
     } finally {

@@ -43,6 +43,10 @@ defmodule HybridsocialWeb.Router do
     post "/password/reset", AuthController, :password_reset
     post "/password/change", AuthController, :password_change
     get "/pow_challenge", AuthController, :pow_challenge
+
+    # Passwordless login with security key (public — no auth required)
+    post "/webauthn/login/challenge", AuthController, :webauthn_login_challenge
+    post "/webauthn/login/verify", AuthController, :webauthn_login_verify
   end
 
   # Authenticated auth endpoints
@@ -184,6 +188,7 @@ defmodule HybridsocialWeb.Router do
     pipe_through [:api, :authenticated]
 
     post "/", OAuthController, :create_app
+    post "/with_token", OAuthController, :create_app_with_token
     get "/", OAuthController, :list_apps
     delete "/:id", OAuthController, :delete_app
   end
@@ -531,8 +536,9 @@ defmodule HybridsocialWeb.Router do
     pipe_through [:api, :rate_limited, :authenticated]
 
     post "/apply", SubscriptionController, :apply_verification
-    post "/domain", SubscriptionController, :verify_domain
     get "/status", SubscriptionController, :verification_status
+    post "/vouch/:identity_id", SubscriptionController, :vouch_for_user
+    get "/vouches/:identity_id", SubscriptionController, :get_vouches
   end
 
   # Data export / import (authenticated)
@@ -542,6 +548,7 @@ defmodule HybridsocialWeb.Router do
     post "/export", ExportController, :create
     get "/export", ExportController, :index
     get "/export/:id", ExportController, :show
+    get "/export/:id/download", ExportController, :download
     post "/import", ExportController, :import_data
   end
 
@@ -566,6 +573,33 @@ defmodule HybridsocialWeb.Router do
 
     # Dashboard
     get "/dashboard", AdminController, :dashboard
+
+    # Instance Settings
+    get "/settings", AdminController, :list_settings
+    put "/settings", AdminController, :update_settings
+
+    # Email
+    get "/email", AdminController, :get_email_config
+    put "/email", AdminController, :update_email_config
+    post "/email/test", AdminController, :send_test_email
+
+    # Theme
+    get "/theme", AdminController, :get_theme
+    put "/theme", AdminController, :update_theme
+    post "/theme/logo", AdminController, :upload_logo
+    post "/theme/favicon", AdminController, :upload_favicon
+
+    # Instance Rules
+    get "/rules", AdminController, :list_rules
+    post "/rules", AdminController, :create_rule
+    put "/rules/:index", AdminController, :update_rule
+    delete "/rules/:index", AdminController, :delete_rule
+
+    # Announcements
+    get "/announcements", AdminController, :list_announcements
+    post "/announcements", AdminController, :create_announcement
+    put "/announcements/:id", AdminController, :update_announcement
+    delete "/announcements/:id", AdminController, :delete_announcement
 
     # Reports
     get "/reports", AdminController, :list_reports
@@ -629,6 +663,19 @@ defmodule HybridsocialWeb.Router do
 
     # Name revocation
     post "/users/:id/revoke_name", AdminController, :revoke_name
+    post "/users/:id/bot_rate_limit", AdminController, :set_bot_rate_limit
+    post "/users/:id/force_bot", AdminController, :force_bot
+    post "/users/:id/unforce_bot", AdminController, :unforce_bot
+
+    # Admin user management
+    put "/users/:id/profile", AdminController, :edit_user_profile
+    post "/users/:id/reset_password", AdminController, :reset_user_password
+    get "/users/:id/email", AdminController, :view_user_email
+    put "/users/:id/email", AdminController, :change_user_email
+    put "/users/:id/tier", AdminController, :change_user_tier
+    post "/users/:id/set_admin", AdminController, :set_admin
+    post "/users/:id/assign_role", AdminController, :assign_user_role
+    post "/users/:id/remove_role", AdminController, :remove_user_role
 
     # Content Filters
     get "/content_filters", AdminController, :list_filters
@@ -670,6 +717,7 @@ defmodule HybridsocialWeb.Router do
     post "/verifications/:id/reject", AdminController, :reject_verification
 
     # Instance Policies
+    get "/known_instances", AdminController, :list_known_instances
     get "/instance_policies", AdminController, :list_instance_policies
     post "/instance_policies", AdminController, :create_instance_policy
     put "/instance_policies/:id", AdminController, :update_instance_policy
@@ -773,6 +821,13 @@ defmodule HybridsocialWeb.Router do
     pipe_through :api
 
     get "/2.0", NodeinfoController, :show
+  end
+
+  # Instance actor (public)
+  scope "/", HybridsocialWeb.Federation do
+    pipe_through :api
+
+    get "/actor", InstanceActorController, :show
   end
 
   scope "/actors", HybridsocialWeb.Federation do

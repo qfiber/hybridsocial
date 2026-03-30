@@ -116,35 +116,6 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
     end
   end
 
-  # POST /api/v1/verification/domain
-  def verify_domain(conn, %{"domain" => domain}) do
-    identity = conn.assigns.current_identity
-
-    case Premium.verify_domain(identity.id, domain) do
-      {:ok, verification} ->
-        conn |> put_status(:ok) |> json(serialize_verification(verification))
-
-      {:error, :domain_not_verified} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{
-          error: "verification.domain_not_verified",
-          instructions: %{
-            dns: "Add a TXT record: hybridsocial-verify=#{identity.handle}",
-            rel_me:
-              "Add <a rel=\"me\" href=\"#{HybridsocialWeb.Endpoint.url()}/@#{identity.handle}\"> to your website"
-          }
-        })
-
-      {:error, :not_found} ->
-        conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
-    end
-  end
-
-  def verify_domain(conn, _params) do
-    conn |> put_status(:bad_request) |> json(%{error: "verification.domain_required"})
-  end
-
   # GET /api/v1/verification/status
   def verification_status(conn, _params) do
     identity = conn.assigns.current_identity
@@ -154,7 +125,62 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
         conn |> put_status(:ok) |> json(%{status: "none"})
 
       verification ->
-        conn |> put_status(:ok) |> json(serialize_verification(verification))
+        vouch_count = if verification.type == "peer_vouch", do: Premium.vouch_count(verification.id), else: 0
+        conn |> put_status(:ok) |> json(Map.put(serialize_verification(verification), :vouch_count, vouch_count))
+    end
+  end
+
+  # POST /api/v1/verification/vouch/:identity_id
+  def vouch_for_user(conn, %{"identity_id" => target_identity_id}) do
+    voucher = conn.assigns.current_identity
+
+    case Premium.get_peer_verification(target_identity_id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "verification.no_pending_request"})
+
+      verification ->
+        case Premium.vouch_for(verification.id, voucher.id) do
+          {:ok, _vouch} ->
+            count = Premium.vouch_count(verification.id)
+            json(conn, %{status: "vouched", vouch_count: count, required: 3})
+
+          {:error, :already_vouched} ->
+            conn |> put_status(:conflict) |> json(%{error: "verification.already_vouched"})
+
+          {:error, :cannot_vouch_self} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "verification.cannot_vouch_self"})
+
+          {:error, _} ->
+            conn |> put_status(:unprocessable_entity) |> json(%{error: "verification.vouch_failed"})
+        end
+    end
+  end
+
+  # GET /api/v1/verification/vouches/:identity_id
+  def get_vouches(conn, %{"identity_id" => target_identity_id}) do
+    case Premium.get_peer_verification(target_identity_id) do
+      nil ->
+        json(conn, %{vouches: [], count: 0, required: 3})
+
+      verification ->
+        vouches = Premium.get_vouches(verification.id)
+
+        json(conn, %{
+          count: length(vouches),
+          required: 3,
+          vouches: Enum.map(vouches, fn v ->
+            %{
+              id: v.id,
+              voucher: %{
+                id: v.voucher.id,
+                handle: v.voucher.handle,
+                display_name: v.voucher.display_name,
+                avatar_url: v.voucher.avatar_url
+              },
+              created_at: v.inserted_at
+            }
+          end)
+        })
     end
   end
 

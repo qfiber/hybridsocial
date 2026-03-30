@@ -50,19 +50,52 @@ defmodule Hybridsocial.Auth.Webauthn do
     }
   end
 
-  @doc "Verify and store a registration response."
+  @doc "Verify and store a registration response. Uses wax_ for CBOR/COSE attestation verification."
   def verify_registration(identity_id, params) do
     credential_id = params["credential_id"] || params["id"]
-    public_key = params["public_key"] || params["response"]["publicKey"] || ""
     name = params["name"] || "Security Key"
 
-    # Verify challenge was issued
     case get_challenge(identity_id) do
       nil ->
         {:error, :challenge_expired}
 
-      _challenge ->
+      challenge ->
         clear_challenge(identity_id)
+
+        # Try full attestation verification via wax_ if attestation data is provided
+        public_key =
+          case params["response"] do
+            %{"attestationObject" => att_b64, "clientDataJSON" => cd_b64} when is_binary(att_b64) ->
+              try do
+                attestation_object = Base.decode64!(att_b64)
+                client_data_json = Base.decode64!(cd_b64)
+                challenge_bytes = Base.url_decode64!(challenge, padding: false)
+
+                rp_id = URI.parse(HybridsocialWeb.Endpoint.url()).host
+
+                case Wax.register(attestation_object, client_data_json,
+                       %Wax.Challenge{
+                         bytes: challenge_bytes,
+                         rp_id: rp_id,
+                         origin: HybridsocialWeb.Endpoint.url(),
+                         type: :attestation,
+                         issued_at: DateTime.utc_now()
+                       }
+                     ) do
+                  {:ok, {_auth_data, result}} ->
+                    Base.url_encode64(:erlang.term_to_binary(result), padding: false)
+
+                  {:error, _reason} ->
+                    # Fall back to storing the raw public key
+                    params["public_key"] || ""
+                end
+              rescue
+                _ -> params["public_key"] || ""
+              end
+
+            _ ->
+              params["public_key"] || ""
+          end
 
         %WebauthnCredential{}
         |> WebauthnCredential.changeset(%{

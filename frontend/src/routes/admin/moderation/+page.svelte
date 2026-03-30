@@ -53,6 +53,9 @@
   // IP Blocks state
   let ipBlocks: IpBlock[] = $state([]);
   let ipBlocksLoading = $state(false);
+  let filtersLoaded = $state(false);
+  let domainsLoaded = $state(false);
+  let ipBlocksLoaded = $state(false);
   let newIp = $state('');
   let newIpSeverity = $state<'sign_up_block' | 'sign_up_requires_approval' | 'no_access'>('sign_up_block');
   let newIpComment = $state('');
@@ -90,6 +93,7 @@
       addToast('Failed to load content filters', 'error');
     } finally {
       filtersLoading = false;
+      filtersLoaded = true;
     }
   }
 
@@ -101,6 +105,7 @@
       addToast('Failed to load banned domains', 'error');
     } finally {
       domainsLoading = false;
+      domainsLoaded = true;
     }
   }
 
@@ -112,15 +117,16 @@
       addToast('Failed to load IP blocks', 'error');
     } finally {
       ipBlocksLoading = false;
+      ipBlocksLoaded = true;
     }
   }
 
   $effect(() => {
-    if (activeTab === 'filters' && filters.length === 0 && !filtersLoading) {
+    if (activeTab === 'filters' && !filtersLoaded && !filtersLoading) {
       loadFilters();
-    } else if (activeTab === 'domains' && bannedDomains.length === 0 && !domainsLoading) {
+    } else if (activeTab === 'domains' && !domainsLoaded && !domainsLoading) {
       loadDomains();
-    } else if (activeTab === 'ipblocks' && ipBlocks.length === 0 && !ipBlocksLoading) {
+    } else if (activeTab === 'ipblocks' && !ipBlocksLoaded && !ipBlocksLoading) {
       loadIpBlocks();
     }
   });

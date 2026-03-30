@@ -26,6 +26,7 @@ defmodule Hybridsocial.Trending.Worker do
       Hybridsocial.Trending.compute_trending_posts()
       Hybridsocial.Trending.compute_trending_hashtags()
       Hybridsocial.Trending.cleanup_old_trending()
+      Hybridsocial.Portability.cleanup_expired_exports()
     rescue
       e ->
         Logger.error("Trending computation failed: #{inspect(e)}")

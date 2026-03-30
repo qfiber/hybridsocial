@@ -25,6 +25,31 @@ if config_env() != :test do
     http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 end
 
+# Instance actor RSA keypair — used for relay and instance-level federation signing.
+# Generate with: mix run -e "Hybridsocial.Federation.InstanceActor.generate_keys_to_stdout()"
+# Or let docker compose generate them on first startup.
+if instance_public_key = System.get_env("INSTANCE_PUBLIC_KEY") do
+  decoded = case Base.decode64(instance_public_key) do
+    {:ok, pem} -> pem
+    _ -> instance_public_key
+  end
+  config :hybridsocial, :instance_public_key, decoded
+end
+
+if instance_private_key = System.get_env("INSTANCE_PRIVATE_KEY") do
+  decoded = case Base.decode64(instance_private_key) do
+    {:ok, pem} -> pem
+    _ -> instance_private_key
+  end
+  config :hybridsocial, :instance_private_key, decoded
+end
+
+# Media host — separate domain/subdomain for serving user uploads (security)
+# Must match Caddy/reverse proxy config. Example: https://media.hybridsocial.com
+if media_host = System.get_env("MEDIA_HOST") do
+  config :hybridsocial, :media_host, media_host
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

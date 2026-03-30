@@ -97,7 +97,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
         desc: fragment("? + ? * 2 + ?", p.reaction_count, p.boost_count, p.reply_count)
       )
       |> limit(^candidate_limit)
-      |> preload(:identity)
+      |> preload([:identity, :quote])
       |> Repo.all()
 
     # Batch-fetch follower counts for all candidate authors

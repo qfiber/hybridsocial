@@ -90,6 +90,28 @@ defmodule Hybridsocial.Portability do
     end
   end
 
+  @doc "Delete export files older than 1 hour."
+  def cleanup_expired_exports do
+    cutoff = DateTime.add(DateTime.utc_now(), -3600, :second)
+
+    exports =
+      DataExport
+      |> where([e], not is_nil(e.file_path) and e.inserted_at < ^cutoff)
+      |> Repo.all()
+
+    Enum.each(exports, fn export ->
+      if export.file_path && File.exists?(export.file_path) do
+        File.rm(export.file_path)
+      end
+
+      export
+      |> Ecto.Changeset.change(file_path: nil)
+      |> Repo.update()
+    end)
+
+    {:ok, length(exports)}
+  end
+
   # --- Data Import ---
 
   def import_follows(identity_id, csv_data) do

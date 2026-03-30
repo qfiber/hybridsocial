@@ -92,7 +92,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> maybe_max_id(Keyword.get(opts, :max_id))
       |> maybe_min_id(Keyword.get(opts, :min_id))
       |> Visibility.apply_shadow_ban_filter(identity_id)
-      |> preload(:identity)
+      |> preload([:identity, :quote])
       |> Repo.all()
 
     popular_posts =
@@ -106,7 +106,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> maybe_min_id(Keyword.get(opts, :min_id))
       |> Visibility.apply_shadow_ban_filter(identity_id)
       |> Visibility.apply_silence_filter()
-      |> preload(:identity)
+      |> preload([:identity, :quote])
       |> Repo.all()
 
     # Combine, deduplicate, score, and sort
