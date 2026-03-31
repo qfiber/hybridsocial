@@ -7,6 +7,7 @@ defmodule Hybridsocial.Social do
   alias Hybridsocial.Repo
   alias Hybridsocial.Accounts
   alias Hybridsocial.Social.{Follow, Block, Mute, PostMute, UserDomainBlock, AccountNote, FollowedTag, Hashtag, UserContentFilter}
+  alias Hybridsocial.Federation.{ActivityBuilder, Publisher}
 
   # --- Follows ---
 
@@ -16,17 +17,30 @@ defmodule Hybridsocial.Social do
          target when not is_nil(target) <- Accounts.get_identity(followee_id) do
       status = if target.is_locked, do: :pending, else: :accepted
 
-      %Follow{}
-      |> Follow.changeset(%{
-        follower_id: follower_id,
-        followee_id: followee_id,
-        status: status
-      })
-      |> Repo.insert(
-        on_conflict: {:replace, [:status, :updated_at]},
-        conflict_target: [:follower_id, :followee_id],
-        returning: true
-      )
+      result =
+        %Follow{}
+        |> Follow.changeset(%{
+          follower_id: follower_id,
+          followee_id: followee_id,
+          status: status
+        })
+        |> Repo.insert(
+          on_conflict: {:replace, [:status, :updated_at]},
+          conflict_target: [:follower_id, :followee_id],
+          returning: true
+        )
+
+      # Publish Follow activity to remote instance if target is remote
+      with {:ok, follow} <- result,
+           follower when not is_nil(follower) <- Accounts.get_identity(follower_id),
+           true <- remote?(target) do
+        Task.Supervisor.start_child(Hybridsocial.Federation.DeliveryTaskSupervisor, fn ->
+          activity = ActivityBuilder.build_follow(follower, target.ap_actor_url)
+          Publisher.publish(activity, follower)
+        end)
+      end
+
+      result
     else
       {:not_self, false} -> {:error, :cannot_follow_self}
       {:not_blocked, true} -> {:error, :blocked}
@@ -38,6 +52,17 @@ defmodule Hybridsocial.Social do
     Follow
     |> where([f], f.follower_id == ^follower_id and f.followee_id == ^followee_id)
     |> Repo.delete_all()
+
+    # Publish Undo Follow to remote instance
+    with follower when not is_nil(follower) <- Accounts.get_identity(follower_id),
+         target when not is_nil(target) <- Accounts.get_identity(followee_id),
+         true <- remote?(target) do
+      Task.Supervisor.start_child(Hybridsocial.Federation.DeliveryTaskSupervisor, fn ->
+        follow_activity = ActivityBuilder.build_follow(follower, target.ap_actor_url)
+        activity = ActivityBuilder.build_undo(follower, follow_activity)
+        Publisher.publish(activity, follower)
+      end)
+    end
 
     :ok
   end
@@ -548,4 +573,12 @@ defmodule Hybridsocial.Social do
     |> Repo.all()
     |> Enum.map(fn uuid -> Ecto.UUID.load!(uuid) end)
   end
+
+  # Check if an identity is from a remote instance
+  defp remote?(%{ap_actor_url: url}) when is_binary(url) do
+    base = HybridsocialWeb.Endpoint.url()
+    not String.starts_with?(url, base)
+  end
+
+  defp remote?(_), do: false
 end

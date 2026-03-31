@@ -76,7 +76,8 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
       "id" => activity_id(follower_identity.id, "follow", target_uuid),
       "type" => "Follow",
       "actor" => actor_url,
-      "object" => followee_ap_id
+      "object" => followee_ap_id,
+      "to" => [followee_ap_id]
     }
   end
 
@@ -152,6 +153,7 @@ defmodule Hybridsocial.Federation.ActivityBuilder do
       "id" => activity_id(identity.id, "undo", target_uuid),
       "type" => "Undo",
       "actor" => actor_url,
+      "to" => activity_to_undo["to"] || [],
       "object" => activity_to_undo
     }
   end
