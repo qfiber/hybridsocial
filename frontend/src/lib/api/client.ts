@@ -33,7 +33,7 @@ class ApiClient {
   }
 
   async request<T>(method: string, path: string, options?: RequestOptions): Promise<T> {
-    const url = new URL(`${API_BASE}${path}`);
+    const url = new URL(`${API_BASE}${path}`, window.location.origin);
     if (options?.params) {
       for (const [key, value] of Object.entries(options.params)) {
         url.searchParams.set(key, value);
