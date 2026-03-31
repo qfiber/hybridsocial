@@ -80,7 +80,7 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
         {Config.get("rate_limit_login", 10), 900}
 
       "/api/v1/auth/register" ->
-        {Config.get("rate_limit_register", 5), 3600}
+        {Config.get("rate_limit_register", 20), 3600}
 
       _ ->
         if authenticated?(conn) do

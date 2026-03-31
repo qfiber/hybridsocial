@@ -34,10 +34,24 @@ export function t(key: string, params?: Record<string, string | number>): string
 
 /**
  * Translate a backend error key into user-friendly message.
+ * Includes hardcoded fallbacks for common errors in case i18n hasn't loaded yet.
  */
+const ERROR_FALLBACKS: Record<string, string> = {
+  'validation.failed': 'Please check your input and try again.',
+  'auth.invalid_credentials': 'Invalid email or password.',
+  'auth.unauthorized': 'You need to sign in to continue.',
+  'auth.pow_required': 'Please complete the verification challenge.',
+  'auth.captcha_failed': 'Captcha verification failed. Please try again.',
+  'auth.email_domain_banned': 'Registration from this email domain is not allowed.',
+  'auth.handle_reserved': 'This handle is reserved and cannot be used.',
+  'rate_limit.exceeded': 'Too many requests. Please wait a moment.',
+  'account.confirmation_required': 'Please check your email to confirm your account.',
+};
+
 export function tError(errorKey: string): string {
   const translated = t(`error.${errorKey}`);
-  return translated !== `error.${errorKey}` ? translated : t('error.unknown');
+  if (translated !== `error.${errorKey}`) return translated;
+  return ERROR_FALLBACKS[errorKey] || 'Something went wrong. Please try again.';
 }
 
 /**
