@@ -7,7 +7,7 @@ const config = {
 			precompress: true
 		}),
 		csrf: {
-			checkOrigin: true
+			checkOrigin: false
 		}
 	},
 	vitePlugin: {
