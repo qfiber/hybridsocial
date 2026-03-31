@@ -39,9 +39,8 @@
 
     // Show onboarding for new users (no display_name set yet)
     const authState = get(authStore);
-    if (authState.user && !authState.user.display_name && !localStorage.getItem('hs_onboarded')) {
+    if (authState.user && !authState.user.display_name) {
       showOnboarding = true;
-      localStorage.setItem('hs_onboarded', '1');
     }
 
     return () => {
@@ -70,6 +69,6 @@
   </AppLayout>
   <PostComposer />
   {#if showOnboarding}
-    <OnboardingModal onclose={() => { showOnboarding = false; localStorage.setItem('hs_onboarded', '1'); }} />
+    <OnboardingModal onclose={() => { showOnboarding = false; }} />
   {/if}
 {/if}
