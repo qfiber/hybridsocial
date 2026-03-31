@@ -83,7 +83,7 @@ services:
     image: alpine:3.19
     container_name: hs_init_keys
     volumes:
-      - ./docker/generate-instance-keys.sh:/generate-keys.sh:ro
+      - ./docker/generate-secrets.sh:/generate-keys.sh:ro
       - ./.env:/app/.env
     command: sh /generate-keys.sh /app/.env
     restart: "no"
@@ -95,7 +95,7 @@ services:
     container_name: hs_migrate
     environment:
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in .env (mix phx.gen.secret)}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE missing — run init-keys container first or set manually}
       VALKEY_URL: "redis://valkey:6379"
       NATS_URL: "nats://nats:4222"
       OPENSEARCH_URL: "http://opensearch:9200"
@@ -130,7 +130,7 @@ services:
       PHX_SERVER: "true"
       PORT: "4000"
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in .env (mix phx.gen.secret)}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE missing — run init-keys container first or set manually}
       PHX_HOST: ${DOMAIN:?Set DOMAIN in .env}
       VALKEY_URL: "redis://valkey:6379"
       NATS_URL: "nats://nats:4222"
