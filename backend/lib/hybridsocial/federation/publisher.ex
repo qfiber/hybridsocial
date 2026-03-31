@@ -247,15 +247,21 @@ defmodule Hybridsocial.Federation.Publisher do
   end
 
   defp get_actor_inbox(actor_url) do
-    # Check if the actor is local
-    case Hybridsocial.Repo.get_by(Hybridsocial.Accounts.Identity, ap_actor_url: actor_url) do
-      nil ->
-        # Remote actor - try to fetch their inbox from the remote_actors cache
-        fetch_remote_inbox(actor_url)
+    base_url = HybridsocialWeb.Endpoint.url()
 
-      _local_identity ->
-        # Local actor, no need for remote delivery
-        nil
+    if String.starts_with?(actor_url, base_url) do
+      # Truly local actor — no remote delivery needed
+      nil
+    else
+      # Remote actor — check if we have their inbox stored locally
+      case Hybridsocial.Repo.get_by(Hybridsocial.Accounts.Identity, ap_actor_url: actor_url) do
+        %{inbox_url: inbox} when is_binary(inbox) and inbox != "" ->
+          inbox
+
+        _ ->
+          # Try remote_actors cache, then fetch from remote server
+          fetch_remote_inbox(actor_url)
+      end
     end
   end
 
@@ -263,12 +269,30 @@ defmodule Hybridsocial.Federation.Publisher do
     # Check the remote_actors cache first
     case Hybridsocial.Repo.get_by(Hybridsocial.Federation.RemoteActor, ap_id: actor_url) do
       nil ->
-        # Could fetch from the remote server, but for now return nil
-        Logger.debug("No cached remote actor for #{actor_url}")
-        nil
+        # Fetch actor from remote server to get inbox
+        Logger.debug("No cached remote actor for #{actor_url}, attempting fetch")
+        case fetch_actor_inbox_from_remote(actor_url) do
+          nil -> nil
+          inbox -> inbox
+        end
 
       remote_actor ->
         remote_actor.inbox_url
+    end
+  end
+
+  defp fetch_actor_inbox_from_remote(actor_url) do
+    headers = [{"Accept", "application/activity+json, application/ld+json"}]
+
+    case HTTPoison.get(actor_url, headers, follow_redirect: true, timeout: 10_000) do
+      {:ok, %{status_code: 200, body: body}} ->
+        case Jason.decode(body) do
+          {:ok, %{"inbox" => inbox}} when is_binary(inbox) -> inbox
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 
