@@ -31,11 +31,17 @@ defmodule HybridsocialWeb.Endpoint do
     only: HybridsocialWeb.static_paths(),
     raise_on_missing_only: code_reloading?
 
-  # Serve uploaded media files from the uploads directory
-  plug Plug.Static,
-    at: "/uploads",
-    from: Path.expand(Application.compile_env(:hybridsocial, :upload_dir, "priv/uploads")),
-    gzip: false
+  # Serve uploaded media files from the uploads directory (runtime path)
+  plug :serve_uploads
+
+  defp serve_uploads(conn, _opts) do
+    uploads_dir = Hybridsocial.Media.Backends.Local.uploads_dir()
+
+    Plug.Static.call(
+      conn,
+      Plug.Static.init(at: "/uploads", from: uploads_dir, gzip: false)
+    )
+  end
 
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.

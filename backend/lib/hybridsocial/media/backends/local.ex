@@ -79,7 +79,7 @@ defmodule Hybridsocial.Media.Backends.Local do
 
   @doc false
   def uploads_dir do
-    Path.join(:code.priv_dir(:hybridsocial), "uploads")
+    System.get_env("UPLOADS_DIR") || Path.join(:code.priv_dir(:hybridsocial), "uploads")
   end
 
   defp full_path(relative_path) do
