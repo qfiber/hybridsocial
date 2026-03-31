@@ -3,6 +3,7 @@
   import { api } from '$lib/api/client.js';
   import { ApiError } from '$lib/api/client.js';
   import { solvePow, type PowChallenge, type PowSolution } from '$lib/utils/pow.js';
+  import { tError } from '$lib/utils/i18n.js';
 
   let handle = $state('');
   let email = $state('');
@@ -135,7 +136,7 @@
 
     loading = true;
     try {
-      const body: Record<string, unknown> = { handle, email, password };
+      const body: Record<string, unknown> = { handle, email, password, password_confirmation: passwordConfirm };
       if (powSolution) body.pow_solution = powSolution;
       if (turnstileEnabled && turnstileToken) body.turnstile_token = turnstileToken;
 
@@ -143,7 +144,7 @@
       success = true;
     } catch (err) {
       if (err instanceof ApiError) {
-        error = err.body.error_description || err.body.error || 'Registration failed';
+        error = err.body.error_description || tError(err.body.error);
         if (err.body.details) {
           fieldErrors = {};
           for (const [field, messages] of Object.entries(err.body.details)) {
