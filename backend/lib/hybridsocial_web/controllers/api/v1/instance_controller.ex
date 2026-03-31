@@ -5,6 +5,15 @@ defmodule HybridsocialWeb.Api.V1.InstanceController do
     json(conn, Hybridsocial.Instance.info())
   end
 
+  def info(conn, _params) do
+    turnstile_key = Hybridsocial.Config.Store.get("turnstile_site_key", "")
+
+    json(conn, %{
+      turnstile_enabled: turnstile_key != "",
+      turnstile_site_key: turnstile_key
+    })
+  end
+
   def online_count(conn, _params) do
     import Ecto.Query
 

@@ -405,7 +405,7 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
 
   def pow_challenge(conn, _params) do
     challenge = Hybridsocial.Auth.PoW.generate_challenge()
-    json(conn, challenge)
+    json(conn, %{challenge: challenge.prefix, difficulty: challenge.difficulty})
   end
 
   defp get_session_info(conn) do

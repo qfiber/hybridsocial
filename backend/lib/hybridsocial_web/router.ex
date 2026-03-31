@@ -43,6 +43,7 @@ defmodule HybridsocialWeb.Router do
     post "/password/reset", AuthController, :password_reset
     post "/password/change", AuthController, :password_change
     get "/pow_challenge", AuthController, :pow_challenge
+    get "/pow-challenge", AuthController, :pow_challenge
 
     # Passwordless login with security key (public — no auth required)
     post "/webauthn/login/challenge", AuthController, :webauthn_login_challenge
@@ -814,6 +815,7 @@ defmodule HybridsocialWeb.Router do
     pipe_through :api
 
     get "/instance", InstanceController, :show
+    get "/instance/info", InstanceController, :info
   end
 
   # NodeInfo
