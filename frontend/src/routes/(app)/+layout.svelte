@@ -41,6 +41,7 @@
     const authState = get(authStore);
     if (authState.user && !authState.user.display_name && !localStorage.getItem('hs_onboarded')) {
       showOnboarding = true;
+      localStorage.setItem('hs_onboarded', '1');
     }
 
     return () => {
