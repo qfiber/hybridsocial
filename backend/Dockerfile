@@ -27,7 +27,7 @@ RUN mix compile
 RUN mix release
 
 # Stage 2: Runtime
-FROM debian:bookworm-slim AS runner
+FROM alpine:3.21 AS runner
 
 ENV MIX_ENV=prod \
     LANG=C.UTF-8 \
@@ -36,20 +36,16 @@ ENV MIX_ENV=prod \
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends \
-      libstdc++6 \
+RUN apk add --no-cache \
+      libstdc++ \
       openssl \
-      libncurses5 \
-      locales \
+      ncurses-libs \
       ca-certificates \
-      postgresql-client \
-    && apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+      postgresql-client
 
 # Create a non-root user
-RUN groupadd --system app && \
-    useradd --system --gid app --home /app app
+RUN addgroup --system app && \
+    adduser --system --ingroup app --home /app app
 
 # Copy the release from the builder stage
 COPY --from=builder --chown=app:app /app/_build/prod/rel/hybridsocial ./
