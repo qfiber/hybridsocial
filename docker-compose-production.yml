@@ -118,6 +118,14 @@ services:
         condition: service_completed_successfully
       backend-migrate:
         condition: service_completed_successfully
+      postgresql:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
     environment:
       PHX_SERVER: "true"
       PORT: "4000"
@@ -148,15 +156,6 @@ services:
       INSTANCE_PRIVATE_KEY: ${INSTANCE_PRIVATE_KEY:-}
     volumes:
       - uploads:/app/uploads
-    depends_on:
-      postgresql:
-        condition: service_healthy
-      valkey:
-        condition: service_healthy
-      nats:
-        condition: service_healthy
-      opensearch:
-        condition: service_healthy
     networks:
       - internal
     expose:
