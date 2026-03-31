@@ -16,10 +16,15 @@
   } = $props();
 
   const hideRightSidebarPaths = ['/settings', '/messages', '/admin'];
+  const hideLeftSidebarPaths = ['/settings'];
   const fullWidthPaths = ['/messages', '/admin', '/settings'];
 
   let showRightSidebar = $derived(
     !hideRightSidebarPaths.some(p => page.url.pathname.startsWith(p))
+  );
+
+  let showLeftSidebar = $derived(
+    !hideLeftSidebarPaths.some(p => page.url.pathname.startsWith(p))
   );
 
   let isFullWidth = $derived(
@@ -28,8 +33,10 @@
 </script>
 
 <Header />
-<div class="app-layout" class:no-right-sidebar={!showRightSidebar}>
-  <Sidebar />
+<div class="app-layout" class:no-right-sidebar={!showRightSidebar} class:no-left-sidebar={!showLeftSidebar}>
+  {#if showLeftSidebar}
+    <Sidebar />
+  {/if}
   <main class="feed-column" class:full-width={isFullWidth}>
     <AppBanner />
     <AnnouncementBanner />
@@ -58,6 +65,14 @@
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }
 
+  .app-layout.no-left-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-layout.no-left-sidebar.no-right-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .feed-column {
     max-width: var(--feed-max-width);
     width: 100%;
@@ -79,6 +94,10 @@
 
     .app-layout.no-right-sidebar {
       grid-template-columns: 64px minmax(0, 1fr);
+    }
+
+    .app-layout.no-left-sidebar {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 
