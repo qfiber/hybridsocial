@@ -67,18 +67,19 @@
 
 <style>
   .settings-layout {
-    max-width: 900px;
+    max-width: 1200px;
     margin: 0 auto;
     display: flex;
-    gap: var(--space-6);
+    gap: var(--space-8);
   }
 
   .settings-nav {
-    width: 220px;
+    width: 200px;
     flex-shrink: 0;
     position: sticky;
     top: calc(var(--header-height) + var(--space-4));
     align-self: flex-start;
+    padding-inline-start: var(--space-2);
   }
 
   .settings-nav-title {
@@ -122,6 +123,7 @@
   .settings-content {
     flex: 1;
     min-width: 0;
+    max-width: 800px;
   }
 
   @media (max-width: 640px) {
