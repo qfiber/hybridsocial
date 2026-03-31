@@ -58,16 +58,16 @@ defmodule HybridsocialWeb.Endpoint do
   plug Plug.Session, @session_options
   plug HybridsocialWeb.Plugs.SecurityHeaders
 
-  plug CORSPlug,
-    origin: {__MODULE__, :cors_origins, []},
-    expose: ["link"],
-    credentials: true
+  plug :cors_plug
 
-  def cors_origins do
-    Application.get_env(:hybridsocial, :cors_origins, [
+  defp cors_plug(conn, _opts) do
+    origins = Application.get_env(:hybridsocial, :cors_origins, [
       "http://localhost:5173",
       "http://localhost:4000"
     ])
+
+    opts = CORSPlug.init(origin: origins, expose: ["link"], credentials: true)
+    CORSPlug.call(conn, opts)
   end
 
   plug HybridsocialWeb.Router
