@@ -26,8 +26,8 @@ COPY priv priv
 RUN mix compile
 RUN mix release
 
-# Stage 2: Runtime
-FROM alpine:3.21 AS runner
+# Stage 2: Runtime — must match the builder's Alpine version for OpenSSL compatibility
+FROM elixir:1.18-otp-28-alpine AS runner
 
 ENV MIX_ENV=prod \
     LANG=C.UTF-8 \
@@ -35,10 +35,9 @@ ENV MIX_ENV=prod \
 
 WORKDIR /app
 
-# Install runtime dependencies
+# Install runtime dependencies (Elixir/OTP already present from base)
 RUN apk add --no-cache \
       libstdc++ \
-      openssl \
       ncurses-libs \
       ca-certificates \
       postgresql-client
