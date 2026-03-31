@@ -13,8 +13,8 @@ RUN npm install @sveltejs/adapter-node
 # Copy source
 COPY . .
 
-# Swap adapter-auto for adapter-node in svelte.config.js
-RUN sed -i "s|import adapter from '@sveltejs/adapter-auto'|import adapter from '@sveltejs/adapter-node'|" svelte.config.js
+# Use production svelte config with adapter-node
+RUN cp svelte.config.node.js svelte.config.js
 
 # Build
 ENV NODE_ENV=production
