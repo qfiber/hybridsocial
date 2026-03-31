@@ -107,7 +107,7 @@
     response = '';
     responseStatus = 0;
     try {
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      const apiBase = import.meta.env.VITE_API_URL || '';
       const headers: Record<string, string> = { 'Accept': 'application/json' };
       const opts: RequestInit = { method, headers, credentials: 'include' };
       if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && requestBody.trim()) {

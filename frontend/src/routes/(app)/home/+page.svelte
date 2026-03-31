@@ -74,7 +74,7 @@
     loadTimeline(true);
 
     // Connect streaming (auth via httpOnly cookie)
-    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+    const apiBase = import.meta.env.VITE_API_URL || '';
     connectTimelineStream(apiBase);
 
     // Listen for real-time updates when at top

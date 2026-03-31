@@ -155,7 +155,7 @@
                 </div>
                 {#if entry.status === 'completed'}
                   <a
-                    href="{import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/v1/export/{entry.id}/download"
+                    href="{import.meta.env.VITE_API_URL || ''}/api/v1/export/{entry.id}/download"
                     class="stitch-btn-primary stitch-btn-sm"
                     download
                   >
