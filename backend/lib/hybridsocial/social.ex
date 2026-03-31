@@ -3,6 +3,7 @@ defmodule Hybridsocial.Social do
   The Social context. Manages follows, blocks, and mutes between identities.
   """
   import Ecto.Query
+  require Logger
 
   alias Hybridsocial.Repo
   alias Hybridsocial.Accounts
@@ -31,13 +32,23 @@ defmodule Hybridsocial.Social do
         )
 
       # Publish Follow activity to remote instance if target is remote
-      with {:ok, follow} <- result,
-           follower when not is_nil(follower) <- Accounts.get_identity(follower_id),
-           true <- remote?(target) do
-        Task.Supervisor.start_child(Hybridsocial.Federation.DeliveryTaskSupervisor, fn ->
-          activity = ActivityBuilder.build_follow(follower, target.ap_actor_url)
-          Publisher.publish(activity, follower)
-        end)
+      case result do
+        {:ok, _follow} ->
+          follower = Accounts.get_identity(follower_id)
+
+          if follower && remote?(target) do
+            Logger.info("Publishing Follow activity to #{target.ap_actor_url}")
+
+            Task.Supervisor.start_child(Hybridsocial.Federation.DeliveryTaskSupervisor, fn ->
+              activity = ActivityBuilder.build_follow(follower, target.ap_actor_url)
+              Publisher.publish(activity, follower)
+            end)
+          else
+            Logger.debug("Skipping federation: follower=#{inspect(!!follower)} remote=#{inspect(remote?(target))} ap_url=#{inspect(target.ap_actor_url)}")
+          end
+
+        _ ->
+          :ok
       end
 
       result
