@@ -19,6 +19,7 @@ erl_crash.dump
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # IDE
 .elixir_ls/
