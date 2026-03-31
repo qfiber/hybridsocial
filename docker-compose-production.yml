@@ -162,7 +162,10 @@ services:
     environment:
       PORT: "3000"
       ORIGIN: "https://${DOMAIN:?}"
-      VITE_API_URL: "http://backend:4000"
+      PROTOCOL_HEADER: "x-forwarded-proto"
+      HOST_HEADER: "x-forwarded-host"
+      ADDRESS_HEADER: "x-forwarded-for"
+      XFF_DEPTH: "1"
     depends_on:
       - backend
     networks:
