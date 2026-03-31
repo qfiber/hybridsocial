@@ -87,7 +87,7 @@ services:
     environment:
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Run 'sh docker/generate-secrets.sh .env' first}
-      VALKEY_URL: "redis://valkey:6379"
+      VALKEY_URL: "redis://:${VALKEY_PASSWORD:-}@valkey:6379"
       NATS_URL: "nats://nats:4222"
       OPENSEARCH_URL: "http://opensearch:9200"
     command: ["eval", "Hybridsocial.Release.migrate()"]
@@ -122,7 +122,7 @@ services:
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Run 'sh docker/generate-secrets.sh .env' first}
       PHX_HOST: ${DOMAIN:?Set DOMAIN in .env}
-      VALKEY_URL: "redis://valkey:6379"
+      VALKEY_URL: "redis://:${VALKEY_PASSWORD:-}@valkey:6379"
       NATS_URL: "nats://nats:4222"
       OPENSEARCH_URL: "http://opensearch:9200"
       POOL_SIZE: ${POOL_SIZE:-10}
