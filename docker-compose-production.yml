@@ -149,8 +149,8 @@ services:
       - uploads:/app/uploads
     networks:
       - internal
-    expose:
-      - "4000"
+    ports:
+      - "4000:4000"
 
   frontend:
     build:
@@ -170,8 +170,8 @@ services:
       - backend
     networks:
       - internal
-    expose:
-      - "3000"
+    ports:
+      - "3000:3000"
 
   # ---- Reverse Proxy ----
 
