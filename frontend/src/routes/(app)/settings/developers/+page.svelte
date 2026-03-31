@@ -4,7 +4,7 @@
   import { addToast } from '$lib/stores/toast.js';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
-  interface OAuthApp {
+  interface BotApp {
     id: string;
     name: string;
     client_id: string;
@@ -12,20 +12,50 @@
     created_at: string;
   }
 
-  interface CreatedApp {
-    app: { id: string; name: string; client_id: string; client_secret: string; scopes: string[] };
-    access_token: string | null;
+  interface BotEntry {
+    id: string;
+    name: string;
+    handle: string;
+    created_at: string;
+    apps: BotApp[];
   }
 
-  // Existing apps
-  let apps = $state<OAuthApp[]>([]);
-  let appsLoading = $state(true);
+  interface CreatedBot {
+    bot: { id: string; name: string; handle: string };
+    client_id: string;
+    client_secret: string;
+    access_token: string;
+    note: string;
+  }
+
+  interface RegeneratedKeys {
+    client_id: string;
+    client_secret: string;
+    access_token: string;
+    note: string;
+  }
+
+  // State
+  let bots = $state<BotEntry[]>([]);
+  let loading = $state(true);
 
   // Create form
-  let appName = $state('');
-  let selectedScopes = $state<string[]>(['read']);
+  let botName = $state('');
   let creating = $state(false);
-  let createdResult = $state<CreatedApp | null>(null);
+  let createdResult = $state<CreatedBot | null>(null);
+  let showCreateForm = $state(false);
+
+  // Regenerated keys (shown once)
+  let regeneratedKeys = $state<{ botId: string; keys: RegeneratedKeys } | null>(null);
+
+  // Token visibility per bot
+  let visibleTokens = $state<Set<string>>(new Set());
+
+  // Confirmation states
+  let confirmDeleteId = $state<string | null>(null);
+  let confirmRegenerateId = $state<string | null>(null);
+  let deleting = $state(false);
+  let regenerating = $state(false);
 
   // API tester
   let method = $state('GET');
@@ -34,13 +64,6 @@
   let response = $state('');
   let responseStatus = $state(0);
   let testing = $state(false);
-
-  const availableScopes = [
-    { id: 'read', label: 'Read', desc: 'Read account data, timelines, notifications' },
-    { id: 'write', label: 'Write', desc: 'Create posts, follow users, react' },
-    { id: 'follow', label: 'Follow', desc: 'Follow and unfollow users' },
-    { id: 'push', label: 'Push', desc: 'Receive push notifications' },
-  ];
 
   const quickEndpoints = [
     { method: 'GET', path: '/api/v1/instance', label: 'Instance' },
@@ -53,53 +76,75 @@
 
   onMount(async () => {
     try {
-      apps = await api.get<OAuthApp[]>('/api/v1/apps');
+      bots = await api.get<BotEntry[]>('/api/v1/bots');
     } catch { /* */ }
-    finally { appsLoading = false; }
+    finally { loading = false; }
   });
 
-  function toggleScope(scope: string) {
-    if (selectedScopes.includes(scope)) {
-      selectedScopes = selectedScopes.filter(s => s !== scope);
-    } else {
-      selectedScopes = [...selectedScopes, scope];
-    }
-  }
-
-  async function createApp() {
-    if (!appName.trim() || creating) return;
+  async function createBot() {
+    if (!botName.trim() || creating) return;
     creating = true;
     createdResult = null;
     try {
-      const result = await api.post<CreatedApp>('/api/v1/apps/with_token', {
-        name: appName,
-        scopes: selectedScopes,
-        redirect_uris: ['urn:ietf:wg:oauth:2.0:oob'],
-      });
+      const result = await api.post<CreatedBot>('/api/v1/bots', { name: botName });
       createdResult = result;
-      appName = '';
-      selectedScopes = ['read'];
-      // Refresh apps list
-      apps = await api.get<OAuthApp[]>('/api/v1/apps');
-      addToast('App created', 'success');
+      botName = '';
+      // Refresh bots list
+      bots = await api.get<BotEntry[]>('/api/v1/bots');
+      addToast('Bot created', 'success');
     } catch {
-      addToast('Failed to create app', 'error');
+      addToast('Failed to create bot', 'error');
     } finally { creating = false; }
   }
 
-  async function deleteApp(id: string) {
+  async function deleteBot(id: string) {
+    deleting = true;
     try {
-      await api.delete(`/api/v1/apps/${id}`);
-      apps = apps.filter(a => a.id !== id);
-      addToast('App deleted', 'success');
+      await api.delete(`/api/v1/bots/${id}`);
+      bots = bots.filter(b => b.id !== id);
+      confirmDeleteId = null;
+      addToast('Bot deleted', 'success');
     } catch {
-      addToast('Failed to delete app', 'error');
+      addToast('Failed to delete bot', 'error');
+    } finally { deleting = false; }
+  }
+
+  async function regenerateKeys(id: string) {
+    regenerating = true;
+    try {
+      const result = await api.post<RegeneratedKeys>(`/api/v1/bots/${id}/regenerate`, {});
+      regeneratedKeys = { botId: id, keys: result };
+      confirmRegenerateId = null;
+      // Refresh bots list
+      bots = await api.get<BotEntry[]>('/api/v1/bots');
+      addToast('Keys regenerated', 'success');
+    } catch {
+      addToast('Failed to regenerate keys', 'error');
+    } finally { regenerating = false; }
+  }
+
+  function toggleTokenVisibility(botId: string) {
+    const next = new Set(visibleTokens);
+    if (next.has(botId)) {
+      next.delete(botId);
+    } else {
+      next.add(botId);
     }
+    visibleTokens = next;
   }
 
   function copyText(text: string) {
     navigator.clipboard.writeText(text);
-    addToast('Copied', 'success');
+    addToast('Copied to clipboard', 'success');
+  }
+
+  function dismissCreated() {
+    createdResult = null;
+    showCreateForm = false;
+  }
+
+  function dismissRegenerated() {
+    regeneratedKeys = null;
   }
 
   async function sendRequest() {
@@ -128,119 +173,230 @@
 
 <div class="dev-page">
   <h1 class="dev-title">Developer Tools</h1>
+  <p class="dev-subtitle">Create a bot to get API credentials for building integrations.</p>
 
-  <!-- Create App -->
-  <div class="stitch-card">
-    <h2 class="stitch-section-title">Create API App</h2>
-    <p class="stitch-desc">Create an app to get API credentials. You'll receive a client ID, client secret, and an access token — all in one step.</p>
+  {#if loading}
+    <div class="stitch-card" style="text-align: center; padding: 32px;">
+      <Spinner />
+    </div>
+  {:else}
 
+    <!-- Created Bot Success Screen -->
     {#if createdResult}
-      <div class="created-result">
-        <div class="created-header">
-          <span class="material-symbols-outlined" style="font-size: 24px; color: var(--color-success)">check_circle</span>
-          <strong>App "{createdResult.app.name}" created!</strong>
-        </div>
-        <p class="created-warning">Save these credentials now — the client secret will not be shown again.</p>
-
-        <div class="credential-row">
-          <span class="credential-label">Client ID (public)</span>
-          <div class="credential-value">
-            <code>{createdResult.app.client_id}</code>
-            <button type="button" class="copy-btn" onclick={() => copyText(createdResult!.app.client_id)}>
-              <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
-            </button>
+      <div class="stitch-card">
+        <div class="created-result">
+          <div class="created-header">
+            <span class="material-symbols-outlined" style="font-size: 24px; color: var(--color-success)">check_circle</span>
+            <strong>Bot "{createdResult.bot.name}" created!</strong>
           </div>
-        </div>
+          <p class="created-warning">Save these credentials now -- they will not be shown again.</p>
 
-        <div class="credential-row">
-          <span class="credential-label">Client Secret (private — keep safe!)</span>
-          <div class="credential-value secret">
-            <code>{createdResult.app.client_secret}</code>
-            <button type="button" class="copy-btn" onclick={() => copyText(createdResult!.app.client_secret)}>
-              <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
-            </button>
-          </div>
-        </div>
-
-        {#if createdResult.access_token}
           <div class="credential-row">
-            <span class="credential-label">Access Token (Bearer token for API requests)</span>
-            <div class="credential-value secret">
-              <code>{createdResult.access_token}</code>
-              <button type="button" class="copy-btn" onclick={() => copyText(createdResult!.access_token!)}>
+            <span class="credential-label">Bot Handle</span>
+            <div class="credential-value">
+              <code>@{createdResult.bot.handle}</code>
+            </div>
+          </div>
+
+          <div class="credential-row">
+            <span class="credential-label">Client ID</span>
+            <div class="credential-value">
+              <code>{createdResult.client_id}</code>
+              <button type="button" class="copy-btn" onclick={() => copyText(createdResult!.client_id)}>
                 <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
               </button>
             </div>
           </div>
-        {/if}
 
-        <div class="credential-row">
-          <span class="credential-label">Usage example</span>
-          <pre class="usage-example">curl -H "Authorization: Bearer {createdResult.access_token || 'YOUR_TOKEN'}" \
-  {window.location.origin}/api/v1/accounts/verify_credentials</pre>
-        </div>
-
-        <button type="button" class="dismiss-btn" onclick={() => createdResult = null}>Done</button>
-      </div>
-    {:else}
-      <div class="create-form">
-        <div class="stitch-field">
-          <label class="stitch-label" for="app-name">App Name</label>
-          <input id="app-name" type="text" class="stitch-input" bind:value={appName} placeholder="My Bot, Dashboard, etc." />
-        </div>
-
-        <div class="stitch-field">
-          <label class="stitch-label">Permissions</label>
-          <div class="scope-chips">
-            {#each availableScopes as scope (scope.id)}
-              <button type="button" class="scope-chip" class:active={selectedScopes.includes(scope.id)} onclick={() => toggleScope(scope.id)}>
-                <span class="scope-name">{scope.label}</span>
-                <span class="scope-desc">{scope.desc}</span>
+          <div class="credential-row">
+            <span class="credential-label">Client Secret (shown once -- save it now!)</span>
+            <div class="credential-value secret">
+              <code>{createdResult.client_secret}</code>
+              <button type="button" class="copy-btn" onclick={() => copyText(createdResult!.client_secret)}>
+                <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
               </button>
-            {/each}
+            </div>
           </div>
-        </div>
 
-        <button type="button" class="stitch-btn-primary" onclick={createApp} disabled={!appName.trim() || selectedScopes.length === 0 || creating}>
-          {creating ? 'Creating...' : 'Create App & Generate Token'}
-        </button>
+          <div class="credential-row">
+            <span class="credential-label">Access Token (Bearer token for API requests)</span>
+            <div class="credential-value secret">
+              <code>{createdResult.access_token}</code>
+              <button type="button" class="copy-btn" onclick={() => copyText(createdResult!.access_token)}>
+                <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="credential-row">
+            <span class="credential-label">Usage example</span>
+            <pre class="usage-example">curl -H "Authorization: Bearer {createdResult.access_token}" \
+  {typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/accounts/verify_credentials</pre>
+          </div>
+
+          <button type="button" class="dismiss-btn" onclick={dismissCreated}>I've saved my credentials</button>
+        </div>
       </div>
     {/if}
-  </div>
 
-  <!-- Existing Apps -->
-  <div class="stitch-card">
-    <h2 class="stitch-section-title">Your Apps</h2>
-    {#if appsLoading}
-      <div style="padding: 16px; text-align: center"><Spinner /></div>
-    {:else if apps.length === 0}
-      <p class="stitch-empty">No apps created yet.</p>
-    {:else}
-      <div class="apps-list">
-        {#each apps as app (app.id)}
-          <div class="app-item">
-            <div class="app-info">
-              <span class="app-name">{app.name}</span>
-              <div class="app-key-row">
-                <span class="app-key-label">Public Key:</span>
-                <code class="app-client-id">{app.client_id}</code>
-                <button type="button" class="copy-btn-sm" onclick={() => copyText(app.client_id)} aria-label="Copy public key">
-                  <span class="material-symbols-outlined" style="font-size: 14px">content_copy</span>
-                </button>
-              </div>
-              <span class="app-meta">{(app.scopes || []).join(', ')}</span>
+    <!-- Regenerated Keys Success Screen -->
+    {#if regeneratedKeys}
+      <div class="stitch-card">
+        <div class="created-result">
+          <div class="created-header">
+            <span class="material-symbols-outlined" style="font-size: 24px; color: var(--color-success)">key</span>
+            <strong>New API keys generated</strong>
+          </div>
+          <p class="created-warning">Save these credentials now -- they will not be shown again.</p>
+
+          <div class="credential-row">
+            <span class="credential-label">Client ID</span>
+            <div class="credential-value">
+              <code>{regeneratedKeys.keys.client_id}</code>
+              <button type="button" class="copy-btn" onclick={() => copyText(regeneratedKeys!.keys.client_id)}>
+                <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
+              </button>
             </div>
-            <button type="button" class="app-delete" onclick={() => deleteApp(app.id)}>
-              <span class="material-symbols-outlined" style="font-size: 18px">delete</span>
-            </button>
+          </div>
+
+          <div class="credential-row">
+            <span class="credential-label">Client Secret (shown once)</span>
+            <div class="credential-value secret">
+              <code>{regeneratedKeys.keys.client_secret}</code>
+              <button type="button" class="copy-btn" onclick={() => copyText(regeneratedKeys!.keys.client_secret)}>
+                <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="credential-row">
+            <span class="credential-label">Access Token</span>
+            <div class="credential-value secret">
+              <code>{regeneratedKeys.keys.access_token}</code>
+              <button type="button" class="copy-btn" onclick={() => copyText(regeneratedKeys!.keys.access_token)}>
+                <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
+              </button>
+            </div>
+          </div>
+
+          <button type="button" class="dismiss-btn" onclick={dismissRegenerated}>I've saved my credentials</button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- No Bots: Create First Bot -->
+    {#if bots.length === 0 && !createdResult}
+      <div class="stitch-card empty-state">
+        <span class="material-symbols-outlined empty-icon">smart_toy</span>
+        <h2 class="stitch-section-title">Create Your First Bot</h2>
+        <p class="stitch-desc">Bots let you interact with the API programmatically. Create one to get started with API credentials.</p>
+
+        <div class="create-form">
+          <div class="stitch-field">
+            <label class="stitch-label" for="bot-name">Bot Name</label>
+            <input id="bot-name" type="text" class="stitch-input" bind:value={botName} placeholder="My Awesome Bot" onkeydown={(e) => e.key === 'Enter' && createBot()} />
+          </div>
+
+          <button type="button" class="stitch-btn-primary" onclick={createBot} disabled={!botName.trim() || creating}>
+            {creating ? 'Creating...' : 'Create Bot'}
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Existing Bots -->
+    {#if bots.length > 0}
+      <div class="bots-list">
+        {#each bots as bot (bot.id)}
+          <div class="stitch-card bot-card">
+            <div class="bot-header">
+              <div class="bot-identity">
+                <span class="material-symbols-outlined bot-avatar">smart_toy</span>
+                <div>
+                  <div class="bot-name">{bot.name}</div>
+                  <div class="bot-handle">@{bot.handle}</div>
+                </div>
+              </div>
+              <div class="bot-actions">
+                {#if confirmRegenerateId === bot.id}
+                  <div class="confirm-bar">
+                    <span class="confirm-text">Regenerate keys?</span>
+                    <button type="button" class="confirm-yes" onclick={() => regenerateKeys(bot.id)} disabled={regenerating}>
+                      {regenerating ? '...' : 'Yes'}
+                    </button>
+                    <button type="button" class="confirm-no" onclick={() => confirmRegenerateId = null}>No</button>
+                  </div>
+                {:else if confirmDeleteId === bot.id}
+                  <div class="confirm-bar">
+                    <span class="confirm-text">Delete this bot?</span>
+                    <button type="button" class="confirm-yes danger" onclick={() => deleteBot(bot.id)} disabled={deleting}>
+                      {deleting ? '...' : 'Yes, delete'}
+                    </button>
+                    <button type="button" class="confirm-no" onclick={() => confirmDeleteId = null}>Cancel</button>
+                  </div>
+                {:else}
+                  <button type="button" class="action-btn" onclick={() => confirmRegenerateId = bot.id} title="Regenerate API keys">
+                    <span class="material-symbols-outlined" style="font-size: 18px">key</span>
+                  </button>
+                  <button type="button" class="action-btn danger" onclick={() => confirmDeleteId = bot.id} title="Delete bot">
+                    <span class="material-symbols-outlined" style="font-size: 18px">delete</span>
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            {#if bot.apps.length > 0}
+              {@const app = bot.apps[0]}
+              <div class="bot-credentials">
+                <div class="credential-row">
+                  <span class="credential-label">Client ID</span>
+                  <div class="credential-value">
+                    <code>{app.client_id}</code>
+                    <button type="button" class="copy-btn" onclick={() => copyText(app.client_id)}>
+                      <span class="material-symbols-outlined" style="font-size: 16px">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {:else}
+              <p class="stitch-empty" style="font-size: 0.8rem;">No API keys. Click the key icon to generate new ones.</p>
+            {/if}
           </div>
         {/each}
       </div>
+
+      <!-- Create Another Bot -->
+      {#if !createdResult}
+        {#if showCreateForm}
+          <div class="stitch-card">
+            <h2 class="stitch-section-title">Create Another Bot</h2>
+            <div class="create-form">
+              <div class="stitch-field">
+                <label class="stitch-label" for="bot-name-new">Bot Name</label>
+                <input id="bot-name-new" type="text" class="stitch-input" bind:value={botName} placeholder="Another Bot" onkeydown={(e) => e.key === 'Enter' && createBot()} />
+              </div>
+              <div class="form-actions">
+                <button type="button" class="stitch-btn-primary" onclick={createBot} disabled={!botName.trim() || creating}>
+                  {creating ? 'Creating...' : 'Create Bot'}
+                </button>
+                <button type="button" class="stitch-btn-secondary" onclick={() => { showCreateForm = false; botName = ''; }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        {:else}
+          <button type="button" class="create-another-btn" onclick={() => showCreateForm = true}>
+            <span class="material-symbols-outlined" style="font-size: 18px">add</span>
+            Create Another Bot
+          </button>
+        {/if}
+      {/if}
     {/if}
-  </div>
+  {/if}
 
   <!-- API Tester -->
-  <div class="stitch-card">
+  <div class="stitch-card" style="margin-top: var(--space-6);">
     <h2 class="stitch-section-title">API Tester</h2>
     <div class="quick-chips">
       {#each quickEndpoints as ep (ep.path)}
@@ -278,7 +434,8 @@
 
 <style>
   .dev-page { max-width: 700px; }
-  .dev-title { font-size: var(--text-2xl); font-weight: 700; margin-block-end: var(--space-6); }
+  .dev-title { font-size: var(--text-2xl); font-weight: 700; margin-block-end: var(--space-1); }
+  .dev-subtitle { font-size: var(--text-sm); color: var(--color-text-secondary); margin-block-end: var(--space-6); }
 
   .stitch-card { background: var(--color-surface-raised, white); border: 1px solid var(--color-border); border-radius: var(--radius-xl); padding: var(--space-5); margin-block-end: var(--space-4); }
   .stitch-section-title { font-size: var(--text-base); font-weight: 600; margin-block-end: var(--space-3); }
@@ -290,19 +447,39 @@
   .stitch-input:focus { outline: none; border-color: var(--color-primary); }
   .stitch-btn-primary { padding: 10px 24px; background: var(--color-primary); color: white; border: none; border-radius: 9999px; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
   .stitch-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .stitch-btn-secondary { padding: 10px 24px; background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: 9999px; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+  .stitch-btn-secondary:hover { border-color: var(--color-text-tertiary); }
 
-  /* Scopes */
-  .scope-chips { display: flex; flex-direction: column; gap: 6px; }
-  .scope-chip {
-    display: flex; flex-direction: column; gap: 2px; text-align: start;
-    padding: 10px 14px; border: 2px solid var(--color-border); border-radius: 10px;
-    background: transparent; cursor: pointer; transition: all 150ms ease;
-  }
-  .scope-chip.active { border-color: var(--color-primary); background: var(--color-primary-soft, rgba(0,128,128,0.05)); }
-  .scope-name { font-size: 0.875rem; font-weight: 600; color: var(--color-text); }
-  .scope-desc { font-size: 0.75rem; color: var(--color-text-secondary); }
+  /* Empty state */
+  .empty-state { text-align: center; padding: var(--space-8) var(--space-5); }
+  .empty-state .stitch-section-title { margin-block-end: var(--space-2); }
+  .empty-state .create-form { max-width: 400px; margin: 0 auto; text-align: start; }
+  .empty-icon { font-size: 48px; color: var(--color-text-tertiary); margin-block-end: var(--space-3); display: block; }
 
-  /* Created result */
+  /* Bot cards */
+  .bots-list { display: flex; flex-direction: column; gap: var(--space-3); }
+  .bot-card { padding: var(--space-4); }
+  .bot-header { display: flex; align-items: center; justify-content: space-between; margin-block-end: var(--space-3); }
+  .bot-identity { display: flex; align-items: center; gap: var(--space-3); }
+  .bot-avatar { font-size: 32px; color: var(--color-primary); background: var(--color-primary-soft, rgba(0,128,128,0.08)); border-radius: 10px; padding: 6px; }
+  .bot-name { font-size: 0.9375rem; font-weight: 600; color: var(--color-text); }
+  .bot-handle { font-size: 0.8125rem; color: var(--color-text-tertiary); }
+
+  .bot-actions { display: flex; align-items: center; gap: 4px; }
+  .action-btn { background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; padding: 6px; border-radius: 8px; display: flex; align-items: center; }
+  .action-btn:hover { background: var(--color-surface); color: var(--color-text-secondary); }
+  .action-btn.danger:hover { color: var(--color-danger, #ef4444); background: rgba(239,68,68,0.08); }
+
+  .confirm-bar { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; }
+  .confirm-text { color: var(--color-text-secondary); font-weight: 500; }
+  .confirm-yes { padding: 4px 12px; background: var(--color-primary); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+  .confirm-yes.danger { background: var(--color-danger, #ef4444); }
+  .confirm-yes:disabled { opacity: 0.5; }
+  .confirm-no { padding: 4px 12px; background: transparent; color: var(--color-text-secondary); border: 1px solid var(--color-border); border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; }
+
+  .bot-credentials { margin-top: var(--space-2); }
+
+  /* Credentials */
   .created-result { padding: 16px; background: var(--color-surface); border-radius: 12px; }
   .created-header { display: flex; align-items: center; gap: 8px; font-size: 0.9375rem; margin-block-end: 8px; }
   .created-warning { font-size: 0.8125rem; color: var(--color-warning, #f59e0b); font-weight: 500; margin-block-end: 16px; }
@@ -312,26 +489,22 @@
   .credential-value { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--color-surface-container-lowest); border: 1px solid var(--color-border); border-radius: 8px; }
   .credential-value code { flex: 1; font-size: 0.75rem; word-break: break-all; color: var(--color-text); }
   .credential-value.secret { border-color: var(--color-warning, #f59e0b); }
-  .copy-btn { background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; padding: 2px; border-radius: 4px; flex-shrink: 0; }
+  .copy-btn { background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; padding: 2px; border-radius: 4px; flex-shrink: 0; display: flex; }
   .copy-btn:hover { color: var(--color-primary); background: var(--color-surface); }
 
   .usage-example { font-size: 0.75rem; padding: 10px 12px; background: #1e1e2e; color: #cdd6f4; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
 
   .dismiss-btn { margin-top: 12px; padding: 8px 20px; background: var(--color-primary); color: white; border: none; border-radius: 9999px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
 
-  /* Apps list */
-  .apps-list { display: flex; flex-direction: column; gap: 8px; }
-  .app-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--color-surface); border-radius: 10px; }
-  .app-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .app-name { font-size: 0.875rem; font-weight: 600; }
-  .app-meta { font-size: 0.7rem; color: var(--color-text-tertiary); }
-  .app-client-id { font-size: 0.65rem; background: var(--color-surface-container-low, #f0f0f0); padding: 1px 5px; border-radius: 4px; }
-  .app-key-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
-  .app-key-label { font-size: 0.65rem; font-weight: 600; color: var(--color-text-tertiary); }
-  .copy-btn-sm { background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; padding: 1px; border-radius: 3px; display: flex; }
-  .copy-btn-sm:hover { color: var(--color-primary); }
-  .app-delete { background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: 50%; }
-  .app-delete:hover { color: var(--color-danger); background: rgba(239,68,68,0.1); }
+  .form-actions { display: flex; gap: 8px; }
+
+  .create-another-btn {
+    display: flex; align-items: center; gap: 6px; justify-content: center;
+    width: 100%; padding: 12px; background: transparent; border: 2px dashed var(--color-border);
+    border-radius: var(--radius-xl); font-size: 0.875rem; font-weight: 600;
+    color: var(--color-text-secondary); cursor: pointer; transition: all 150ms ease;
+  }
+  .create-another-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
   /* API Tester */
   .quick-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-block-end: 10px; }
@@ -355,8 +528,4 @@
   .status-ok { background: #dcfce7; color: #15803d; }
   .status-err { background: #fecaca; color: #dc2626; }
   .response-body { padding: 12px; margin: 0; font-size: 0.75rem; font-family: monospace; color: var(--color-text); white-space: pre-wrap; word-break: break-word; max-height: 300px; overflow-y: auto; }
-
-  .method-badge { font-size: 0.55rem; font-weight: 700; padding: 1px 4px; border-radius: 3px; text-transform: uppercase; }
-  .method-get { background: #dbeafe; color: #1d4ed8; }
-  .method-post { background: #dcfce7; color: #15803d; }
 </style>

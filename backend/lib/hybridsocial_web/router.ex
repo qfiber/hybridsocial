@@ -184,6 +184,16 @@ defmodule HybridsocialWeb.Router do
     get "/:id", MediaController, :show
   end
 
+  # Bot-gated developer tools (authenticated)
+  scope "/api/v1/bots", HybridsocialWeb.Api.V1 do
+    pipe_through [:api, :authenticated]
+
+    get "/", BotController, :index
+    post "/", BotController, :create
+    delete "/:id", BotController, :delete
+    post "/:id/regenerate", BotController, :regenerate
+  end
+
   # OAuth app management (authenticated)
   scope "/api/v1/apps", HybridsocialWeb.Api.V1 do
     pipe_through [:api, :authenticated]
