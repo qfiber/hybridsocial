@@ -119,6 +119,7 @@ services:
     environment:
       PHX_SERVER: "true"
       PORT: "4000"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Run 'sh docker/generate-secrets.sh .env' first}
       PHX_HOST: ${DOMAIN:?Set DOMAIN in .env}

@@ -12,7 +12,7 @@ config :hybridsocial, HybridsocialWeb.Endpoint,
     ]
   ]
 
-# Do not print debug messages in production
+# Log level — override with LOG_LEVEL=debug in .env for troubleshooting
 config :logger, level: :info
 
 # Email - configured at runtime in config/runtime.exs based on SMTP or Resend env vars

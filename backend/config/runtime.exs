@@ -50,6 +50,11 @@ if media_host = System.get_env("MEDIA_HOST") do
   config :hybridsocial, :media_host, media_host
 end
 
+# Log level — set LOG_LEVEL=debug in .env for verbose output
+if log_level = System.get_env("LOG_LEVEL") do
+  config :logger, level: String.to_existing_atom(log_level)
+end
+
 # Service URLs — override defaults for Docker/production
 if valkey_url = System.get_env("VALKEY_URL") do
   config :hybridsocial, :valkey_url, valkey_url
