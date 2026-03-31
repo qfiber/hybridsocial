@@ -1,8 +1,8 @@
 # HybridSocial Production Deployment
 # Usage:
 #   1. Copy .env.production.example to .env and fill in your values
-#   2. docker compose -f docker-compose-production.yml up -d
-#   3. docker compose -f docker-compose-production.yml exec backend bin/hybridsocial eval "Hybridsocial.Release.migrate()"
+#   2. sh docker/generate-secrets.sh .env   (auto-generates SECRET_KEY_BASE + instance keys)
+#   3. docker compose -f docker-compose-production.yml up -d
 #
 # First-time setup:
 #   docker compose -f docker-compose-production.yml exec backend bin/hybridsocial eval "Hybridsocial.Release.setup()"
@@ -78,16 +78,6 @@ services:
 
   # ---- Application ----
 
-  # Generate instance actor keys on first startup
-  init-keys:
-    image: alpine:3.19
-    container_name: hs_init_keys
-    volumes:
-      - ./docker/generate-secrets.sh:/generate-keys.sh:ro
-      - ./.env:/app/.env
-    command: sh /generate-keys.sh /app/.env
-    restart: "no"
-
   backend-migrate:
     build:
       context: ./backend
@@ -95,7 +85,7 @@ services:
     container_name: hs_migrate
     environment:
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE missing — run init-keys container first or set manually}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Run 'sh docker/generate-secrets.sh .env' first}
       VALKEY_URL: "redis://valkey:6379"
       NATS_URL: "nats://nats:4222"
       OPENSEARCH_URL: "http://opensearch:9200"
@@ -114,8 +104,6 @@ services:
     container_name: hs_backend
     restart: unless-stopped
     depends_on:
-      init-keys:
-        condition: service_completed_successfully
       backend-migrate:
         condition: service_completed_successfully
       postgresql:
@@ -130,7 +118,7 @@ services:
       PHX_SERVER: "true"
       PORT: "4000"
       DATABASE_URL: "ecto://${DB_USER:-hybridsocial}:${DB_PASSWORD:?}@postgresql/${DB_NAME:-hybridsocial_prod}"
-      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?SECRET_KEY_BASE missing — run init-keys container first or set manually}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Run 'sh docker/generate-secrets.sh .env' first}
       PHX_HOST: ${DOMAIN:?Set DOMAIN in .env}
       VALKEY_URL: "redis://valkey:6379"
       NATS_URL: "nats://nats:4222"
