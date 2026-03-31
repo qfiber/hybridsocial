@@ -11,10 +11,10 @@ config :hybridsocial,
   ecto_repos: [Hybridsocial.Repo],
   generators: [timestamp_type: :utc_datetime, binary_id: true],
   env: config_env(),
-  nats_url: System.get_env("NATS_URL", "nats://localhost:4222"),
-  nats_host: System.get_env("NATS_HOST", "localhost"),
-  nats_port: String.to_integer(System.get_env("NATS_PORT", "4222")),
-  nats_monitoring_port: String.to_integer(System.get_env("NATS_MONITORING_PORT", "8222"))
+  nats_url: "nats://localhost:4222",
+  nats_host: "localhost",
+  nats_port: 4222,
+  nats_monitoring_port: 8222
 
 # Register event-stream MIME type for SSE
 config :mime, :types, %{
@@ -50,11 +50,11 @@ config :ex_aws,
 config :hybridsocial, Hybridsocial.Mailer, adapter: Swoosh.Adapters.Local
 
 # Valkey (Redis-compatible) cache
-config :hybridsocial, :valkey_url, System.get_env("VALKEY_URL", "redis://localhost:6379")
+config :hybridsocial, :valkey_url, "redis://localhost:6379"
 
 # OpenSearch configuration
-config :hybridsocial, :opensearch_url, System.get_env("OPENSEARCH_URL", "http://localhost:9200")
-config :hybridsocial, :search_backend, System.get_env("SEARCH_BACKEND", "postgresql")
+config :hybridsocial, :opensearch_url, "http://localhost:9200"
+config :hybridsocial, :search_backend, "postgresql"
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

@@ -50,6 +50,27 @@ if media_host = System.get_env("MEDIA_HOST") do
   config :hybridsocial, :media_host, media_host
 end
 
+# Service URLs — override defaults for Docker/production
+if valkey_url = System.get_env("VALKEY_URL") do
+  config :hybridsocial, :valkey_url, valkey_url
+end
+
+if opensearch_url = System.get_env("OPENSEARCH_URL") do
+  config :hybridsocial, :opensearch_url, opensearch_url
+end
+
+if search_backend = System.get_env("SEARCH_BACKEND") do
+  config :hybridsocial, :search_backend, search_backend
+end
+
+if nats_url = System.get_env("NATS_URL") do
+  config :hybridsocial,
+    nats_url: nats_url,
+    nats_host: System.get_env("NATS_HOST", URI.parse(nats_url).host || "localhost"),
+    nats_port: String.to_integer(System.get_env("NATS_PORT", to_string(URI.parse(nats_url).port || 4222))),
+    nats_monitoring_port: String.to_integer(System.get_env("NATS_MONITORING_PORT", "8222"))
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||
