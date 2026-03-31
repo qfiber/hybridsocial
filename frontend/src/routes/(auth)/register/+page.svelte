@@ -60,9 +60,23 @@
     passwordConfirm.length > 0 && password !== passwordConfirm
   );
 
+  let passwordTooShort = $derived(
+    password.length > 0 && password.length < 16
+  );
+
+  let emailInvalid = $derived(
+    email.length > 0 && !email.includes('@')
+  );
+
+  let handleInvalid = $derived(
+    handle.length > 0 && !/^[a-zA-Z0-9_]+$/.test(handle)
+  );
+
   let formValid = $derived(
     handle.length > 0 &&
+    !handleInvalid &&
     email.length > 0 &&
+    !emailInvalid &&
     password.length >= 16 &&
     password === passwordConfirm &&
     agreedToTerms &&
@@ -129,6 +143,18 @@
     error = '';
     fieldErrors = {};
 
+    if (handleInvalid) {
+      fieldErrors.handle = 'Only letters, numbers, and underscores';
+      return;
+    }
+    if (emailInvalid) {
+      fieldErrors.email = 'Please enter a valid email address';
+      return;
+    }
+    if (password.length < 16) {
+      fieldErrors.password = 'Password must be at least 16 characters';
+      return;
+    }
     if (password !== passwordConfirm) {
       fieldErrors.password_confirm = 'Passwords do not match';
       return;
@@ -223,26 +249,32 @@
           <label for="handle" class="auth-label">HANDLE</label>
           <div class="auth-handle-wrap">
             <span class="auth-handle-prefix" aria-hidden="true">@</span>
-            <input id="handle" type="text" class="auth-input auth-handle-input" class:auth-input-error={!!fieldErrors.handle} placeholder="yourname" bind:value={handle} required disabled={loading} autocomplete="username" pattern="[a-zA-Z0-9_]+" />
+            <input id="handle" type="text" class="auth-input auth-handle-input" class:auth-input-error={!!fieldErrors.handle || handleInvalid} placeholder="yourname" bind:value={handle} required disabled={loading} autocomplete="username" pattern="[a-zA-Z0-9_]+" />
           </div>
           {#if fieldErrors.handle}
             <p class="auth-field-error" role="alert">{fieldErrors.handle}</p>
+          {:else if handleInvalid}
+            <p class="auth-field-error" role="alert">Only letters, numbers, and underscores</p>
           {/if}
         </div>
 
         <div class="auth-field">
           <label for="reg-email" class="auth-label">EMAIL</label>
-          <input id="reg-email" type="email" class="auth-input" class:auth-input-error={!!fieldErrors.email} placeholder="you@example.com" bind:value={email} required disabled={loading} autocomplete="email" />
+          <input id="reg-email" type="email" class="auth-input" class:auth-input-error={!!fieldErrors.email || emailInvalid} placeholder="you@example.com" bind:value={email} required disabled={loading} autocomplete="email" />
           {#if fieldErrors.email}
             <p class="auth-field-error" role="alert">{fieldErrors.email}</p>
+          {:else if emailInvalid}
+            <p class="auth-field-error" role="alert">Please enter a valid email address</p>
           {/if}
         </div>
 
         <div class="auth-field">
           <label for="reg-password" class="auth-label">PASSWORD</label>
-          <input id="reg-password" type="password" class="auth-input" class:auth-input-error={!!fieldErrors.password} placeholder="At least 16 characters" bind:value={password} required minlength={16} disabled={loading} autocomplete="new-password" />
+          <input id="reg-password" type="password" class="auth-input" class:auth-input-error={!!fieldErrors.password || passwordTooShort} placeholder="At least 16 characters" bind:value={password} required minlength={16} disabled={loading} autocomplete="new-password" />
           {#if fieldErrors.password}
             <p class="auth-field-error" role="alert">{fieldErrors.password}</p>
+          {:else if passwordTooShort}
+            <p class="auth-field-error" role="alert">{password.length}/16 characters minimum</p>
           {/if}
         </div>
 
