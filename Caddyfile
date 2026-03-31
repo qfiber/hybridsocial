@@ -44,6 +44,14 @@
 		reverse_proxy backend:4000
 	}
 
+	handle /actors/* {
+		reverse_proxy backend:4000
+	}
+
+	handle /activities/* {
+		reverse_proxy backend:4000
+	}
+
 	handle /oauth/* {
 		reverse_proxy backend:4000
 	}
