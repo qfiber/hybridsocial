@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { uploadMedia } from '$lib/api/media.js';
   import type { MediaAttachment } from '$lib/api/types.js';
   import { addToast } from '$lib/stores/toast.js';
@@ -132,6 +133,103 @@
   function removeAttachment(id: string) {
     uploaded = uploaded.filter((m) => m.id !== id);
   }
+
+  // --- Voice messages ---------------------------------------------------
+  // Record audio in the browser and hand the blob to the same upload path as
+  // any other attachment — the DM media pipeline already accepts audio, so no
+  // backend change is needed.
+  const canRecord =
+    typeof navigator !== 'undefined' &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== 'undefined';
+
+  const RECORD_MIME =
+    typeof MediaRecorder === 'undefined'
+      ? ''
+      : ['audio/webm', 'audio/ogg', 'audio/mp4'].find((t) => MediaRecorder.isTypeSupported(t)) || '';
+
+  let recording = $state(false);
+  let recordSeconds = $state(0);
+  let mediaRecorder: MediaRecorder | null = null;
+  let recordChunks: Blob[] = [];
+  let recordStream: MediaStream | null = null;
+  let recordTimer: ReturnType<typeof setInterval> | null = null;
+  let discardOnStop = false;
+
+  let recordLabel = $derived(
+    `${Math.floor(recordSeconds / 60)}:${String(recordSeconds % 60).padStart(2, '0')}`,
+  );
+
+  async function startRecording() {
+    if (disabled || recording) return;
+    if (uploaded.length + uploadingCount >= maxAttachments) {
+      addToast(`Maximum ${maxAttachments} attachments per message`, 'error');
+      return;
+    }
+    try {
+      recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      addToast('Microphone access is needed for voice messages', 'error');
+      return;
+    }
+    recordChunks = [];
+    discardOnStop = false;
+    mediaRecorder = new MediaRecorder(recordStream, RECORD_MIME ? { mimeType: RECORD_MIME } : undefined);
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) recordChunks.push(e.data);
+    };
+    mediaRecorder.onstop = finalizeRecording;
+    mediaRecorder.start();
+    recording = true;
+    recordSeconds = 0;
+    recordTimer = setInterval(() => {
+      recordSeconds += 1;
+      if (recordSeconds >= 300) stopRecording(); // 5-minute cap
+    }, 1000);
+  }
+
+  function stopRecording() {
+    if (!recording) return;
+    discardOnStop = false;
+    mediaRecorder?.stop();
+  }
+
+  function cancelRecording() {
+    if (!recording) return;
+    discardOnStop = true;
+    mediaRecorder?.stop();
+  }
+
+  function teardownRecorder() {
+    if (recordTimer) {
+      clearInterval(recordTimer);
+      recordTimer = null;
+    }
+    recordStream?.getTracks().forEach((t) => t.stop());
+    recordStream = null;
+    recording = false;
+  }
+
+  async function finalizeRecording() {
+    const chunks = recordChunks;
+    const cancelled = discardOnStop;
+    const rawType = mediaRecorder?.mimeType || RECORD_MIME || 'audio/webm';
+    const type = rawType.split(';')[0]; // drop any ;codecs=… so the type is a plain MIME
+    teardownRecorder();
+    recordChunks = [];
+    if (cancelled || chunks.length === 0) return;
+    const ext = type.includes('ogg') ? 'ogg' : type.includes('mp4') ? 'm4a' : 'webm';
+    const file = new File([new Blob(chunks, { type })], `voice-message.${ext}`, { type });
+    await uploadFiles([file]);
+  }
+
+  onDestroy(() => {
+    if (recording) {
+      discardOnStop = true;
+      mediaRecorder?.stop();
+    }
+    teardownRecorder();
+  });
 
   function handleSubmit() {
     const trimmed = content.trim();
@@ -274,6 +372,25 @@
     </div>
   {/if}
 
+  {#if recording}
+    <div class="recording-bar" role="status">
+      <span class="recording-dot" aria-hidden="true"></span>
+      <span class="recording-time">Recording… {recordLabel}</span>
+      <div class="recording-actions">
+        <button type="button" class="recording-cancel" onclick={cancelRecording} aria-label="Cancel recording">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+        <button type="button" class="recording-send" onclick={stopRecording} aria-label="Stop and attach recording">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  {/if}
+
   <div class="message-input-row">
     <input
       bind:this={fileInputEl}
@@ -297,6 +414,22 @@
         <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
       </svg>
     </button>
+
+    {#if canRecord}
+      <button
+        type="button"
+        class="mic-btn"
+        onclick={startRecording}
+        aria-label="Record voice message"
+        disabled={disabled || recording || uploaded.length + uploadingCount >= maxAttachments}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3" />
+          <path d="M5 10v1a7 7 0 0 0 14 0v-1" />
+          <line x1="12" y1="19" x2="12" y2="22" />
+        </svg>
+      </button>
+    {/if}
 
     <textarea
       bind:this={textareaEl}
@@ -407,7 +540,8 @@
     flex-shrink: 0;
   }
 
-  .emoji-btn {
+  .emoji-btn,
+  .mic-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -423,14 +557,82 @@
   }
 
   .emoji-btn:hover:not(:disabled),
-  .emoji-btn.active {
+  .emoji-btn.active,
+  .mic-btn:hover:not(:disabled) {
     background: var(--color-surface);
     color: var(--color-text);
   }
 
-  .emoji-btn:disabled {
+  .emoji-btn:disabled,
+  .mic-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .recording-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    margin-block-end: var(--space-2);
+    background: var(--color-danger-soft);
+    color: var(--color-on-danger-soft);
+    border-radius: var(--radius-lg);
+  }
+
+  .recording-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-danger);
+    flex-shrink: 0;
+    animation: recording-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes recording-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .recording-time {
+    flex: 1;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .recording-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .recording-cancel,
+  .recording-send {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    color: currentColor;
+    background: transparent;
+    transition: background var(--transition-fast);
+  }
+
+  .recording-cancel:hover {
+    background: rgba(0, 0, 0, 0.1);
+  }
+
+  .recording-send {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+  }
+
+  .recording-send:hover {
+    background: var(--color-primary-hover, var(--color-primary));
   }
 
   .message-textarea {
