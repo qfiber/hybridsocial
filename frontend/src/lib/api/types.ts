@@ -15,6 +15,9 @@ export interface TierLimits {
   scheduled_posts: boolean;
   custom_emoji: boolean;
   follows_limit: number;
+  audio_allowed: boolean;
+  audio_size_mb: number;
+  audio_duration: number;
 }
 
 /**

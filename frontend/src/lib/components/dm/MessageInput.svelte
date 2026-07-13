@@ -3,6 +3,7 @@
   import { uploadMedia } from '$lib/api/media.js';
   import type { MediaAttachment } from '$lib/api/types.js';
   import { addToast } from '$lib/stores/toast.js';
+  import { currentUser } from '$lib/stores/auth.js';
   import EmojiPicker from '$lib/components/post/EmojiPicker.svelte';
 
   let {
@@ -143,6 +144,14 @@
     !!navigator.mediaDevices?.getUserMedia &&
     typeof MediaRecorder !== 'undefined';
 
+  // Audio uploads are tier-gated on the backend (media_controller's
+  // check_audio_allowed). Only show the mic when the user's tier actually
+  // permits audio, otherwise recording just 403s on upload. The recording
+  // length is capped to the tier's audio_duration for the same reason.
+  let audioAllowed = $derived($currentUser?.limits?.audio_allowed ?? false);
+  let maxRecordSeconds = $derived($currentUser?.limits?.audio_duration ?? 120);
+  let showMic = $derived(canRecord && audioAllowed);
+
   const RECORD_MIME =
     typeof MediaRecorder === 'undefined'
       ? ''
@@ -184,7 +193,8 @@
     recordSeconds = 0;
     recordTimer = setInterval(() => {
       recordSeconds += 1;
-      if (recordSeconds >= 300) stopRecording(); // 5-minute cap
+      // Stop at the tier's max audio duration so the upload isn't rejected.
+      if (recordSeconds >= maxRecordSeconds) stopRecording();
     }, 1000);
   }
 
@@ -415,7 +425,7 @@
       </svg>
     </button>
 
-    {#if canRecord}
+    {#if showMic}
       <button
         type="button"
         class="mic-btn"
