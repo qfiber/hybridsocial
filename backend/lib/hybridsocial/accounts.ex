@@ -578,7 +578,24 @@ defmodule Hybridsocial.Accounts do
       user ->
         user
         |> User.confirm_changeset()
+        |> maybe_auto_approve()
         |> Repo.update()
+    end
+  end
+
+  # When the instance does not require manual approval (any registration_mode
+  # other than "approval"), a verified email is all that's needed — stamp
+  # `approved_at` at confirmation time so the account isn't left sitting in the
+  # admin approval queue. In "approval" mode we leave it for an admin to act.
+  defp maybe_auto_approve(changeset) do
+    if Hybridsocial.Config.get("registration_mode", "open") == "approval" do
+      changeset
+    else
+      Ecto.Changeset.put_change(
+        changeset,
+        :approved_at,
+        DateTime.utc_now() |> DateTime.truncate(:microsecond)
+      )
     end
   end
 
