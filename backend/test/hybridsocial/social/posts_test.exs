@@ -162,13 +162,24 @@ defmodule Hybridsocial.Social.PostsTest do
 
     test "re-renders content_html with the tier markdown level, like create" do
       identity = create_user("mdedit", "mdedit@test.com")
-      md = "**bold** text"
+
+      # A heading is a `full`-tier-only feature: `:basic` (the level the bug
+      # fell back to) strips it, while `:full`/`:full_embeds` keeps it as <h1>.
+      # `**bold**` renders identically at both levels, so it could not tell the
+      # buggy basic-fallback apart from a correct tier render — a heading can.
+      md = "# Heading\n\nbody text"
       {:ok, created} = Posts.create_post(identity.id, %{"content" => md})
 
       {:ok, edited} = Posts.edit_post(created.id, identity.id, %{"content" => md})
 
+      # Create renders at the author's tier level (full), so the heading
+      # survives as an <h1>.
+      assert created.content_html =~ "<h1"
+
       # Editing must render content_html the same way create does. Before the
-      # fix, edit fell back to a plaintext sanitize and stripped the markdown.
+      # fix, edit fell back to a basic sanitize and stripped the heading, so
+      # this <h1> assertion and the equality below both failed.
+      assert edited.content_html =~ "<h1"
       assert edited.content_html == created.content_html
     end
   end
