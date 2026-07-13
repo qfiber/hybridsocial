@@ -32,11 +32,6 @@ export interface GroupSettings {
   avatar_url?: string | null;
   header_url?: string | null;
   rules?: string[];
-  screening?: {
-    questions?: string[];
-    min_account_age_days?: number;
-    require_profile_image?: boolean;
-  };
 }
 
 export interface GroupInvite {
@@ -58,6 +53,29 @@ export function getGroups(filter: 'member' | 'discover' = 'member', cursor?: str
 
 export function getGroup(id: string): Promise<GroupDetail> {
   return api.get(`/api/v1/groups/${id}`);
+}
+
+// Each question is stored as an object on the backend (jsonb array of maps).
+// The settings UI works with plain strings and converts at the call site.
+export interface ScreeningQuestion {
+  text: string;
+}
+
+export interface GroupScreening {
+  questions: ScreeningQuestion[];
+  min_account_age_days: number;
+  require_profile_image: boolean;
+}
+
+export function getGroupScreening(id: string): Promise<GroupScreening> {
+  return api.get(`/api/v1/groups/${id}/screening`);
+}
+
+// Screening config has its own endpoint (PATCH /groups/:id/screening). The
+// generic updateGroup (PATCH /groups/:id) does NOT persist screening — the
+// backend's group changeset drops the key — so it must be saved separately.
+export function updateGroupScreening(id: string, data: GroupScreening): Promise<GroupScreening> {
+  return api.patch(`/api/v1/groups/${id}/screening`, data);
 }
 
 export type FederationMode = 'local_only' | 'public_federated';

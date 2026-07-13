@@ -339,6 +339,20 @@ defmodule Hybridsocial.GroupsTest do
       assert config.min_account_age_days == 14
     end
 
+    test "persists and reloads free-text questions", %{alice: alice} do
+      {:ok, group} = Groups.create_group(alice.id, %{"name" => "Group"})
+
+      questions = [%{"text" => "How did you hear about us?"}, %{"text" => "Why join?"}]
+
+      assert {:ok, _} =
+               Groups.update_screening_config(group.id, alice.id, %{"questions" => questions})
+
+      # Reload from the DB (not the changeset result) so we exercise the jsonb
+      # array-of-maps load path the settings page reads back on prefill.
+      reloaded = Groups.get_screening_config(group.id)
+      assert reloaded.questions == questions
+    end
+
     test "non-admin cannot update", %{alice: alice, bob: bob} do
       {:ok, group} = Groups.create_group(alice.id, %{"name" => "Group"})
       {:ok, _} = Groups.join_group(group.id, bob.id)

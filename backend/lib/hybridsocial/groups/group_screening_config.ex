@@ -8,6 +8,9 @@ defmodule Hybridsocial.Groups.GroupScreeningConfig do
   schema "group_screening_config" do
     field :require_profile_image, :boolean, default: false
     field :min_account_age_days, :integer, default: 0
+    # Free-text screening questions, each a `%{"text" => "..."}` map, stored in
+    # the jsonb column as a JSON array of objects. The admin UI presents these
+    # as a plain list of prompts and converts to/from this shape at the API.
     field :questions, {:array, :map}, default: []
     field :auto_approve_rules, :map, default: %{}
 

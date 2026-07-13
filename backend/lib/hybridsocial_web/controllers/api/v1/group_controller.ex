@@ -376,6 +376,20 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
 
   # GET /api/v1/groups/:id/screening
   def screening(conn, %{"id" => id}) do
+    identity = conn.assigns.current_identity
+
+    cond do
+      not Groups.can_manage?(id, identity.id) ->
+        conn
+        |> put_status(:forbidden)
+        |> json(%{error: "group.forbidden"})
+
+      true ->
+        render_screening_config(conn, id)
+    end
+  end
+
+  defp render_screening_config(conn, id) do
     case Groups.get_screening_config(id) do
       nil ->
         conn

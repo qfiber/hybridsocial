@@ -346,5 +346,15 @@ defmodule HybridsocialWeb.Api.V1.GroupControllerTest do
       assert response["require_profile_image"] == true
       assert response["min_account_age_days"] == 30
     end
+
+    test "get screening is forbidden for a non-manager", %{conn: conn} do
+      owner = create_user("screenowner", "screenowner@test.com")
+      {:ok, group} = Groups.create_group(owner.id, %{"name" => "Group"})
+
+      # `conn` is authenticated as a different user with no role in the group;
+      # screening config is manager-only, so this must 403 rather than leak it.
+      conn = get(conn, "/api/v1/groups/#{group.id}/screening")
+      assert json_response(conn, 403)["error"] == "group.forbidden"
+    end
   end
 end

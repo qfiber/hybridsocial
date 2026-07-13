@@ -7,6 +7,8 @@
   import type { GroupDetail, GroupApplication, GroupMember } from '$lib/api/groups.js';
   import {
     getGroup,
+    getGroupScreening,
+    updateGroupScreening,
     updateGroup,
     getGroupApplications,
     approveApplication,
@@ -99,6 +101,21 @@
         goto(`/groups/${groupId}`);
         return;
       }
+
+      // Prefill the Screening tab from the group's saved config so managers
+      // edit the real questions/rules instead of a blank form (which, on save,
+      // used to overwrite them with defaults).
+      if (MANAGE_ROLES.includes(g.role ?? '')) {
+        try {
+          const s = await getGroupScreening(groupId);
+          screeningQuestions = (s.questions ?? []).map((q) => q.text);
+          minAccountAgeDays = s.min_account_age_days ?? 0;
+          requireProfileImage = s.require_profile_image ?? false;
+        } catch {
+          // Non-fatal — leave the screening form at its defaults.
+        }
+      }
+
       if (!canManage && activeTab === 'general') {
         activeTab = 'applications';
       }
@@ -164,15 +181,20 @@
   async function saveScreening() {
     saving = true;
     try {
-      await updateGroup(groupId, {
-        screening: {
-          questions: screeningQuestions.filter((q) => q.trim()),
-          min_account_age_days: minAccountAgeDays,
-          require_profile_image: requireProfileImage
-        }
+      // Screening has its own endpoint; the generic group update silently
+      // drops it, which is why saving here used to be a no-op.
+      const saved = await updateGroupScreening(groupId, {
+        questions: screeningQuestions.filter((q) => q.trim()).map((text) => ({ text })),
+        min_account_age_days: minAccountAgeDays,
+        require_profile_image: requireProfileImage
       });
+      // Reflect the persisted, filtered result back into the form.
+      screeningQuestions = (saved.questions ?? []).map((q) => q.text);
+      minAccountAgeDays = saved.min_account_age_days ?? 0;
+      requireProfileImage = saved.require_profile_image ?? false;
+      addToast('Screening settings saved', 'success');
     } catch {
-      // Error saving
+      addToast('Could not save screening settings', 'error');
     } finally {
       saving = false;
     }
