@@ -9,7 +9,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
   2. **Velocity bonus** — engagement concentrated in a short burst scores higher
   3. **Underdog bonus** — posts with high engagement relative to their author's
      follower count get a boost (viral from small accounts)
-  4. **Time decay** — exponential decay, halving roughly every 6 hours
+  4. **Time decay** — exponential decay, halving roughly every 24 hours
   5. **Author diversity** — at most 2 posts per author in the final feed
 
   The trending window (default 24h) is configurable via the
@@ -39,7 +39,9 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
   def score_post(post, context) do
     now = Map.get(context, :now, DateTime.utc_now())
     follower_counts = Map.get(context, :follower_counts, %{})
-    age_hours = max(DateTime.diff(now, post.inserted_at, :second) / 3600.0, 0.01)
+    # Floor at 30 min so a brand-new post can't manufacture an enormous
+    # velocity (engagement / age) and leapfrog genuinely engaged posts.
+    age_hours = max(DateTime.diff(now, post.inserted_at, :second) / 3600.0, 0.5)
 
     reactions = post.reaction_count || 0
     boosts = post.boost_count || 0
@@ -48,8 +50,9 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
     # 1. Raw engagement (weighted)
     raw_engagement = reactions + boosts * 2 + replies * 1.5
 
-    # 2. Velocity bonus: engagement per hour (capped at 10x)
-    velocity = min(raw_engagement / age_hours, raw_engagement * 10)
+    # 2. Velocity bonus: engagement per hour, capped so a short burst on a
+    #    fresh post is a mild boost, not a takeover of the ranking.
+    velocity = min(raw_engagement / age_hours, 5.0)
     velocity_factor = 1.0 + :math.log(max(velocity, 1)) / 5.0
 
     # 3. Underdog bonus: high engagement relative to follower count
@@ -65,8 +68,11 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
         1.2
       end
 
-    # 4. Time decay: halve every ~6 hours
-    decay = :math.exp(-age_hours / 8.66)
+    # 4. Time decay: gentle — halve about every 24 hours. A short (~6h)
+    #    half-life made "trending" behave like "newest": a fresh, barely-engaged
+    #    post outranked an older well-engaged one. A longer half-life keeps real
+    #    engagement the dominant signal while still favoring recency as a tiebreak.
+    decay = :math.exp(-age_hours / 34.6)
 
     # Final score
     raw_engagement * velocity_factor * underdog_factor * decay
