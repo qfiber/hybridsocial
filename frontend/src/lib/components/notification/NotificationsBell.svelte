@@ -318,5 +318,18 @@
     .notif-dismiss {
       opacity: 1;
     }
+
+    /* On a phone the bell sits near the right edge, so an inline-end-anchored
+       popover runs off the left of the screen (its start edge is clipped).
+       Detach it from the bell and center it under the header as a near-
+       full-width sheet so it shows completely and consistently. */
+    .notif-popover {
+      position: fixed;
+      inset-block-start: calc(var(--header-height, 60px) + var(--space-2));
+      inset-inline: 0;
+      margin-inline: auto;
+      width: min(420px, calc(100vw - 2 * var(--space-2)));
+      max-height: min(75vh, 620px);
+    }
   }
 </style>
