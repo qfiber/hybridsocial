@@ -79,6 +79,33 @@ Two OTP trees under `backend/lib/`:
 Event flow uses **NATS JetStream** for durable events (post.created, reaction.created, …) that
 workers consume; Phoenix PubSub is kept for ephemeral real-time (SSE feeds, WebSocket DMs).
 
+**Periodic jobs — there is no Oban/cron.** Recurring work is a set of bare **self-ticking
+GenServers** listed in `application.ex` (started outside `:test`), each re-arming with
+`Process.send_after(self(), :tick, @interval)` in `handle_info(:tick, …)` and reading its
+interval/retention from `Config`. Examples: `AppealExpiryWorker`, `TakedownPurgeWorker`,
+`StoryExpiryWorker`, `Media.PurgeWorker`. To add periodic work, **clone the nearest existing
+worker** and register it — don't reach for a scheduler library.
+
+**Runtime config** goes through `Hybridsocial.Config` (`config.ex`): `Config.get(key, default)`
+reads a DB-backed setting (ETS-cached), `Config.set(key, value)` writes DB + cache. The admin
+panel edits these via the generic `GET/PUT /api/v1/admin/settings` (key/value rows). Values are
+stored **untyped** — read them back as the type you need (`Config.get("x") == true`,
+`String.to_integer/1`, etc.) and, from the client, send the right JSON type, not a stringified
+one. This is the mechanism behind "all tunables are DB-backed".
+
+**Feeds & ranking** (`feeds.ex` + `feeds/`) is the other deep subsystem. Timeline *ordering*
+is pluggable: `home_timeline` dispatches through `AlgorithmResolver.impl(opts)` to
+`Feeds.Algorithms.{Chronological, Algorithmic, Trending}`, chosen by the `algorithm`/`sort`
+query param (Home's Latest/For You/Top; Explore's tabs). `Trending` scores public posts by
+engagement × velocity × time-decay over a config window and caps posts-per-author for
+diversity. **Cursor pagination is keyset, not id-based** — post ids are random UUIDv4, so a
+`p.id < max_id` compare returns an arbitrary slice; the public/global timelines resolve a
+cursor id to its `(activity_ts, id)` tuple (`lookup_activity_cursor`) and row-tuple compare,
+`max_id` for older / `min_id` for newer (so ascending "oldest" paginates via `min_id`). Never
+add id-ordered pagination to a time- or engagement-ordered feed. The global first page is a
+viewer-independent **prewarmed snapshot** (`Feeds.PrewarmWorker` + `Snapshot`), with the
+viewer's own interaction state layered on by `apply_viewer_state`.
+
 ## Permissions, roles & tiers
 
 - **Authorization is server-side, in the context.** A mutation checks the actor against a role
@@ -105,13 +132,34 @@ workers consume; Phoenix PubSub is kept for ephemeral real-time (SSE feeds, WebS
   (moderator), while `can_manage?` (owner/admin only) gates role grants and settings. Gate any
   "act as / edit the page" path on the matching predicate; instance staff don't implicitly get it.
 
+**Staff moderation & takedowns.** A staff (`:staff`) deletion of a group/page/post is an
+accountable **takedown**, not a raw delete: `moderation/takedown.ex` (`moderation_takedowns`
+table) records target/owner/moderator/reason, notifies the owner, and starts a 60-day appeal
+window. The loop is notice (`create_takedown`) → owner appeal (`create_takedown_appeal`,
+`GET/POST /api/v1/takedowns`) → restore-on-approve (`reverse_moderation_action` →
+`restore_takedown_target`) → **opt-in** hard purge (`TakedownPurgeWorker`, gated on
+`takedown_purge_enabled`, default off). Soft-delete/restore live on each entity context
+(`restore_group`/`restore_page`/`admin_restore_post`). A takedown only opens when the actor is
+`:staff` **and** a reason is given — an owner deleting their own content passes neither.
+
+**The `:staff` override is scoped to *moderation*, not *governance*.** `require_role/3` grants
+`:staff` for delete/takedown and member ban/remove (staff police abusive content) — but NOT for
+in-entity governance: role grants go through `require_group_manage_role/2` (genuine group
+admin/owner, no staff fallback) and entity deletion is owner-only (`@destroy_roles [:owner]`,
+`authorize_page_deletion` owner-or-`:staff`; only the owner among the entity's own roles).
+Editing a group/page's *settings* is likewise governance. On the client, staff act through the
+`AdminProfileActions` panel on the entity header (suspend/silence/take-down), never the entity's
+own Manage modal (`canManage`/`canDelete` exclude `$isStaffMember`).
+
 ## Frontend architecture
 
 SvelteKit 2 + **Svelte 5 (runes mode is enforced)**; `adapter-node` for production
 (`svelte.config.node.js`). Under `frontend/src/`:
 - `routes/` — grouped layouts `(app)`, `(auth)`, `legal`, `admin`.
-- `lib/api/` — `client.ts` is the core fetch wrapper; ~28 typed resource modules call it;
-  `types.ts` is the shared contract (Mastodon-compatible REST).
+- `lib/api/` — `client.ts` is the core fetch wrapper (the `api` singleton: `api.get/post/put/delete`,
+  auto token-refresh on 401); ~28 typed resource modules call it; `types.ts` is the shared contract
+  (Mastodon-compatible REST). Failures throw `ApiError` with `.status` and a machine `.body.error`
+  code — map those codes to user copy rather than showing the raw message.
 - `lib/stores/` — ~22 stores. Note `theme.ts` (see below) and `i18n.ts`.
 - `lib/components/` — organized by domain (`ui/`, `layout/`, `feed/`, `post/`, `dm/`, `admin/`).
 
@@ -123,9 +171,33 @@ Cross-cutting systems worth knowing before editing UI:
 - **i18n / RTL**: `i18n.ts` exposes a `locale` store; `+layout.svelte` sets `<html dir/lang>`
   from it. CSS uses **logical properties** (`margin-inline`, `inset-inline`, `text-align:start`)
   so layouts mirror automatically — prefer these over physical `left/right` in new code.
+  Strings live in flat dotted-key files under `src/locales/` — `en.json` is the source of
+  truth; other locales are partial and **fall back to English** (so a missing key isn't a bug,
+  and `check-i18n.mjs` reports coverage, not errors, for gaps). In components read the reactive
+  `$t` store (`import { t } from '$lib/stores/i18n.js'`; `$t('post.edit')`) so text re-resolves
+  on locale switch; in imperative code (toasts, thrown copy) call `t()`/`tError()` from
+  `$lib/utils/i18n.js`. Any new user-facing string needs an `en.json` key — don't hardcode it.
+  Gotcha: never name a local/`{#each}` variable `t` — it shadows the `$t` store and
+  `svelte-check` fails with `store_invalid_scoped_subscription`. For interpolation the store
+  takes params (`$t('key', { name })` fills `{name}`); there is no built-in pluralization, so
+  pick a `_one`/`_other` key in the component.
+- **One shared feed engine**: `createEntityFeed` (`lib/feed/entity-feed.svelte.ts`) is the single
+  load → dedupe → cursor engine behind *every* feed (home, explore, profile, group, page, tags,
+  bookmarks, lists) — it derives the next cursor from the last item's id. `TimelineFeed.svelte`
+  wraps it with tab switching, the live stream, optimistic composer updates and scroll
+  restoration; a page just supplies per-tab `load(cursor)` functions. Reach for these before
+  hand-rolling pagination.
 - **Optimistic posting**: `PostComposer.svelte` dispatches a `new-post` CustomEvent to show the
   post immediately, then `post-replace` once the server returns the real one. Toasts come from
-  `stores/toast.ts` (`addToast`).
+  `stores/toast.ts` (`addToast`). Feeds also listen for `post-deleted {id}` on `window` to drop
+  a row — the shared convention for optimistic removal (delete, block, dismiss).
+- **Streams** is the single vertical short-video feed (Reels was consolidated into it —
+  one `/streams` route, `StreamPlayer.svelte`; no separate Reels route/component). Served by
+  `GET /api/v1/timelines/streams` (`social/streams.ex` `streams_feed/2`): public video only,
+  ordered by the `sort` param (trending/newest/oldest), gated on `orientation`, a per-viewer
+  `include_federated` opt-in (otherwise local + locally-boosted only), the viewer's
+  block/mute/domain filters, and a `min_duration` from the admin-tunable
+  `streams_min_duration_seconds`. View events tag `source: 'streams_feed'`.
 - **PWA**: `static/sw.js` (service worker, push) + `static/manifest.json`.
 
 ## Testing
