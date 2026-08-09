@@ -591,6 +591,7 @@ defmodule HybridsocialWeb.Router do
     get "/tags", TrendController, :tags
     get "/statuses", TrendController, :statuses
     get "/links", TrendController, :links
+    get "/accounts", AccountController, :trending_accounts
   end
 
   # Funding (public)

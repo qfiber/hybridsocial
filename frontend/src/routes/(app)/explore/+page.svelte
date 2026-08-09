@@ -11,13 +11,10 @@
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
   import TimelineFeed, {
     type TimelineTab,
-    type TimelineCache,
   } from '$lib/components/feed/TimelineFeed.svelte';
-  import { readExploreFeed, writeExploreFeed } from '$lib/stores/explore-feed-cache.js';
-
-  // Session cache → remember the active tab (Local/Global/Trending) and
-  // restore scroll on back-nav from a post detail (issue #53).
-  const exploreCache: TimelineCache = { read: readExploreFeed, write: writeExploreFeed };
+  import FeedTabs from '$lib/components/feed/FeedTabs.svelte';
+  import ExploreTrending from '$lib/components/explore/ExploreTrending.svelte';
+  import { onMount } from 'svelte';
 
   // ── Public feeds (Local / Global / Trending) ─────────────────────────
   async function loadPublic(base: string, cursor: string | null, sort?: string): Promise<Post[]> {
@@ -80,20 +77,38 @@
       stream: { kind: 'public' },
       emptyMessage: 'No posts from the fediverse yet',
     },
-    {
-      id: 'trending',
-      label: 'Trending',
-      icon: 'trending_up',
-      // Explicitly global: the public endpoint defaults local_only=true, and the
-      // Trending algorithm now honors it — so without local=false this tab would
-      // show only *local* trending and drop federated content.
-      load: (c) => loadPublic('/api/v1/timelines/public?algorithm=trending&local=false', c),
-      // Algorithmic — a brand-new post shouldn't jump onto Trending.
-      stream: null,
-      accepts: () => false,
-      emptyMessage: 'Nothing trending right now',
-    },
   ];
+
+  // Top-level Explore tabs. Local/Global are post feeds (TimelineFeed);
+  // Trending is a distinct view (tags / accounts / posts) — see ExploreTrending.
+  const TOP_TABS = [
+    { id: 'local', label: 'Local', icon: 'home' },
+    { id: 'global', label: 'Global', icon: 'public' },
+    { id: 'trending', label: 'Trending', icon: 'trending_up' },
+  ];
+  const TOP_TAB_KEY = 'hs-explore-tab';
+  let topTab = $state<'local' | 'global' | 'trending'>('local');
+
+  function changeTopTab(id: string) {
+    if (id === topTab) return;
+    topTab = id as 'local' | 'global' | 'trending';
+    try {
+      localStorage.setItem(TOP_TAB_KEY, id);
+    } catch {
+      /* storage unavailable — the choice just won't persist */
+    }
+  }
+
+  let feedTab = $derived(exploreTabs.find((t) => t.id === topTab) ?? exploreTabs[0]);
+
+  onMount(() => {
+    try {
+      const saved = localStorage.getItem(TOP_TAB_KEY);
+      if (saved === 'local' || saved === 'global' || saved === 'trending') topTab = saved;
+    } catch {
+      /* ignore */
+    }
+  });
 
   // ── Search ───────────────────────────────────────────────────────────
   let query = $state('');
@@ -227,7 +242,18 @@
       {/if}
     </Tabs>
   {:else}
-    <TimelineFeed tabs={exploreTabs} cache={exploreCache} filterContext="public" />
+    <div class="explore-toptabs">
+      <FeedTabs tabs={TOP_TABS} active={topTab} onchange={changeTopTab} />
+    </div>
+    {#if topTab === 'trending'}
+      <ExploreTrending />
+    {:else}
+      <!-- One feed at a time (its own tab bar hidden since a single tab is
+           passed); keyed so switching Local↔Global remounts with the right feed. -->
+      {#key topTab}
+        <TimelineFeed tabs={[feedTab]} filterContext="public" />
+      {/key}
+    {/if}
   {/if}
 </div>
 

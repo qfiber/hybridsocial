@@ -1108,6 +1108,14 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
     json(conn, Enum.map(suggestions, &serialize_identity/1))
   end
 
+  # GET /api/v1/trends/accounts — trending personal profiles (Explore). Public
+  # (optional auth): the viewer's follow state is fetched separately via
+  # /accounts/relationships, same as other account lists.
+  def trending_accounts(conn, _params) do
+    accounts = Accounts.list_trending_accounts()
+    json(conn, Enum.map(accounts, &serialize_identity/1))
+  end
+
   # --- Content Filters ---
 
   def list_filters(conn, _params) do

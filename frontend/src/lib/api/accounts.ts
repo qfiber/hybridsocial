@@ -60,9 +60,19 @@ export function getSuggestions(): Promise<Identity[]> {
   return api.get('/api/v1/accounts/suggestions');
 }
 
+/** Follow a hashtag by name (case-insensitive on the server). */
+export function followTag(name: string): Promise<{ name: string; following: boolean }> {
+  return api.post('/api/v1/followed_tags', { name });
+}
+
 /** Stop following a hashtag by name (case-insensitive on the server). */
 export function unfollowTag(name: string): Promise<{ name: string; following: boolean }> {
   return api.delete(`/api/v1/followed_tags/${encodeURIComponent(name)}`);
+}
+
+/** Hashtags the current viewer follows (used to seed follow state in lists). */
+export function getFollowedTags(): Promise<{ name: string }[]> {
+  return api.get<{ name: string }[]>('/api/v1/followed_tags').catch(() => []);
 }
 
 export function unfollow(id: string): Promise<Relationship> {

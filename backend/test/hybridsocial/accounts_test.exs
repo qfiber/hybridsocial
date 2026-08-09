@@ -182,4 +182,44 @@ defmodule Hybridsocial.AccountsTest do
       assert Accounts.handle_reserved?("testuser") == true
     end
   end
+
+  describe "list_trending_accounts/1" do
+    test "ranks personal accounts by recent engagement + followers, above quiet ones" do
+      hot = create_user("tr_hot")
+      pop = create_user("tr_pop")
+      cold = create_user("tr_cold")
+
+      post =
+        %Hybridsocial.Social.Post{}
+        |> Hybridsocial.Social.Post.create_changeset(%{
+          identity_id: hot.id,
+          content: "engaged",
+          visibility: "public"
+        })
+        |> Repo.insert!()
+
+      post |> Ecto.Changeset.change(reaction_count: 40) |> Repo.update!()
+
+      for i <- 1..6 do
+        f = create_user("tr_f#{i}")
+
+        Repo.insert!(%Hybridsocial.Social.Follow{
+          follower_id: f.id,
+          followee_id: pop.id,
+          status: :accepted
+        })
+      end
+
+      ranked = Accounts.list_trending_accounts() |> Enum.map(& &1.id)
+
+      assert hot.id in ranked
+      assert pop.id in ranked
+      assert cold.id in ranked
+
+      cold_idx = Enum.find_index(ranked, &(&1 == cold.id))
+      # Both the engaged author and the well-followed account outrank the quiet one.
+      assert Enum.find_index(ranked, &(&1 == hot.id)) < cold_idx
+      assert Enum.find_index(ranked, &(&1 == pop.id)) < cold_idx
+    end
+  end
 end
