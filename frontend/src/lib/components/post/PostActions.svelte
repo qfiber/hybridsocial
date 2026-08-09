@@ -822,6 +822,36 @@
     showMoreMenu = true;
   }
 
+  // The post's video attachment, if any — gates the "Download video" item
+  // (present on Streams clips and any video post).
+  let postVideo = $derived(post.media_attachments?.find((m) => m.type === 'video'));
+
+  async function handleDownloadVideo(e: MouseEvent) {
+    e.stopPropagation();
+    showMoreMenu = false;
+    const url = postVideo?.url || (postVideo as any)?.remote_url;
+    if (!url) return;
+    const name = `stream-${post.id}.mp4`;
+    try {
+      // Fetch → blob so the browser saves the file even for a cross-origin
+      // (federated) URL, where an <a download> would just navigate.
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('bad response');
+      const blob = await res.blob();
+      const obj = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = obj;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(obj);
+    } catch {
+      // CORS / network error → open in a new tab so the viewer can still save it.
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
   async function handleShare(e: MouseEvent) {
     e.stopPropagation();
     showMoreMenu = false;
@@ -1414,6 +1444,12 @@
           <span class="material-symbols-outlined menu-icon">share</span>
           {$t('post.share')}
         </button>
+        {#if postVideo}
+          <button type="button" class="more-menu-item" role="menuitem" onclick={handleDownloadVideo}>
+            <span class="material-symbols-outlined menu-icon">download</span>
+            {$t('post.download_video')}
+          </button>
+        {/if}
         <button type="button" class="more-menu-item" role="menuitem" onclick={handleBookmark}>
           <span class="material-symbols-outlined menu-icon">{isBookmarked ? 'bookmark_remove' : 'bookmark'}</span>
           {isBookmarked ? $t('post.remove_bookmark') : $t('post.bookmark')}
