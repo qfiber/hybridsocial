@@ -178,8 +178,24 @@
     }
     try {
       recordStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      addToast('Microphone access is needed for voice messages', 'error');
+    } catch (err) {
+      const name = (err as { name?: string } | null)?.name;
+      // A Permissions-Policy block means the site itself disallows the mic, so
+      // the user CAN'T grant it (usually a stale server/proxy header) — a
+      // different problem from the user declining the prompt or having no mic.
+      const fp = (document as unknown as { featurePolicy?: { allowsFeature?: (f: string) => boolean } })
+        .featurePolicy;
+      const policyBlocked = typeof fp?.allowsFeature === 'function' && !fp.allowsFeature('microphone');
+      if (policyBlocked) {
+        addToast(
+          "Microphone is blocked for this site, so voice messages can't be recorded. Please contact the administrator.",
+          'error',
+        );
+      } else if (name === 'NotFoundError' || name === 'NotReadableError' || name === 'OverconstrainedError') {
+        addToast('No microphone was found on this device', 'error');
+      } else {
+        addToast('Microphone access was denied — allow it in your browser to record voice messages', 'error');
+      }
       return;
     }
     recordChunks = [];
