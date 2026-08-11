@@ -432,6 +432,54 @@ defmodule Hybridsocial.Social.StreamsTest do
                Enum.find_index(oldest, &(&1 == newer.id))
     end
 
+    test "sort: newest paginates accurately via the keyset cursor (no dupes, no gaps)" do
+      alice = create_user("sfeed_page", "sfeed_page@example.com")
+
+      p1 = create_post(alice, %{content: "one"}) |> attach_video(alice)
+      p2 = create_post(alice, %{content: "two"}) |> attach_video(alice)
+      p3 = create_post(alice, %{content: "three"}) |> attach_video(alice)
+
+      # Strictly increasing times → newest order is [p3, p2, p1].
+      for {p, day} <- [{p1, 1}, {p2, 2}, {p3, 3}] do
+        Repo.update_all(from(x in Post, where: x.id == ^p.id),
+          set: [inserted_at: DateTime.new!(Date.new!(2020, 1, day), ~T[00:00:00.000000])]
+        )
+      end
+
+      page1 = Streams.streams_feed(nil, sort: "newest", limit: 2) |> Enum.map(& &1.id)
+      assert page1 == [p3.id, p2.id]
+
+      page2 =
+        Streams.streams_feed(nil, sort: "newest", limit: 2, max_id: List.last(page1))
+        |> Enum.map(& &1.id)
+
+      # Continues from the boundary with no overlap and no skipped rows.
+      assert page2 == [p1.id]
+    end
+
+    test "sort: oldest paginates forward via the min_id keyset cursor" do
+      alice = create_user("sfeed_page_old", "sfeed_page_old@example.com")
+
+      p1 = create_post(alice, %{content: "one"}) |> attach_video(alice)
+      p2 = create_post(alice, %{content: "two"}) |> attach_video(alice)
+      p3 = create_post(alice, %{content: "three"}) |> attach_video(alice)
+
+      for {p, day} <- [{p1, 1}, {p2, 2}, {p3, 3}] do
+        Repo.update_all(from(x in Post, where: x.id == ^p.id),
+          set: [inserted_at: DateTime.new!(Date.new!(2020, 1, day), ~T[00:00:00.000000])]
+        )
+      end
+
+      page1 = Streams.streams_feed(nil, sort: "oldest", limit: 2) |> Enum.map(& &1.id)
+      assert page1 == [p1.id, p2.id]
+
+      page2 =
+        Streams.streams_feed(nil, sort: "oldest", limit: 2, min_id: List.last(page1))
+        |> Enum.map(& &1.id)
+
+      assert page2 == [p3.id]
+    end
+
     test "q: filters by phrase or hashtag in the post body" do
       alice = create_user("sfeed_q", "sfeed_q@example.com")
 

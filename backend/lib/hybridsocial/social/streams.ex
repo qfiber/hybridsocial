@@ -257,18 +257,70 @@ defmodule Hybridsocial.Social.Streams do
   end
 
   defp apply_cursor_filters(query, opts) do
-    query
-    |> maybe_max_id(Keyword.get(opts, :max_id))
-    |> maybe_min_id(Keyword.get(opts, :min_id))
+    # The frontend sends the last item's id as max_id (desc feeds) or min_id
+    # (the asc "oldest" feed); either way it's just the boundary row. Resolve it
+    # and keyset-compare on the SAME key the sort orders by.
+    cursor_id = Keyword.get(opts, :max_id) || Keyword.get(opts, :min_id)
+    apply_keyset(query, Keyword.get(opts, :sort), cursor_id)
+  end
+
+  defp apply_keyset(query, _sort, nil), do: query
+
+  defp apply_keyset(query, sort, cursor_id) do
+    case Repo.one(
+           from(p in Post,
+             where: p.id == ^cursor_id,
+             select: {p.reaction_count, p.inserted_at, p.id}
+           )
+         ) do
+      nil -> query
+      boundary -> keyset_where(query, sort, boundary)
+    end
+  end
+
+  # Keyset compares mirror `apply_sort` exactly (same key, same direction, same
+  # id tiebreak) so pagination is accurate — post ids are random UUIDv4, so the
+  # old `p.id < max_id` returned an arbitrary slice and the feed froze.
+  defp keyset_where(query, "newest", {_rc, ia, id}) do
+    where(
+      query,
+      [p],
+      fragment("(?, ?) < (?, ?)", p.inserted_at, p.id, ^ia, type(^id, Ecto.UUID))
+    )
+  end
+
+  defp keyset_where(query, "oldest", {_rc, ia, id}) do
+    where(
+      query,
+      [p],
+      fragment("(?, ?) > (?, ?)", p.inserted_at, p.id, ^ia, type(^id, Ecto.UUID))
+    )
+  end
+
+  defp keyset_where(query, _trending, {rc, ia, id}) do
+    where(
+      query,
+      [p],
+      fragment(
+        "(?, ?, ?) < (?, ?, ?)",
+        p.reaction_count,
+        p.inserted_at,
+        p.id,
+        ^rc,
+        ^ia,
+        type(^id, Ecto.UUID)
+      )
+    )
   end
 
   # Timeline ordering the viewer picks: trending (engagement-weighted, the
-  # default), newest, or oldest.
-  defp apply_sort(query, "newest"), do: order_by(query, [p], desc: p.inserted_at)
-  defp apply_sort(query, "oldest"), do: order_by(query, [p], asc: p.inserted_at)
+  # default), newest, or oldest. The `id` tiebreak makes the order total and
+  # matches the keyset cursor above.
+  defp apply_sort(query, "newest"), do: order_by(query, [p], desc: p.inserted_at, desc: p.id)
+  defp apply_sort(query, "oldest"), do: order_by(query, [p], asc: p.inserted_at, asc: p.id)
 
   defp apply_sort(query, _trending),
-    do: order_by(query, [p], desc: p.reaction_count, desc: p.inserted_at)
+    do: order_by(query, [p], desc: p.reaction_count, desc: p.inserted_at, desc: p.id)
 
   # Free-text filter over the post body. Hashtags live literally in the
   # content (e.g. "#gaza"), so a single case-insensitive match covers both
@@ -296,19 +348,6 @@ defmodule Hybridsocial.Social.Streams do
     |> String.replace("%", "\\%")
     |> String.replace("_", "\\_")
   end
-
-  # KNOWN LIMITATION: this id-based cursor (`p.id < max_id`) only orders
-  # correctly when the sort correlates with the UUIDv4 primary key, which it
-  # does NOT for `newest`/`oldest` (inserted_at) or `trending` (reaction_count).
-  # It is latent today because the Streams UI loads a single page and never
-  # passes max_id/min_id. Before wiring infinite scroll to any of these sorts,
-  # replace this with a boundary-lookup + row-tuple compare on the sort key
-  # (see the UUID cursor-pagination pattern used elsewhere).
-  defp maybe_max_id(query, nil), do: query
-  defp maybe_max_id(query, max_id), do: where(query, [p], p.id < ^max_id)
-
-  defp maybe_min_id(query, nil), do: query
-  defp maybe_min_id(query, min_id), do: where(query, [p], p.id > ^min_id)
 
   defp to_float(value) when is_float(value), do: value
   defp to_float(value) when is_integer(value), do: value / 1

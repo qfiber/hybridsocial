@@ -54,7 +54,7 @@
     { href: '/lists', labelKey: 'nav.lists', icon: 'M4 6h16M4 10h16M4 14h16M4 18h16' },
     { href: '/groups', labelKey: 'nav.groups', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
     { href: '/pages', labelKey: 'nav.pages', icon: 'M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z M9 22V12h6v10' },
-    { href: '/streams', labelKey: 'nav.streams', icon: 'M3 5h18v14H3z M3 9h18 M8 5v4 M13 5v4 M18 5v4 M10 13l4 2-4 2z' },
+    { href: '/streams', labelKey: 'nav.streams', icon: 'M7 4h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z M10.5 9.5l4 2.5-4 2.5z' },
     { href: '/bookmarks', labelKey: 'nav.bookmarks', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
     { href: '/scheduled', labelKey: 'nav.scheduled', icon: 'M12 2a10 10 0 100 20 10 10 0 000-20z M12 6v6l4 2' },
     { href: '/drafts', labelKey: 'nav.drafts', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },

@@ -10,9 +10,11 @@
     muted,
     autoplay,
     federated = false,
+    allAspect = false,
     onmutetoggle,
     onautoplaytoggle,
     onfederatedtoggle,
+    onaspecttoggle,
     onsearch,
     onsort,
     oncomment,
@@ -25,10 +27,13 @@
     autoplay: boolean;
     /** Per-viewer opt-in: also pull videos from across the fediverse. */
     federated?: boolean;
+    /** When on, the feed includes clips of every aspect ratio; off = 9:16 only. */
+    allAspect?: boolean;
     onmutetoggle: () => void;
     /** Feed-level controls, overlaid on the clip (top-right). */
     onautoplaytoggle: () => void;
     onfederatedtoggle?: () => void;
+    onaspecttoggle?: () => void;
     onsearch: () => void;
     onsort: () => void;
     oncomment?: () => void;
@@ -300,10 +305,23 @@
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>
     </button>
+    {#if onaspecttoggle}
+      <button
+        type="button"
+        class="stream-icon-btn"
+        class:on={allAspect}
+        aria-pressed={allAspect}
+        aria-label={allAspect ? $t('streams.aspect_all') : $t('streams.aspect_portrait')}
+        title={$t('streams.aspect_hint')}
+        onclick={(e) => { e.stopPropagation(); onaspecttoggle?.(); }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="10" height="18" rx="2" /><path d="M17 8h3v8h-3" /></svg>
+      </button>
+    {/if}
     {#if onfederatedtoggle}
       <button
         type="button"
-        class="reel-icon-btn"
+        class="stream-icon-btn"
         class:on={federated}
         aria-pressed={federated}
         aria-label={federated ? $t('streams.fediverse_on') : $t('streams.fediverse_off')}
@@ -396,7 +414,7 @@
     {/if}
 
     <div class="stream-actions">
-      <PostActions {post} {oncomment} />
+      <PostActions {post} {oncomment} menuFixed />
       {#if post.content}
         <button
           type="button"
@@ -422,6 +440,9 @@
     flex: 0 0 100%;
     height: 100%;
     scroll-snap-align: center;
+    /* Force a stop on every clip even on a fast flick, so one swipe advances
+       exactly one clip instead of momentum carrying past several. */
+    scroll-snap-stop: always;
     display: flex;
     align-items: center;
     justify-content: center;

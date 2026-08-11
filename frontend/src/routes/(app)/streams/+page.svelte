@@ -7,10 +7,20 @@
   import StreamPlayer from '$lib/components/streams/StreamPlayer.svelte';
   import { getPostContext } from '$lib/api/statuses.js';
   import { instanceName } from '$lib/stores/instance.js';
+  import { t } from '$lib/stores/i18n.js';
 
   let posts = $state<Post[]>([]);
   let loading = $state(true);
   let error = $state('');
+
+  // Infinite scroll: the feed keeps a keyset cursor (last item's id) and loads
+  // the next page as the viewer nears the end, instead of stopping after one
+  // page. `hasMore` goes false once a page comes back short.
+  const PAGE_SIZE = 20;
+  let cursor = $state<string | null>(null);
+  let hasMore = $state(true);
+  let loadingMore = $state(false);
+  let feedEl = $state<HTMLDivElement | null>(null);
 
   // Streams autoplay by default (the whole point of the format); still
   // toggleable and remembered across visits.
@@ -52,6 +62,22 @@
     showFederated = !showFederated;
     try {
       localStorage.setItem(FEDERATED_KEY, showFederated ? '1' : '0');
+    } catch {
+      /* storage unavailable — the toggle just won't persist */
+    }
+    loadStreams();
+  }
+
+  // Aspect-ratio filter. Default is vertical 9:16 (`orientation=portrait`, the
+  // native Streams format); toggling on asks the server for clips of every
+  // orientation (`orientation=all`). Remembered per device.
+  const ASPECT_KEY = 'hs-streams-aspect';
+  let showAllAspect = $state(false);
+
+  function toggleAspect() {
+    showAllAspect = !showAllAspect;
+    try {
+      localStorage.setItem(ASPECT_KEY, showAllAspect ? '1' : '0');
     } catch {
       /* storage unavailable — the toggle just won't persist */
     }
@@ -109,25 +135,67 @@
     }
   }
 
+  // Shared query params for the current filters (orientation / sort / federated
+  // / search). Pagination adds the cursor on top.
+  function streamParams(): Record<string, string> {
+    // Default to the native 9:16 vertical format; the aspect toggle opts into
+    // clips of every orientation/size.
+    const params: Record<string, string> = { orientation: showAllAspect ? 'all' : 'portrait' };
+    if (sort !== 'trending') params.sort = sort;
+    if (showFederated) params.include_federated = 'true';
+    const q = search.trim();
+    if (q) params.q = q;
+    return params;
+  }
+
   async function loadStreams() {
     loading = true;
     error = '';
+    cursor = null;
+    hasMore = true;
     try {
-      // Surface clips of every orientation/size — a 640x360 horizontal upload
-      // belongs here just as much as a 9:16 one.
-      const params: Record<string, string> = { orientation: 'all' };
-      if (sort !== 'trending') params.sort = sort;
-      if (showFederated) params.include_federated = 'true';
-      const q = search.trim();
-      if (q) params.q = q;
-      const result = await api.get<any>('/api/v1/timelines/streams', params);
-      const data = Array.isArray(result) ? result : (result as any)?.data || [];
+      const result = await api.get<any>('/api/v1/timelines/streams', streamParams());
+      const data: Post[] = Array.isArray(result) ? result : (result as any)?.data || [];
       posts = data;
+      cursor = data.length > 0 ? data[data.length - 1].id : null;
+      hasMore = data.length >= PAGE_SIZE;
+      // If the first page was all filtered out client-side but the server may
+      // have more, keep trying to fill the viewport.
+      if (feedEl) maybeLoadMore();
     } catch {
       error = 'Failed to load streams.';
     } finally {
       loading = false;
     }
+  }
+
+  async function loadMore() {
+    if (loadingMore || !hasMore || !cursor || loading) return;
+    loadingMore = true;
+    try {
+      const params = streamParams();
+      // Oldest is ascending → page forward with min_id; every other sort is
+      // descending → max_id (older).
+      params[sort === 'oldest' ? 'min_id' : 'max_id'] = cursor;
+      const result = await api.get<any>('/api/v1/timelines/streams', params);
+      const data: Post[] = Array.isArray(result) ? result : (result as any)?.data || [];
+      const seen = new Set(posts.map((p) => p.id));
+      const fresh = data.filter((p) => !seen.has(p.id));
+      posts = [...posts, ...fresh];
+      cursor = data.length > 0 ? data[data.length - 1].id : cursor;
+      hasMore = data.length >= PAGE_SIZE;
+    } catch {
+      // Best-effort — leave hasMore so a later scroll can retry.
+    } finally {
+      loadingMore = false;
+    }
+  }
+
+  // Trigger a page load when the viewer is within ~2 clips of the end.
+  function maybeLoadMore() {
+    if (!feedEl || !hasMore || loadingMore) return;
+    const remaining = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight;
+    if (remaining < feedEl.clientHeight * 2) loadMore();
   }
 
   function changeSort(next: (typeof SORT_VALUES)[number]) {
@@ -201,6 +269,7 @@
       if (v !== null) autoplay = v === '1';
       muted = localStorage.getItem(MUTED_KEY) !== '0';
       showFederated = localStorage.getItem(FEDERATED_KEY) === '1';
+      showAllAspect = localStorage.getItem(ASPECT_KEY) === '1';
       const savedSort = localStorage.getItem(SORT_KEY);
       if (savedSort && (SORT_VALUES as readonly string[]).includes(savedSort)) {
         sort = savedSort as (typeof SORT_VALUES)[number];
@@ -278,7 +347,7 @@
       <p class="state-sub">Video clips will appear here.</p>
     </div>
   {:else}
-    <div class="streams-feed">
+    <div class="streams-feed" bind:this={feedEl} onscroll={maybeLoadMore}>
       {#each streams as post (post.id)}
         {@const v = streamVideo(post)}
         {#if v}
@@ -288,9 +357,11 @@
             {muted}
             {autoplay}
             federated={showFederated}
+            allAspect={showAllAspect}
             onmutetoggle={toggleMuted}
             onautoplaytoggle={toggleAutoplay}
             onfederatedtoggle={toggleFederated}
+            onaspecttoggle={toggleAspect}
             onsearch={() => { sortOpen = false; searchOpen = !searchOpen; }}
             onsort={() => { searchOpen = false; sortOpen = !sortOpen; }}
             oncomment={() => openComments(post)}
@@ -298,6 +369,12 @@
           />
         {/if}
       {/each}
+      {#if loadingMore}
+        <div class="streams-more" aria-live="polite">
+          <span class="streams-more-spinner" aria-hidden="true"></span>
+          <span>{$t('streams.loading_more')}</span>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -470,6 +547,35 @@
 
   .streams-feed::-webkit-scrollbar {
     display: none;
+  }
+
+  /* "Loading more" row at the tail of the feed. Not a snap target, so it
+     doesn't count as a clip when the viewer flicks to the end. */
+  .streams-more {
+    flex: 0 0 auto;
+    scroll-snap-align: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    padding: var(--space-4);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm, 0.875rem);
+  }
+
+  .streams-more-spinner {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-primary);
+    animation: streams-spin 0.7s linear infinite;
+  }
+
+  @keyframes streams-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .stream-skeleton {
