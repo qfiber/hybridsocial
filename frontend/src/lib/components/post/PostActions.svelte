@@ -201,6 +201,14 @@
     return state.user?.id === post.account.id;
   });
 
+  // A post authored *as a page* carries the page identity in `post.account`,
+  // so the strict author check above is false for the page's own managers —
+  // which is why Edit / Delete / Pin silently vanished from a page owner's
+  // own posts. The serializer sets `post.page.can_edit` for any viewer the
+  // backend's `Pages.can_edit?` accepts (owner / admin / editor); trust it so
+  // the manage actions show exactly where the server already authorizes them.
+  let canManagePost = $derived(() => isOwnPost() || post.page?.can_edit === true);
+
   let isRemotePost = $derived(() => {
     const acct = post.account.acct || post.account.handle;
     return acct.includes('@');
@@ -1422,7 +1430,7 @@
           <span class="material-symbols-outlined menu-icon">{isPostMuted ? 'notifications_active' : 'notifications_off'}</span>
           {isPostMuted ? $t('post.unmute_notifications') : $t('post.mute_notifications')}
         </button>
-        {#if isOwnPost()}
+        {#if canManagePost()}
           {#if !isPinned || viewerContext === null || viewerContext === pinScope}
             {@const pinLabel = isPinned
               ? (pinScope === 'group'
@@ -1457,7 +1465,7 @@
             {$t('post.edit_history')}
           </button>
         {/if}
-        {#if !isOwnPost()}
+        {#if !canManagePost()}
           <div class="more-menu-divider"></div>
           <button type="button" class="more-menu-item" role="menuitem" onclick={handleMentionUser}>
             <span class="material-symbols-outlined menu-icon">alternate_email</span>

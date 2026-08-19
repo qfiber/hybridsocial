@@ -118,6 +118,18 @@
     error = null;
     try {
       account = await lookupAccount(handle);
+
+      // Pages are organization identities with their own page-aware route
+      // (composer + manage gear for managers, Follow for visitors). Reaching a
+      // page by its @handle — via a post's author link, a mention, or search —
+      // must land on that same canonical view, not the generic account profile
+      // that showed a stray Follow button and hid the composer/manage controls
+      // from the owner. The page id IS the identity id, so route straight there.
+      if (account?.type === 'page') {
+        await goto(`/pages/${account.id}`, { replaceState: true });
+        return;
+      }
+
       retryCount = 0;
       const auth = get(authStore);
       const ownProfile = !!account && !!auth.user && auth.user.id === account.id;

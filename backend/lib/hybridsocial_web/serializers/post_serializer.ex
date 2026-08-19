@@ -313,8 +313,9 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
   IMPORTANT: the set of fields patched here must stay in sync with the
   viewer-dependent fields in `serialize_many/2`: `is_boosted`,
   `is_bookmarked`, `is_muted`, `current_user_reaction`, the per-reaction
-  `me` flag, and poll `voted` / `own_votes`. Staff-only moderation fields
-  are intentionally NOT added — the prewarmed first page omits them.
+  `me` flag, poll `voted` / `own_votes`, and `page.can_edit`. Staff-only
+  moderation fields are intentionally NOT added — the prewarmed first page
+  omits them.
   """
   def apply_viewer_state(serialized, nil), do: serialized
   def apply_viewer_state([], _viewer_id), do: []
@@ -340,8 +341,25 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       |> Map.put("current_user_reaction", Map.get(reactions_map, id))
       |> patch_reactions_me(id, my_reactions)
       |> patch_poll_votes(id, viewer_id)
+      |> patch_page_can_edit(viewer_id)
     end)
   end
+
+  # `page.can_edit` is viewer-dependent — whether THIS viewer may edit/delete a
+  # post authored as a page. The anonymous snapshot bakes it `false`; recompute
+  # it for the real viewer so a page's managers still see Edit/Delete on their
+  # own page's posts on a prewarmed public timeline. Only page-anchored posts
+  # pay the per-post check; everything else short-circuits.
+  defp patch_page_can_edit(%{"page" => %{"id" => page_id} = page} = post, viewer_id)
+       when is_binary(page_id) do
+    Map.put(
+      post,
+      "page",
+      Map.put(page, "can_edit", Hybridsocial.Pages.can_edit?(page_id, viewer_id))
+    )
+  end
+
+  defp patch_page_can_edit(post, _viewer_id), do: post
 
   # Recompute only the per-viewer `me` flag on each reaction; the counts
   # in the snapshot are viewer-independent and stay as-is.
