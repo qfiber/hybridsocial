@@ -3,12 +3,17 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import MessageReactionPicker from '$lib/components/dm/MessageReactionPicker.svelte';
   import { loadReactionCatalog, resolveReaction } from '$lib/utils/message-reactions.js';
+  import { translateMessage } from '$lib/api/conversations.js';
+  import { effectiveTranslationTarget, translationEnabled } from '$lib/stores/translation.js';
+  import { t, availableLocales } from '$lib/stores/i18n.js';
+  import { addToast } from '$lib/stores/toast.js';
   import { onMount } from 'svelte';
   import { fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
 
   let {
     message,
+    conversationId,
     isOwn = false,
     showAvatar = true,
     replyTo = null,
@@ -19,6 +24,7 @@
     onreplyclick,
   }: {
     message: Message;
+    conversationId: string;
     isOwn?: boolean;
     showAvatar?: boolean;
     // The message this one is replying to, resolved by the parent (which
@@ -233,6 +239,46 @@
       saveEdit();
     }
   }
+
+  // --- Translation ---
+  // Fetched lazily and cached, then the body swaps to it and the toggle
+  // relabels to "Show original". Mirrors the post translate affordance, reusing
+  // the same instance capability and target-language preference.
+  let translatedText = $state<string | null>(null);
+  let translating = $state(false);
+  let showingTranslation = $state(false);
+
+  let translateTargetName = $derived.by(() => {
+    const code = $effectiveTranslationTarget;
+    const meta = $availableLocales.find((l) => l.code === code);
+    return meta?.nativeName || meta?.name || code.toUpperCase();
+  });
+
+  // Offer translation when the instance has a backend and the message carries
+  // plaintext (encrypted-only bodies have no `content` to send).
+  let canTranslate = $derived($translationEnabled && !!(message.content || '').trim());
+
+  async function handleTranslate(e: MouseEvent) {
+    e.stopPropagation();
+    if (showingTranslation) {
+      showingTranslation = false;
+      return;
+    }
+    if (translatedText !== null) {
+      showingTranslation = true;
+      return;
+    }
+    translating = true;
+    try {
+      const res = await translateMessage(conversationId, message.id, $effectiveTranslationTarget);
+      translatedText = res.content;
+      showingTranslation = true;
+    } catch {
+      addToast($t('post.translate_failed'), 'error');
+    } finally {
+      translating = false;
+    }
+  }
 </script>
 
 <div
@@ -308,12 +354,32 @@
           </div>
           <span class="edit-hint">Enter to save, Esc to cancel.</span>
         </div>
+      {:else if showingTranslation && translatedText !== null}
+        <p class="message-text" dir="auto">{translatedText}</p>
       {:else if message.content_html}
         <div class="message-body" dir="auto">
           {@html message.content_html}
         </div>
       {:else}
         <p class="message-text" dir="auto">{message.content}</p>
+      {/if}
+
+      {#if canTranslate && !editing}
+        <button
+          type="button"
+          class="msg-translate-btn"
+          onclick={handleTranslate}
+          disabled={translating}
+        >
+          <span class="material-symbols-outlined msg-translate-icon">translate</span>
+          {#if translating}
+            {$t('post.translating')}
+          {:else if showingTranslation}
+            {$t('post.show_original')}
+          {:else}
+            {$t('post.translate_to', { lang: translateTargetName })}
+          {/if}
+        </button>
       {/if}
 
       {#if mediaAttachments.length > 0}
@@ -897,6 +963,42 @@
     font-size: var(--text-sm);
     line-height: 1.5;
     color: var(--color-text);
+  }
+
+  /* Quiet translate toggle under the message text. */
+  .msg-translate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    margin-block-start: 3px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-primary);
+    font: inherit;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    opacity: 0.9;
+  }
+
+  .msg-translate-btn:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  .msg-translate-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .msg-translate-icon {
+    font-size: 14px !important;
+  }
+
+  /* On the accent (own) bubble, tint the toggle to the on-primary palette so
+     it stays legible against the gradient. */
+  .bubble-own .msg-translate-btn {
+    color: rgba(255, 255, 255, 0.9);
   }
 
   /* Per-paragraph direction inside message bodies — pairs with

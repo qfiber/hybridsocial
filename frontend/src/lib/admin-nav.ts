@@ -98,6 +98,7 @@ export const adminSections: AdminSection[] = [
     icon: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
     items: [
       { href: '/admin/email', label: 'Email', description: 'Delivery server and message templates', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', permission: 'email.manage' },
+      { href: '/admin/translation', label: 'Translation', description: 'Post translation backend (LibreTranslate / DeepL)', icon: 'M4 5h7M9 3v2c0 4.418-2.239 8-5 8M5 9c0 2.144 2.952 3.908 6.5 4M12 20l4-9 4 9M17.1 17h-2.2', permission: 'settings.manage' },
       { href: '/admin/webhooks', label: 'Webhooks', description: 'Push events to external services', icon: 'M13.83 10.17a4 4 0 00-5.66 0l-4 4a4 4 0 105.66 5.66l1.1-1.1m-.76-4.9a4 4 0 005.66 0l4-4a4 4 0 00-5.66-5.66l-1.1 1.1', permission: 'settings.manage' },
       { href: '/admin/backups', label: 'Backups', description: 'Encrypted database snapshots', icon: 'M4 7v10c0 2.21 3.58 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.58 4 8 4s8-1.79 8-4M4 7c0-2.21 3.58-4 8-4s8 1.79 8 4', permission: 'backups.view' },
       { href: '/admin/audit-log', label: 'Audit log', description: 'Every staff action, timestamped', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', permission: 'audit_log.view' },

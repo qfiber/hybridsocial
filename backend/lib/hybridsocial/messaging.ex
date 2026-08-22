@@ -799,6 +799,37 @@ defmodule Hybridsocial.Messaging do
     end
   end
 
+  @doc """
+  Translate a message's text into `target_lang` for a conversation participant.
+
+  Any participant (not just the sender) may translate a message they can read.
+  Only plaintext bodies can be translated — an end-to-end encrypted message has
+  no server-side plaintext, so it returns `{:error, :no_content}`. Delegates the
+  actual translation to `Hybridsocial.Content.Translation`, so it inherits the
+  admin-configured backend and the disabled-by-default behaviour.
+  """
+  def translate_message(message_id, identity_id, target_lang) do
+    case Repo.get(Message, message_id) do
+      nil ->
+        {:error, :not_found}
+
+      %Message{deleted_at: deleted_at} when not is_nil(deleted_at) ->
+        {:error, :not_found}
+
+      %Message{} = message ->
+        cond do
+          not participant?(message.conversation_id, identity_id) ->
+            {:error, :forbidden}
+
+          is_nil(message.content) or message.content == "" ->
+            {:error, :no_content}
+
+          true ->
+            Hybridsocial.Content.Translation.translate(message.content, target_lang)
+        end
+    end
+  end
+
   @doc "Edit a message. Only the sender can edit."
   def edit_message(message_id, sender_id, new_content) do
     case Repo.get(Message, message_id) do

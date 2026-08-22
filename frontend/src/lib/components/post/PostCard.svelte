@@ -2,7 +2,7 @@
   import type { Post } from '$lib/api/types.js';
   import { goto, beforeNavigate } from '$app/navigation';
   import { relativeTime, relativeTimeFuture, fullDateTime } from '$lib/utils/time.js';
-  import { editPost, getPost } from '$lib/api/statuses.js';
+  import { editPost, getPost, translateStatus } from '$lib/api/statuses.js';
   import { uploadMedia } from '$lib/api/media.js';
   import { currentUser } from '$lib/stores/auth.js';
   import type { MediaAttachment } from '$lib/api/types.js';
@@ -19,8 +19,10 @@
   import { renderCustomEmojis } from '$lib/utils/custom-emoji.js';
   import DisplayName from '$lib/components/DisplayName.svelte';
   import { filterBadges, type Badge } from '$lib/utils/badges.js';
-  import { t } from '$lib/stores/i18n.js';
+  import { t, availableLocales } from '$lib/stores/i18n.js';
   import { t as translate } from '$lib/utils/i18n.js';
+  import { effectiveTranslationTarget, translationEnabled } from '$lib/stores/translation.js';
+  import { addToast } from '$lib/stores/toast.js';
 
   // Seeded PRNG from post ID for deterministic wave patterns
   function seededRng(seed: string) {
@@ -488,6 +490,55 @@
     return renderCustomEmojis(stripped, post.emojis);
   });
 
+  // --- Post translation ---
+  // The translated body (plain text) is fetched lazily on first click and
+  // cached, so toggling back and forth doesn't re-hit the backend.
+  let translatedText = $state<string | null>(null);
+  let translationProvider = $state('');
+  let translating = $state(false);
+  let showingTranslation = $state(false);
+
+  // The language we'd translate INTO, resolved to a display name for the
+  // button label ("Translate to العربية"). Follows the user's Settings choice,
+  // falling back to the interface language.
+  let translateTargetName = $derived.by(() => {
+    const code = $effectiveTranslationTarget;
+    const meta = $availableLocales.find((l) => l.code === code);
+    return meta?.nativeName || meta?.name || code.toUpperCase();
+  });
+
+  // Offer translation only when the instance has a backend configured, the post
+  // has text, and it isn't already in the target language (when the source is
+  // known). The endpoint enforces the backend gate server-side regardless.
+  let canTranslate = $derived(
+    $translationEnabled &&
+      !!(post.content || post.content_html) &&
+      post.language !== $effectiveTranslationTarget,
+  );
+
+  async function handleTranslateToggle(e: MouseEvent) {
+    e.stopPropagation();
+    if (showingTranslation) {
+      showingTranslation = false;
+      return;
+    }
+    if (translatedText !== null) {
+      showingTranslation = true;
+      return;
+    }
+    translating = true;
+    try {
+      const res = await translateStatus(post.id, $effectiveTranslationTarget);
+      translatedText = res.content;
+      translationProvider = res.provider;
+      showingTranslation = true;
+    } catch {
+      addToast($t('post.translate_failed'), 'error');
+    } finally {
+      translating = false;
+    }
+  }
+
   // Poll voting
   let pollVoted = $state(post.poll?.voted ?? false);
   let pollOwnVotes = $state<number[]>(post.poll?.own_votes ?? []);
@@ -846,7 +897,13 @@
       <div class="post-body" class:filter-hidden={filterMatch?.action === 'warn' && !filterRevealed}>
         <div class="nsfw-container" class:nsfw-active={post.sensitive} class:nsfw-revealed={showSensitive}>
           <div class="nsfw-content">
-          {#if post.content_html}
+          {#if showingTranslation && translatedText !== null}
+            <div class="post-content" dir="auto">
+              {#each translatedText.split('\n') as line, i (i)}
+                {#if line}<p dir="auto">{line}</p>{/if}
+              {/each}
+            </div>
+          {:else if post.content_html}
             <div
               class="post-content"
               class:post-content-collapsed={contentCollapsed && contentOverflows}
@@ -867,17 +924,35 @@
               <p dir="auto">{post.content}</p>
             </div>
           {/if}
-          {#if contentOverflows && contentCollapsed}
+          {#if !showingTranslation && contentOverflows && contentCollapsed}
             <button type="button" class="content-toggle-btn" onclick={(e) => { e.stopPropagation(); contentCollapsed = false; }}>
               <span class="material-symbols-outlined content-toggle-icon">expand_more</span>
               {$t('post.show_more')}
             </button>
           {/if}
-          {#if contentOverflows && !contentCollapsed && !detail}
+          {#if !showingTranslation && contentOverflows && !contentCollapsed && !detail}
             <button type="button" class="content-toggle-btn content-toggle-collapse" onclick={(e) => { e.stopPropagation(); contentCollapsed = true; }}>
               <span class="material-symbols-outlined content-toggle-icon">expand_less</span>
               {$t('post.show_less')}
             </button>
+          {/if}
+
+          {#if canTranslate}
+            <div class="translate-row" onclick={(e) => e.stopPropagation()} role="presentation">
+              <button type="button" class="translate-btn" onclick={handleTranslateToggle} disabled={translating}>
+                <span class="material-symbols-outlined translate-icon">translate</span>
+                {#if translating}
+                  {$t('post.translating')}
+                {:else if showingTranslation}
+                  {$t('post.show_original')}
+                {:else}
+                  {$t('post.translate_to', { lang: translateTargetName })}
+                {/if}
+              </button>
+              {#if showingTranslation && translationProvider}
+                <span class="translate-provider">{$t('post.translated_via', { provider: translationProvider })}</span>
+              {/if}
+            </div>
           {/if}
 
           {#if post.tags && post.tags.length > 0}
@@ -2007,6 +2082,48 @@
 
   .content-toggle-collapse {
     margin-block-start: 12px;
+  }
+
+  /* Translate toggle — a quiet, text-first affordance under the body, styled
+     to read like a link rather than compete with the action bar. */
+  .translate-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-block-start: 8px;
+  }
+
+  .translate-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 4px;
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+
+  .translate-btn:hover:not(:disabled) {
+    text-decoration: underline;
+  }
+
+  .translate-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .translate-icon {
+    font-size: 18px;
+  }
+
+  .translate-provider {
+    font-size: 0.6875rem;
+    color: var(--color-text-tertiary, var(--color-text-secondary));
   }
 
   .post-content :global(a) {

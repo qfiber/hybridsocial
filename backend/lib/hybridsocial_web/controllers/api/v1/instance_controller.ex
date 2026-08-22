@@ -43,7 +43,11 @@ defmodule HybridsocialWeb.Api.V1.InstanceController do
       # Upstream source — admins can point this at a fork in config,
       # otherwise defaults to the canonical repo. Used by the footer
       # "view source" link.
-      source_url: Hybridsocial.Config.get("source_url", "https://github.com/qfiber/hybridsocial")
+      source_url: Hybridsocial.Config.get("source_url", "https://github.com/qfiber/hybridsocial"),
+      # Whether an admin has configured a translation backend. The client
+      # uses this to decide whether to offer the per-post "Translate" action;
+      # the endpoint still enforces it server-side.
+      translation_enabled: Hybridsocial.Content.Translation.enabled?()
     })
   end
 

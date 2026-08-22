@@ -851,6 +851,15 @@ export interface EmailConfig {
   env_provider?: string | null;
 }
 
+export interface TranslationConfig {
+  /** "none" (disabled), "libretranslate", or "deepl". */
+  backend: string;
+  /** LibreTranslate base URL (ignored for DeepL). */
+  api_url: string;
+  /** Masked on read (contains "****"); send a fresh value to change it. */
+  api_key: string;
+}
+
 export interface AdminRole {
   id: string;
   name: string;

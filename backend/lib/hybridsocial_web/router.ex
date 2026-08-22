@@ -526,6 +526,7 @@ defmodule HybridsocialWeb.Router do
     get "/:id/messages", ConversationController, :messages
     put "/:id/messages/:mid", ConversationController, :edit_message
     delete "/:id/messages/:mid", ConversationController, :delete_message
+    post "/:id/messages/:mid/translate", ConversationController, :translate_message
     post "/:id/read", ConversationController, :mark_read
     post "/:id/typing", ConversationController, :typing
     patch "/:id/settings", ConversationController, :update_settings
@@ -811,6 +812,10 @@ defmodule HybridsocialWeb.Router do
     get "/email", AdminController, :get_email_config
     put "/email", AdminController, :update_email_config
     post "/email/test", AdminController, :send_test_email
+
+    # Post translation backend (LibreTranslate / DeepL)
+    get "/translation", AdminController, :get_translation_config
+    put "/translation", AdminController, :update_translation_config
 
     # Theme
     get "/theme", AdminController, :get_theme

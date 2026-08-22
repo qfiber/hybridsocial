@@ -16,6 +16,7 @@ import type {
   Relay,
   Announcement,
   EmailConfig,
+  TranslationConfig,
   AdminThemeConfig,
   PaginatedResponse,
   Webhook,
@@ -351,6 +352,17 @@ export function updateEmailConfig(config: Partial<EmailConfig>): Promise<EmailCo
 
 export function sendTestEmail(to: string): Promise<void> {
   return api.post('/api/v1/admin/email/test', { to });
+}
+
+// Post translation
+export function getTranslationConfig(): Promise<TranslationConfig> {
+  return api.get('/api/v1/admin/translation');
+}
+
+export function updateTranslationConfig(
+  config: Partial<TranslationConfig>,
+): Promise<TranslationConfig> {
+  return api.put('/api/v1/admin/translation', config);
 }
 
 // Verifications

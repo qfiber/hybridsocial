@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { clearAuth } from '$lib/stores/auth.js';
-  import { switchLocale, availableLocales, locale } from '$lib/stores/i18n.js';
+  import { switchLocale, availableLocales, locale, t } from '$lib/stores/i18n.js';
+  import { translationTarget, setTranslationTarget } from '$lib/stores/translation.js';
   import { addToast } from '$lib/stores/toast.js';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
@@ -10,6 +11,15 @@
 
   let selectedLocale = $state('en');
   let localeSaving = $state(false);
+
+  // Preferred language to translate posts INTO. '' follows the interface
+  // language. Stored per-device by the translation store (localStorage).
+  let selectedTranslateTarget = $state('');
+
+  function saveTranslateTarget() {
+    setTranslationTarget(selectedTranslateTarget);
+    addToast($t('settings.translation_saved'), 'success');
+  }
 
   let showDeleteModal = $state(false);
   let deleteConfirmText = $state('');
@@ -47,6 +57,10 @@
     // Set current locale from store
     const unsub = locale.subscribe(v => { selectedLocale = v; });
     unsub();
+
+    // Seed the translation-target select from its store.
+    const unsubTt = translationTarget.subscribe(v => { selectedTranslateTarget = v; });
+    unsubTt();
 
     try {
       verification = await api.get<VerificationStatus>('/api/v1/verification/status');
@@ -109,6 +123,22 @@
         <button type="button" class="save-locale-btn" onclick={saveLocale} disabled={localeSaving}>
           {localeSaving ? 'Saving...' : 'Save'}
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post translation -->
+  <div class="settings-section">
+    <h2 class="section-title">{$t('settings.translation_title')}</h2>
+    <div class="settings-form">
+      <p class="section-desc">{$t('settings.translation_desc')}</p>
+      <div class="language-row">
+        <select class="language-select" bind:value={selectedTranslateTarget} onchange={saveTranslateTarget}>
+          <option value="">{$t('settings.translation_follow_ui')}</option>
+          {#each $availableLocales as loc (loc.code)}
+            <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
+          {/each}
+        </select>
       </div>
     </div>
   </div>

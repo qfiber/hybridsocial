@@ -37,6 +37,19 @@ export function deletePost(id: string): Promise<void> {
   return api.delete(`/api/v1/statuses/${id}`);
 }
 
+export interface TranslatedStatus {
+  /** Translated body as plain text. */
+  content: string;
+  detected_source_language: string | null;
+  /** Backend that produced it, e.g. "libretranslate" / "deepl". */
+  provider: string;
+}
+
+/** Translate a post's body into `targetLang` (a BCP-47 / ISO-639 code). */
+export function translateStatus(id: string, targetLang: string): Promise<TranslatedStatus> {
+  return api.post(`/api/v1/statuses/${id}/translate`, { target_lang: targetLang });
+}
+
 export function getPostContext(
   id: string,
   opts?: { mediaId?: string | null },

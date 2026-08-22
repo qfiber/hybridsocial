@@ -549,6 +549,35 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     end
   end
 
+  def get_translation_config(conn, _params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      json(conn, %{
+        # "none" disables the per-post Translate action entirely.
+        backend: Hybridsocial.Config.get("translation_backend", "none"),
+        api_url: Hybridsocial.Config.get("translation_api_url", "https://libretranslate.com"),
+        api_key: mask_secret(Hybridsocial.Config.get("translation_api_key", ""))
+      })
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def update_translation_config(conn, params) do
+    with :ok <- require_permission(conn, "settings.manage") do
+      if params["backend"], do: Hybridsocial.Config.set("translation_backend", params["backend"])
+      if params["api_url"], do: Hybridsocial.Config.set("translation_api_url", params["api_url"])
+
+      # A masked value (contains "****") means the admin left the stored key
+      # untouched — don't overwrite the real secret with the mask.
+      if params["api_key"] && !String.contains?(params["api_key"] || "", "****"),
+        do: Hybridsocial.Config.set("translation_api_key", params["api_key"])
+
+      get_translation_config(conn, %{})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
   # Detects whether the mail transport is pinned by the server
   # environment. `runtime.exs` resolves the Swoosh adapter from these at
   # boot (Resend takes precedence over SMTP), so when either is set the

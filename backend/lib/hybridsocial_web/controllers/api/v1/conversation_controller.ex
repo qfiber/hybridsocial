@@ -164,6 +164,36 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
   end
 
   # PUT /api/v1/conversations/:id/messages/:mid
+  def translate_message(conn, %{"id" => _conversation_id, "mid" => message_id} = params) do
+    identity = conn.assigns.current_identity
+    target_lang = params["target_lang"] || "en"
+
+    case Messaging.translate_message(message_id, identity.id, target_lang) do
+      {:ok, translated} ->
+        json(conn, %{
+          content: translated,
+          provider: Hybridsocial.Config.get("translation_backend", "none")
+        })
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "message.not_found"})
+
+      {:error, :forbidden} ->
+        conn |> put_status(:forbidden) |> json(%{error: "message.forbidden"})
+
+      {:error, :no_content} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "message.no_content"})
+
+      {:error, :translation_disabled} ->
+        conn |> put_status(:service_unavailable) |> json(%{error: "translation.disabled"})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:bad_gateway)
+        |> json(%{error: "translation.failed", detail: inspect(reason)})
+    end
+  end
+
   def edit_message(conn, %{"id" => _conversation_id, "mid" => message_id} = params) do
     identity = conn.assigns.current_identity
     new_content = Map.get(params, "content", "")

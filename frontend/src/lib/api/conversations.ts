@@ -97,6 +97,22 @@ export function deleteMessage(conversationId: string, messageId: string): Promis
   return api.delete(`/api/v1/conversations/${conversationId}/messages/${messageId}`);
 }
 
+export interface TranslatedMessage {
+  content: string;
+  provider: string;
+}
+
+/** Translate a DM's text into `targetLang` for any conversation participant. */
+export function translateMessage(
+  conversationId: string,
+  messageId: string,
+  targetLang: string,
+): Promise<TranslatedMessage> {
+  return api.post(`/api/v1/conversations/${conversationId}/messages/${messageId}/translate`, {
+    target_lang: targetLang,
+  });
+}
+
 export function editMessage(
   conversationId: string,
   messageId: string,
