@@ -99,9 +99,13 @@
 
   // Conservative guesses for where the picker needs room. The picker
   // isn't mounted yet at the moment we decide placement, so it can't
-  // be measured — these match the 2-row emoji layout plus a small
-  // buffer so a loaded premium catalog doesn't overflow unexpectedly.
-  const PICKER_ESTIMATED_HEIGHT = 140;
+  // be measured — this must cover the TALL case (default row + the
+  // PREMIUM divider, upgrade link and a second emoji row), or a message
+  // near the bottom opens the picker downward and its lower rows get
+  // clipped under the composer (what happened on mobile). Over-estimating
+  // only flips it above sooner, where there's always room (the whole
+  // conversation scrolls above the newest messages).
+  const PICKER_ESTIMATED_HEIGHT = 260;
   const PICKER_ESTIMATED_WIDTH = 320;
   const VIEWPORT_SAFETY_PAD = 12;
 
@@ -932,6 +936,16 @@
     width: 260px;
     max-width: 100%;
     height: 40px;
+  }
+
+  /* On touch devices the native audio control has a taller intrinsic height,
+     so pinning it to 40px clipped the transport buttons (the "raw/cut" player
+     on mobile). Let it take its natural height and fill the bubble width. */
+  @media (pointer: coarse) {
+    .media-audio {
+      width: 100%;
+      height: auto;
+    }
   }
 
   /* Generic file / unknown attachment → a tappable download chip.
