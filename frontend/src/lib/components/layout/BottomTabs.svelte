@@ -87,23 +87,62 @@
     }
     if (tab.isMore) {
       e.preventDefault();
-      showMoreSheet = !showMoreSheet;
+      if (showMoreSheet) closeMoreSheet();
+      else openMoreSheet();
       return;
     }
   }
 
-  function closeMoreSheet() {
+  // The sheet is a mobile overlay, so the phone's Back button (and the
+  // swipe-back gesture) should dismiss it rather than leave the page. Push a
+  // throwaway history entry while it's open; a `popstate` (the back gesture)
+  // then closes the sheet and consumes that entry. Any other close path
+  // (tap-outside, Escape, a nav link, tapping More again) pops the entry back
+  // off so the history stack doesn't collect dead entries.
+  let sheetPushedState = false;
+
+  function openMoreSheet() {
+    showMoreSheet = true;
+    try {
+      history.pushState({ hsMoreSheet: true }, '');
+      sheetPushedState = true;
+    } catch {
+      /* history unavailable — the sheet still works, just no back-to-close */
+    }
+  }
+
+  function closeMoreSheet(opts?: { fromPop?: boolean; navigating?: boolean }) {
+    if (!showMoreSheet) return;
     showMoreSheet = false;
+    // Don't touch history when the back gesture already consumed our entry
+    // (fromPop), nor when a navigation is about to supersede it (navigating).
+    if (sheetPushedState && !opts?.fromPop && !opts?.navigating) {
+      try {
+        history.back();
+      } catch {
+        /* ignore */
+      }
+    }
+    sheetPushedState = false;
   }
 
   function handleSheetKey(e: KeyboardEvent) {
     if (e.key === 'Escape') closeMoreSheet();
   }
 
+  function handlePopState() {
+    if (showMoreSheet) closeMoreSheet({ fromPop: true });
+  }
+
+  $effect(() => {
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  });
+
   // The header avatar dropdown (the old logout home) is hidden on mobile,
   // so the More sheet carries logout now — separated from nav links.
   async function handleLogout() {
-    closeMoreSheet();
+    closeMoreSheet({ navigating: true });
     try {
       await api.post('/api/v1/auth/logout');
     } catch {
@@ -155,7 +194,7 @@
 {#if showMoreSheet}
   <div
     class="more-sheet-backdrop"
-    onclick={closeMoreSheet}
+    onclick={() => closeMoreSheet()}
     role="presentation"
   ></div>
   <div
@@ -172,7 +211,7 @@
             href={item.href}
             class="more-sheet-item"
             class:active={isActive(item.href)}
-            onclick={closeMoreSheet}
+            onclick={() => closeMoreSheet({ navigating: true })}
           >
             <span class="more-sheet-icon-wrap">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
