@@ -8,6 +8,7 @@
   import { getPostContext } from '$lib/api/statuses.js';
   import { instanceName } from '$lib/stores/instance.js';
   import { t } from '$lib/stores/i18n.js';
+  import { addToast } from '$lib/stores/toast.js';
 
   let posts = $state<Post[]>([]);
   let loading = $state(true);
@@ -65,6 +66,10 @@
     } catch {
       /* storage unavailable — the toggle just won't persist */
     }
+    // Touch devices have no hover, so the button's tooltip never shows and its
+    // purpose is invisible. A brief toast on tap names the state without being
+    // intrusive — and doubles as feedback on desktop too.
+    addToast($t(showFederated ? 'streams.fediverse_on' : 'streams.fediverse_off'), 'info');
     loadStreams();
   }
 
