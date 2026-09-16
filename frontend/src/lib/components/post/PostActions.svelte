@@ -168,8 +168,12 @@
       const vert = below
         ? `top: ${Math.round(rect.bottom + 8)}px`
         : `bottom: ${Math.round(window.innerHeight - rect.top + 8)}px`;
+      // `inset: auto` clears the base `.picker-anchor` logical insets
+      // (`inset-block-end: 100%`, `inset-inline-start: 50%`) so a downward-
+      // opening picker (which sets only `top`) isn't left with `bottom: 100%`
+      // and shoved off-screen — the same leftover-inset trap as the ⋯ menu.
       reactionPickerFixedStyle =
-        `position: fixed; left: ${cx}px; transform: translateX(-50%); ${vert}; z-index: 9999;`;
+        `position: fixed; inset: auto; left: ${cx}px; transform: translateX(-50%); ${vert}; z-index: 9999;`;
     }
   });
   let showMoreMenu = $state(false);
@@ -894,7 +898,12 @@
     const vert = menuOpenUpward
       ? `bottom: ${Math.round(window.innerHeight - rect.top + 4)}px`
       : `top: ${Math.round(rect.bottom + 4)}px`;
-    menuFixedStyle = `position: fixed; ${vert}; ${horiz}; max-height: ${cap}px; z-index: 9999;`;
+    // `inset: auto` neutralizes the base `.more-menu` logical insets
+    // (`inset-block-start: 100%`, `inset-inline-end: 0`) before we set the
+    // specific edges. Without it, an upward-opening menu (which sets only
+    // `bottom`) kept `top: 100%` and was shoved off the bottom of the screen —
+    // invisible until a scroll recomputed it. Same fix as the shared Dropdown.
+    menuFixedStyle = `position: fixed; inset: auto; ${vert}; ${horiz}; max-height: ${cap}px; z-index: 9999;`;
   }
 
   function toggleMoreMenu(e: MouseEvent) {
