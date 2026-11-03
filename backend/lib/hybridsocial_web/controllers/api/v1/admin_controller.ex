@@ -1101,7 +1101,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           conn |> put_status(:not_found) |> json(%{error: "report.not_found"})
 
         report ->
-          conn |> put_status(:ok) |> json(%{data: serialize_report(report)})
+          conn |> put_status(:ok) |> json(%{data: serialize_report_detail(report)})
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -1115,10 +1115,8 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
       case Moderation.resolve_report(id, moderator_id, action_taken) do
         {:ok, report} ->
-          Moderation.log(moderator_id, "report.resolved", "report", report.id, %{
-            action_taken: action_taken
-          })
-
+          # The audit entry is written by Moderation.resolve_report/3 in the
+          # same transaction; logging here too recorded every action twice.
           Moderation.fire_webhook("report.resolved", %{
             id: report.id,
             moderator_id: moderator_id,
@@ -1129,6 +1127,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
         {:error, :not_found} ->
           conn |> put_status(:not_found) |> json(%{error: "report.not_found"})
+
+        {:error, :already_closed} ->
+          conn |> put_status(:conflict) |> json(%{error: "report.already_closed"})
 
         {:error, _} ->
           conn |> put_status(:unprocessable_entity) |> json(%{error: "report.resolve_failed"})
@@ -1144,8 +1145,6 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
       case Moderation.dismiss_report(id, moderator_id) do
         {:ok, report} ->
-          Moderation.log(moderator_id, "report.dismissed", "report", report.id, %{})
-
           Moderation.fire_webhook("report.resolved", %{
             id: report.id,
             moderator_id: moderator_id,
@@ -1156,6 +1155,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
         {:error, :not_found} ->
           conn |> put_status(:not_found) |> json(%{error: "report.not_found"})
+
+        {:error, :already_closed} ->
+          conn |> put_status(:conflict) |> json(%{error: "report.already_closed"})
 
         {:error, _} ->
           conn |> put_status(:unprocessable_entity) |> json(%{error: "report.dismiss_failed"})
@@ -1180,6 +1182,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
         {:error, :not_found} ->
           conn |> put_status(:not_found) |> json(%{error: "report.not_found"})
+
+        {:error, :already_closed} ->
+          conn |> put_status(:conflict) |> json(%{error: "report.already_closed"})
 
         {:error, _} ->
           conn |> put_status(:unprocessable_entity) |> json(%{error: "report.assign_failed"})
@@ -2399,7 +2404,9 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     %{
       id: report.id,
       category: report.category,
-      comment: report.comment,
+      # Report has no `comment` field; reading one raised KeyError and 500'd
+      # /admin/posts/:id for every post that had been reported.
+      comment: report.description,
       status: report.status,
       created_at: report.inserted_at,
       reporter: serialize_audit_actor(report.reporter)
@@ -3064,13 +3071,97 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       comment: report.description,
       status: report.status,
       assigned_to: report.assigned_to,
+      assigned_moderator: serialize_loaded_actor(report.assigned_moderator),
       action_taken: report.action_taken,
       federated: report.federated,
+      tier: report.tier,
+      group_id: report.group_id,
+      escalated_at: report.escalated_at,
       resolved_at: report.resolved_at,
       created_at: report.inserted_at,
       updated_at: report.updated_at
     }
   end
+
+  defp serialize_loaded_actor(%Hybridsocial.Accounts.Identity{} = i), do: serialize_audit_actor(i)
+  defp serialize_loaded_actor(_), do: nil
+
+  # GET /admin/reports/:id — the list payload plus what a moderator needs
+  # to decide without leaving the page: the full reported post (author,
+  # CW, media), who escalated it and from which group, this report's own
+  # action trail, and the reported account's other reports.
+  defp serialize_report_detail(report) do
+    related = Moderation.related_reports(report)
+
+    escalated_by =
+      if report.escalated_by,
+        do:
+          report.escalated_by |> Hybridsocial.Accounts.get_identity() |> serialize_loaded_actor()
+
+    group =
+      if report.group_id do
+        case Hybridsocial.Repo.get(Hybridsocial.Groups.Group, report.group_id) do
+          nil -> nil
+          g -> %{id: g.id, name: g.name}
+        end
+      end
+
+    report
+    |> serialize_report()
+    |> Map.merge(%{
+      target_post: report_detail_post(report),
+      escalated_by: escalated_by,
+      group: group,
+      audit_log: Enum.map(Moderation.report_audit_log(report.id), &serialize_post_audit_entry/1),
+      related_reports:
+        Enum.map(related, fn r ->
+          %{
+            id: r.id,
+            category: r.category,
+            status: r.status,
+            target_type: r.target_type,
+            created_at: r.inserted_at,
+            reporter: serialize_loaded_actor(r.reporter)
+          }
+        end),
+      reported_open_reports: Moderation.open_report_count_for(report.reported_id)
+    })
+  end
+
+  defp report_detail_post(%{target_type: "post", target_id: id}) when is_binary(id) do
+    case Hybridsocial.Repo.get(Hybridsocial.Social.Post, id) do
+      nil ->
+        nil
+
+      post ->
+        post = Hybridsocial.Repo.preload(post, [:media_attachments, :identity])
+
+        %{
+          id: post.id,
+          content: post.content,
+          content_html: post.content_html,
+          spoiler_text: post.spoiler_text,
+          sensitive: post.sensitive,
+          visibility: post.visibility,
+          created_at: post.inserted_at,
+          edited_at: post.edited_at,
+          deleted_at: post.deleted_at,
+          author: serialize_loaded_actor(post.identity),
+          media:
+            Enum.map(post.media_attachments || [], fn m ->
+              %{
+                id: m.id,
+                content_type: m.content_type,
+                alt_text: m.alt_text,
+                storage_path: m.storage_path,
+                remote_url: m.remote_url
+              }
+            end)
+        }
+    end
+  end
+
+  defp report_detail_post(_), do: nil
 
   defp serialize_audit_entry(entry) do
     # Wrap target resolution so a broken resolver clause can never

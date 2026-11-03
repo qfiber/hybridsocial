@@ -217,10 +217,18 @@ defmodule Hybridsocial.Moderation do
     :ok
   end
 
+  @report_preloads [:reporter, :reported, :assigned_moderator]
+
+  # Statuses a moderator still has to act on. `investigating` is what
+  # `assign_report/2` moves a report to, so it is as open as `pending`.
+  @open_report_statuses ~w(pending investigating)
+
+  def open_report_statuses, do: @open_report_statuses
+
   def get_report(id) do
     case Repo.get(Report, id) do
       nil -> nil
-      report -> Repo.preload(report, [:reporter, :reported])
+      report -> Repo.preload(report, @report_preloads)
     end
   end
 
@@ -231,7 +239,40 @@ defmodule Hybridsocial.Moderation do
     |> order_by([r], desc: r.inserted_at)
     |> paginate(opts)
     |> Repo.all()
-    |> Repo.preload([:reporter, :reported])
+    |> Repo.preload(@report_preloads)
+  end
+
+  @doc """
+  Audit trail for one report (assign / resolve / dismiss), oldest first,
+  so the detail view reads as a timeline.
+  """
+  def report_audit_log(report_id) do
+    AuditLog
+    |> where([a], a.target_type == "report" and a.target_id == ^report_id)
+    |> order_by([a], asc: a.created_at)
+    |> limit(100)
+    |> Repo.all()
+    |> Repo.preload(:actor)
+  end
+
+  @doc """
+  Other reports filed against the same account, newest first, so a
+  moderator can spot a repeat pattern from one report. Excludes `report`.
+  """
+  def related_reports(%Report{reported_id: reported_id, id: id}, limit \\ 20) do
+    Report
+    |> where([r], r.reported_id == ^reported_id and r.id != ^id)
+    |> order_by([r], desc: r.inserted_at)
+    |> limit(^limit)
+    |> Repo.all()
+    |> Repo.preload(:reporter)
+  end
+
+  @doc "Count of still-open reports against an account."
+  def open_report_count_for(reported_id) do
+    Report
+    |> where([r], r.reported_id == ^reported_id and r.status in ^@open_report_statuses)
+    |> Repo.aggregate(:count)
   end
 
   # What instance staff see. Group-tier reports are group business and are
@@ -273,7 +314,11 @@ defmodule Hybridsocial.Moderation do
     n
   end
 
-  defp filter_reports_by_status(query, nil), do: query
+  defp filter_reports_by_status(query, status) when status in [nil, "", "all"], do: query
+
+  defp filter_reports_by_status(query, "open"),
+    do: where(query, [r], r.status in ^@open_report_statuses)
+
   defp filter_reports_by_status(query, status), do: where(query, [r], r.status == ^status)
 
   def assign_report(report_id, moderator_id) do
@@ -281,64 +326,58 @@ defmodule Hybridsocial.Moderation do
       nil ->
         {:error, :not_found}
 
-      report ->
-        report
-        |> Report.assign_changeset(moderator_id)
-        |> Repo.update()
-    end
-  end
-
-  def resolve_report(report_id, moderator_id, action_taken) do
-    case Repo.get(Report, report_id) do
-      nil ->
-        {:error, :not_found}
+      %Report{status: status} when status not in @open_report_statuses ->
+        {:error, :already_closed}
 
       report ->
-        was_pending? = report.status == "pending"
-
-        Ecto.Multi.new()
-        |> Ecto.Multi.update(:report, Report.resolve_changeset(report, action_taken))
-        |> Ecto.Multi.run(:audit, fn _repo, _changes ->
-          log(moderator_id, "report.resolved", "report", report_id, %{action_taken: action_taken})
-        end)
-        |> Repo.transaction()
-        |> case do
-          {:ok, %{report: resolved}} ->
-            if was_pending? and resolved.target_type == "post" and
-                 is_binary(resolved.target_id) do
-              bump_post_open_report_count(resolved.target_id, -1)
-            end
-
-            {:ok, resolved}
-
-          {:error, _, changeset, _} ->
-            {:error, changeset}
+        with {:ok, assigned} <- report |> Report.assign_changeset(moderator_id) |> Repo.update() do
+          {:ok, Repo.preload(assigned, @report_preloads)}
         end
     end
   end
 
+  def resolve_report(report_id, moderator_id, action_taken) do
+    close_report(
+      report_id,
+      moderator_id,
+      &Report.resolve_changeset(&1, action_taken),
+      "report.resolved",
+      %{action_taken: action_taken}
+    )
+  end
+
   def dismiss_report(report_id, moderator_id) do
+    close_report(report_id, moderator_id, &Report.dismiss_changeset/1, "report.dismissed", %{})
+  end
+
+  # Resolve and dismiss share one path: only an open report can be closed
+  # (re-closing would overwrite the original outcome and timestamp), the
+  # audit entry is written in the same transaction, and the post's
+  # open-report counter drops by one. That counter was incremented when
+  # the report was filed, so it has to come down for `investigating`
+  # reports too, not only `pending` ones.
+  defp close_report(report_id, moderator_id, changeset_fun, action, details) do
     case Repo.get(Report, report_id) do
       nil ->
         {:error, :not_found}
 
-      report ->
-        was_pending? = report.status == "pending"
+      %Report{status: status} when status not in @open_report_statuses ->
+        {:error, :already_closed}
 
+      report ->
         Ecto.Multi.new()
-        |> Ecto.Multi.update(:report, Report.dismiss_changeset(report))
+        |> Ecto.Multi.update(:report, changeset_fun.(report))
         |> Ecto.Multi.run(:audit, fn _repo, _changes ->
-          log(moderator_id, "report.dismissed", "report", report_id, %{})
+          log(moderator_id, action, "report", report_id, details)
         end)
         |> Repo.transaction()
         |> case do
-          {:ok, %{report: dismissed}} ->
-            if was_pending? and dismissed.target_type == "post" and
-                 is_binary(dismissed.target_id) do
-              bump_post_open_report_count(dismissed.target_id, -1)
+          {:ok, %{report: closed}} ->
+            if closed.target_type == "post" and is_binary(closed.target_id) do
+              bump_post_open_report_count(closed.target_id, -1)
             end
 
-            {:ok, dismissed}
+            {:ok, Repo.preload(closed, @report_preloads)}
 
           {:error, _, changeset, _} ->
             {:error, changeset}

@@ -563,17 +563,80 @@ export interface AdminUser {
   verification_tier?: string | null;
 }
 
+export type AdminReportStatus = 'pending' | 'investigating' | 'resolved' | 'dismissed';
+
+/** Slim identity the admin API embeds for actors (moderators, reporters on sub-lists). */
+export interface AdminActorRef {
+  id: string;
+  handle: string;
+  display_name: string | null;
+  avatar_url: string | null;
+}
+
 export interface AdminReport {
   id: string;
-  status: 'pending' | 'resolved' | 'dismissed';
+  status: AdminReportStatus;
   category: string;
-  comment: string;
+  /** The reporter's note. `description` is the same value. */
+  comment: string | null;
+  description: string | null;
+  target_type: string | null;
+  target_id: string | null;
+  action_taken: string | null;
+  federated: boolean;
+  tier: 'instance' | 'group';
+  group_id: string | null;
+  escalated_at: string | null;
+  resolved_at: string | null;
   created_at: string;
   updated_at: string;
-  reporter: Identity;
-  target_account: Identity;
+  reporter: Identity | null;
+  /** Admin account shape: carries moderation state as well. */
+  target_account: (Identity & { is_suspended?: boolean; is_silenced?: boolean }) | null;
   target_post: Post | null;
-  assigned_to: Identity | null;
+  /** Moderator id; `assigned_moderator` is the embedded identity. */
+  assigned_to: string | null;
+  assigned_moderator: AdminActorRef | null;
+}
+
+export interface AdminReportDetail extends Omit<AdminReport, 'target_post'> {
+  target_post: {
+    id: string;
+    content: string | null;
+    content_html: string | null;
+    spoiler_text: string | null;
+    sensitive: boolean;
+    visibility: string;
+    created_at: string;
+    edited_at: string | null;
+    deleted_at: string | null;
+    author: AdminActorRef | null;
+    media: {
+      id: string;
+      content_type: string;
+      alt_text: string | null;
+      storage_path: string | null;
+      remote_url: string | null;
+    }[];
+  } | null;
+  escalated_by: AdminActorRef | null;
+  group: { id: string; name: string } | null;
+  audit_log: {
+    id: string;
+    action: string;
+    details: Record<string, unknown> | null;
+    created_at: string;
+    actor: AdminActorRef | null;
+  }[];
+  related_reports: {
+    id: string;
+    category: string;
+    status: AdminReportStatus;
+    target_type: string | null;
+    created_at: string;
+    reporter: AdminActorRef | null;
+  }[];
+  reported_open_reports: number;
 }
 
 export interface ContentFilter {
