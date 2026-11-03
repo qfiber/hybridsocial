@@ -96,6 +96,42 @@
     return ACTION_KEYS[action] ? $t(ACTION_KEYS[action]) : action;
   }
 
+  type AuditEntry = AdminReportDetail['audit_log'][number];
+
+  // Before #206 every resolve/dismiss was logged twice, a few ms apart.
+  // The audit log is append-only, so collapse identical neighbours (same
+  // action and moderator within a few seconds) for display instead.
+  const DUPLICATE_WINDOW_MS = 5000;
+  let activity = $derived.by(() => {
+    const out: AuditEntry[] = [];
+    for (const entry of report?.audit_log ?? []) {
+      const prev = out[out.length - 1];
+      const duplicate =
+        prev &&
+        prev.action === entry.action &&
+        prev.actor?.id === entry.actor?.id &&
+        Math.abs(new Date(entry.created_at).getTime() - new Date(prev.created_at).getTime()) <
+          DUPLICATE_WINDOW_MS;
+      if (!duplicate) out.push(entry);
+    }
+    return out;
+  });
+
+  // `action_taken` defaults to "resolved" when no note was given, which
+  // only repeats the status, so treat that as "no note".
+  function actionNoteOf(value: unknown): string | null {
+    return typeof value === 'string' && value.trim() && value !== 'resolved' ? value : null;
+  }
+
+  // A federated report arrives from the remote *server*. Mastodon sends it
+  // as the instance's system actor and doesn't reveal who filed it, so the
+  // reporter shown is the server, not a person.
+  let reporterServer = $derived.by(() => {
+    if (!report?.federated || !report.reporter) return null;
+    const r = report.reporter;
+    return r.domain || (r.acct?.includes('@') ? r.acct.split('@').pop() : null) || null;
+  });
+
   function mediaSrc(m: { storage_path: string | null; remote_url: string | null }): string {
     return m.storage_path || m.remote_url || '';
   }
@@ -220,8 +256,12 @@
           <h2 class="section-title">{$t('admin.reports.activity')}</h2>
           <ol class="timeline">
             <li class="timeline-row">
-              <span class="timeline-action">{$t('admin.reports.activity_filed')}</span>
-              {#if report.reporter}
+              {#if reporterServer}
+                <span class="timeline-action">{$t('admin.reports.activity_forwarded', { server: reporterServer })}</span>
+              {:else}
+                <span class="timeline-action">{$t('admin.reports.activity_filed')}</span>
+              {/if}
+              {#if report.reporter && !reporterServer}
                 <a href="/@{report.reporter.acct || report.reporter.handle}">@{report.reporter.acct || report.reporter.handle}</a>
               {/if}
               <span class="muted">· {formatDate(report.created_at)}</span>
@@ -235,7 +275,7 @@
                 <span class="muted">· {formatDate(report.escalated_at)}</span>
               </li>
             {/if}
-            {#each report.audit_log as entry (entry.id)}
+            {#each activity as entry (entry.id)}
               <li class="timeline-row">
                 <span class="timeline-action">{activityLabel(entry.action)}</span>
                 {#if entry.actor}
@@ -244,8 +284,8 @@
                   <span class="muted">{$t('admin.reports.system')}</span>
                 {/if}
                 <span class="muted">· {formatDate(entry.created_at)}</span>
-                {#if entry.details && typeof entry.details.action_taken === 'string' && entry.details.action_taken !== 'resolved'}
-                  <p class="timeline-note">{entry.details.action_taken}</p>
+                {#if actionNoteOf(entry.details?.action_taken)}
+                  <p class="timeline-note">{actionNoteOf(entry.details?.action_taken)}</p>
                 {/if}
               </li>
             {/each}
@@ -314,7 +354,7 @@
             <dl class="meta-list">
               <dt>{$t('admin.reports.status')}</dt>
               <dd><span class="status-badge status-{report.status}">{statusLabel(report.status)}</span></dd>
-              {#if report.action_taken}
+              {#if actionNoteOf(report.action_taken)}
                 <dt>{$t('admin.reports.action_taken')}</dt>
                 <dd>{report.action_taken}</dd>
               {/if}
@@ -359,7 +399,11 @@
         <!-- Reporter -->
         <section class="card side-card">
           <h2 class="side-title">{$t('admin.reports.reporter')}</h2>
-          {#if report.reporter}
+          {#if reporterServer}
+            <p class="person-name">{$t('admin.reports.remote_server', { server: reporterServer })}</p>
+            <p class="side-text">{$t('admin.reports.remote_reporter_hint')}</p>
+            <a class="side-link" href="/admin/federation">{$t('admin.reports.view_federation')} →</a>
+          {:else if report.reporter}
             {@const rep = report.reporter}
             <a class="person" href="/@{rep.acct || rep.handle}">
               {#if rep.avatar_url}
