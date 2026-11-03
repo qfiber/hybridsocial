@@ -3,12 +3,11 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install dependencies
-COPY package.json package-lock.json* ./
+# Install dependencies. adapter-node is a pinned devDependency in the
+# lockfile; it used to be `npm install`ed here unversioned, which broke the
+# image the day adapter-node 6 (SvelteKit 3 only) was published.
+COPY package.json package-lock.json ./
 RUN npm ci
-
-# Install adapter-node for production
-RUN npm install @sveltejs/adapter-node
 
 # Copy source
 COPY . .
