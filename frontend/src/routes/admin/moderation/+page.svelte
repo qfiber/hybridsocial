@@ -5,6 +5,7 @@
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import DataTable from '$lib/components/admin/DataTable.svelte';
   import { addToast } from '$lib/stores/toast.js';
+  import { t } from '$lib/stores/i18n.js';
   import {
     getReports, resolveReport, dismissReport,
     getContentFilters, createContentFilter, deleteContentFilter,
@@ -32,7 +33,7 @@
     { id: 'media-hashes', label: 'Media Hashes' },
   ];
 
-  const validTabs = tabs.map((t) => t.id);
+  const validTabs = tabs.map((tab) => tab.id);
 
   let activeTab = $state('reports');
 
@@ -45,15 +46,27 @@
   let rejectingId = $state<string | null>(null);
   let rejectReason = $state('');
 
-  // Reports state
+  // Reports state. The status filter is applied by the server: loading
+  // one unfiltered page and filtering it here only ever showed the newest
+  // 20 reports, so anything older silently never appeared.
+  const REPORTS_PAGE_SIZE = 50;
+  const OPEN_STATUSES = ['pending', 'investigating'];
   let reports: AdminReport[] = $state([]);
   let reportsLoading = $state(true);
-  let reportStatusFilter = $state('pending');
+  let reportsLoadingMore = $state(false);
+  let reportsHasMore = $state(false);
+  let reportStatusFilter = $state('open');
 
+  function matchesReportFilter(status: string, filter: string): boolean {
+    if (filter === 'all') return true;
+    if (filter === 'open') return OPEN_STATUSES.includes(status);
+    return status === filter;
+  }
+
+  // Server-filtered, but re-checked locally so a report resolved from
+  // this page drops out of the Open/Pending view straight away.
   let filteredReports = $derived(
-    reportStatusFilter === 'all'
-      ? reports
-      : reports.filter((r) => r.status === reportStatusFilter)
+    reports.filter((r) => matchesReportFilter(r.status, reportStatusFilter))
   );
 
   let reportRows = $derived(
@@ -143,15 +156,41 @@
     await loadReports();
   });
 
+  async function fetchReportsPage(offset: number): Promise<AdminReport[]> {
+    const params: Record<string, string> = {
+      limit: String(REPORTS_PAGE_SIZE),
+      offset: String(offset)
+    };
+    if (reportStatusFilter !== 'all') params.status = reportStatusFilter;
+    const result = await getReports(params);
+    return result.data ?? [];
+  }
+
   async function loadReports() {
     reportsLoading = true;
     try {
-      const result = await getReports();
-      reports = result.data;
+      const page = await fetchReportsPage(0);
+      reports = page;
+      reportsHasMore = page.length === REPORTS_PAGE_SIZE;
     } catch {
-      addToast('Failed to load reports', 'error');
+      addToast($t('admin.reports.load_failed'), 'error');
     } finally {
       reportsLoading = false;
+    }
+  }
+
+  async function loadMoreReports() {
+    if (reportsLoadingMore) return;
+    reportsLoadingMore = true;
+    try {
+      const page = await fetchReportsPage(reports.length);
+      const seen = new Set(reports.map((r) => r.id));
+      reports = [...reports, ...page.filter((r) => !seen.has(r.id))];
+      reportsHasMore = page.length === REPORTS_PAGE_SIZE;
+    } catch {
+      addToast($t('admin.reports.load_failed'), 'error');
+    } finally {
+      reportsLoadingMore = false;
     }
   }
 
@@ -481,11 +520,19 @@
   <Tabs {tabs} bind:active={activeTab}>
     {#if activeTab === 'reports'}
       <div class="tab-toolbar">
-        <select class="input" style="width: 160px" bind:value={reportStatusFilter}>
-          <option value="all">All</option>
-          <option value="pending">Pending</option>
-          <option value="resolved">Resolved</option>
-          <option value="dismissed">Dismissed</option>
+        <select
+          class="input"
+          style="width: 160px"
+          bind:value={reportStatusFilter}
+          onchange={loadReports}
+          aria-label={$t('admin.reports.filter_label')}
+        >
+          <option value="open">{$t('admin.reports.filter_open')}</option>
+          <option value="pending">{$t('admin.reports.status_pending')}</option>
+          <option value="investigating">{$t('admin.reports.status_investigating')}</option>
+          <option value="resolved">{$t('admin.reports.status_resolved')}</option>
+          <option value="dismissed">{$t('admin.reports.status_dismissed')}</option>
+          <option value="all">{$t('admin.reports.filter_all')}</option>
         </select>
         <span class="retention-note" aria-live="polite">
           Resolved and dismissed reports are kept for 90 days, then deleted. Pending reports are never deleted automatically.
@@ -568,10 +615,17 @@
               {row['status']}
             </span>
           </td>
-          <td>{formatDate(row['created_at'] as string)}</td>
           <td>
-            {#if row['status'] === 'pending'}
-              <div class="action-buttons">
+            <a class="report-date-link" href="/admin/moderation/reports/{row['id']}">
+              {formatDate(row['created_at'] as string)}
+            </a>
+          </td>
+          <td>
+            <div class="action-buttons">
+              <a class="btn btn-sm btn-outline" href="/admin/moderation/reports/{row['id']}">
+                {$t('admin.reports.view_details')}
+              </a>
+            {#if OPEN_STATUSES.includes(row['status'] as string)}
                 <button
                   class="btn btn-sm btn-primary"
                   type="button"
@@ -582,13 +636,24 @@
                   type="button"
                   onclick={() => handleDismiss(row as unknown as AdminReport)}
                 >Dismiss</button>
-              </div>
-            {:else}
-              <span class="text-secondary" style="font-size: var(--text-xs)">{row['status']}</span>
             {/if}
+            </div>
           </td>
         {/snippet}
       </DataTable>
+
+      {#if reportsHasMore && !reportsLoading}
+        <div class="load-more-row">
+          <button
+            class="btn btn-outline"
+            type="button"
+            disabled={reportsLoadingMore}
+            onclick={loadMoreReports}
+          >
+            {reportsLoadingMore ? $t('admin.reports.loading') : $t('admin.reports.load_more')}
+          </button>
+        </div>
+      {/if}
 
     {:else if activeTab === 'verifications'}
       <div class="tab-toolbar">
@@ -890,6 +955,27 @@
   .status-resolved {
     background: var(--color-success-soft);
     color: var(--color-on-success-soft);
+  }
+
+  .status-investigating {
+    background: var(--color-info-soft);
+    color: var(--color-on-info-soft);
+  }
+
+  .load-more-row {
+    display: flex;
+    justify-content: center;
+    margin-block-start: var(--space-4);
+  }
+
+  .report-date-link {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .report-date-link:hover {
+    color: var(--color-primary);
+    text-decoration: underline;
   }
 
   .status-dismissed {

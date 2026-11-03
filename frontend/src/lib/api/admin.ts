@@ -3,6 +3,7 @@ import type {
   Post,
   AdminUser,
   AdminReport,
+  AdminReportDetail,
   ContentFilter,
   BannedDomain,
   IpBlock,
@@ -162,16 +163,27 @@ export function getReports(params?: Record<string, string>): Promise<PaginatedRe
   return api.get('/api/v1/admin/reports', params);
 }
 
-export function resolveReport(id: string): Promise<AdminReport> {
-  return api.post(`/api/v1/admin/reports/${id}/resolve`);
+export function getReport(id: string): Promise<{ data: AdminReportDetail }> {
+  return api.get(`/api/v1/admin/reports/${encodeURIComponent(id)}`);
+}
+
+export function resolveReport(id: string, actionTaken?: string): Promise<AdminReport> {
+  return api.post(
+    `/api/v1/admin/reports/${id}/resolve`,
+    actionTaken ? { action_taken: actionTaken } : undefined
+  );
 }
 
 export function dismissReport(id: string): Promise<AdminReport> {
   return api.post(`/api/v1/admin/reports/${id}/dismiss`);
 }
 
-export function assignReport(id: string, assigneeId: string): Promise<AdminReport> {
-  return api.post(`/api/v1/admin/reports/${id}/assign`, { assignee_id: assigneeId });
+/** Assign a report; omit `moderatorId` to assign it to yourself. */
+export function assignReport(id: string, moderatorId?: string): Promise<AdminReport> {
+  return api.post(
+    `/api/v1/admin/reports/${id}/assign`,
+    moderatorId ? { moderator_id: moderatorId } : {}
+  );
 }
 
 // Content Filters

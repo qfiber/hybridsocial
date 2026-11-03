@@ -60,8 +60,140 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert %{"data" => data} = json_response(conn, 200)
       assert data["status"] == "investigating"
       assert data["assigned_to"] == admin.id
+      assert data["assigned_moderator"]["id"] == admin.id
+    end
+
+    test "status=open returns pending and investigating, not closed", %{
+      conn: conn,
+      admin: admin,
+      user: user,
+      reported: reported,
+      report: report
+    } do
+      {:ok, investigating} =
+        Moderation.create_report(user.id, %{"reported_id" => reported.id, "category" => "spam"})
+
+      {:ok, _} = Moderation.assign_report(investigating.id, admin.id)
+
+      {:ok, closed} =
+        Moderation.create_report(user.id, %{"reported_id" => reported.id, "category" => "other"})
+
+      {:ok, _} = Moderation.dismiss_report(closed.id, admin.id)
+
+      ids =
+        get(conn, "/api/v1/admin/reports?status=open")
+        |> json_response(200)
+        |> Map.fetch!("data")
+        |> Enum.map(& &1["id"])
+        |> MapSet.new()
+
+      assert ids == MapSet.new([report.id, investigating.id])
+
+      assert [%{"id" => id}] =
+               get(conn, "/api/v1/admin/reports?status=dismissed")
+               |> json_response(200)
+               |> Map.fetch!("data")
+
+      assert id == closed.id
+    end
+
+    test "detail embeds the reported post, the action trail and related reports", %{
+      conn: conn,
+      admin: admin,
+      user: user,
+      reported: reported,
+      report: earlier
+    } do
+      {:ok, post} =
+        Hybridsocial.Social.Posts.create_post(reported.id, %{
+          "content" => "reported body",
+          "spoiler_text" => "cw"
+        })
+
+      {:ok, report} =
+        Moderation.create_report(user.id, %{
+          "reported_id" => reported.id,
+          "target_type" => "post",
+          "target_id" => post.id,
+          "category" => "harassment",
+          "description" => "why"
+        })
+
+      {:ok, _} = Moderation.resolve_report(report.id, admin.id, "warned")
+
+      data =
+        get(conn, "/api/v1/admin/reports/#{report.id}")
+        |> json_response(200)
+        |> Map.fetch!("data")
+
+      assert data["description"] == "why"
+      assert data["action_taken"] == "warned"
+      assert data["target_post"]["id"] == post.id
+      assert data["target_post"]["spoiler_text"] == "cw"
+      assert data["target_post"]["author"]["id"] == reported.id
+      assert [%{"action" => "report.resolved"}] = data["audit_log"]
+      assert [%{"id" => related_id}] = data["related_reports"]
+      assert related_id == earlier.id
+      assert data["reported_open_reports"] == 1
+    end
+
+    test "a closed report can't be closed or assigned again", %{conn: conn, report: report} do
+      assert json_response(post(conn, "/api/v1/admin/reports/#{report.id}/dismiss"), 200)
+
+      assert %{"error" => "report.already_closed"} =
+               json_response(post(conn, "/api/v1/admin/reports/#{report.id}/resolve"), 409)
+
+      assert %{"error" => "report.already_closed"} =
+               json_response(post(conn, "/api/v1/admin/reports/#{report.id}/assign", %{}), 409)
+
+      # One audit entry per action, not two (the controller used to log again).
+      assert [_] = Moderation.report_audit_log(report.id)
+    end
+
+    test "resolving an investigating post report still drops the post's open count", %{
+      admin: admin,
+      user: user,
+      reported: reported
+    } do
+      {:ok, post} = Hybridsocial.Social.Posts.create_post(reported.id, %{"content" => "x"})
+
+      {:ok, report} =
+        Moderation.create_report(user.id, %{
+          "reported_id" => reported.id,
+          "target_type" => "post",
+          "target_id" => post.id,
+          "category" => "spam"
+        })
+
+      {:ok, _} = Moderation.assign_report(report.id, admin.id)
+      {:ok, _} = Moderation.resolve_report(report.id, admin.id, "resolved")
+
+      assert Hybridsocial.Repo.get!(Hybridsocial.Social.Post, post.id).open_report_count == 0
+    end
+
+    test "GET /admin/posts/:id works for a reported post", %{
+      conn: conn,
+      user: user,
+      reported: reported
+    } do
+      {:ok, post} = Hybridsocial.Social.Posts.create_post(reported.id, %{"content" => "x"})
+
+      {:ok, _} =
+        Moderation.create_report(user.id, %{
+          "reported_id" => reported.id,
+          "target_type" => "post",
+          "target_id" => post.id,
+          "category" => "spam",
+          "description" => "note"
+        })
+
+      assert %{"reports" => [%{"comment" => "note"}]} =
+               get(conn, "/api/v1/admin/posts/#{post.id}") |> json_response(200) |> unwrap_data()
     end
   end
+
+  defp unwrap_data(%{"data" => data}), do: data
+  defp unwrap_data(body), do: body
 
   describe "moderator access" do
     setup %{conn: conn} do
