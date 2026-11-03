@@ -688,5 +688,9 @@
   "admin.reports.resolved_toast": "Report resolved",
   "admin.reports.dismissed_toast": "Report dismissed",
   "admin.reports.already_closed": "This report was already closed by someone else",
-  "admin.reports.action_failed": "That action failed. Please try again."
+  "admin.reports.action_failed": "That action failed. Please try again.",
+  "admin.reports.activity_forwarded": "Sent by the server {server}",
+  "admin.reports.remote_server": "The server {server}",
+  "admin.reports.remote_reporter_hint": "This report was forwarded by another server. Remote servers usually don't share which of their users filed it.",
+  "admin.reports.view_federation": "Federation settings"
 }
