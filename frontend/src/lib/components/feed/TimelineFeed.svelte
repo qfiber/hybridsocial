@@ -337,11 +337,16 @@
 </script>
 
 <div class="timeline-feed">
-  {#if tabs.length > 1}
+  {#if tabs.length > 1 || activeTab?.sorts?.length}
     <!-- Sticky feed switcher: pinned under the header so switching feeds
-         deep in a long timeline doesn't force a scroll to top. -->
+         deep in a long timeline doesn't force a scroll to top. Renders when
+         there's a feed switcher (>1 tab) OR a sort control — Explore drives a
+         single tab at a time but still needs its Trending/Newest/Oldest chips
+         (their absence for single-tab feeds was the regression). -->
     <div class="timeline-sticky-bar">
-      <FeedTabs {tabs} active={activeId} onchange={switchTab} />
+      {#if tabs.length > 1}
+        <FeedTabs {tabs} active={activeId} onchange={switchTab} />
+      {/if}
       {#if activeTab?.sorts?.length}
         <div class="timeline-sort" class:timeline-sort-hidden={sortHidden} role="group" aria-label="Sort">
           {#each activeTab.sorts as s (s.value)}
@@ -383,7 +388,10 @@
 
   .timeline-sticky-bar {
     position: sticky;
-    inset-block-start: var(--header-height);
+    /* `--timeline-sticky-offset` lets a host stack another sticky bar above
+       this one (Explore's Local/Global/Trending switcher). Defaults to 0 so
+       the Home timeline is unaffected. */
+    inset-block-start: calc(var(--header-height) + var(--timeline-sticky-offset, 0px));
     z-index: 20;
     display: flex;
     flex-direction: column;

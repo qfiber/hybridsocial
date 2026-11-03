@@ -101,6 +101,34 @@
 
   let feedTab = $derived(exploreTabs.find((t) => t.id === topTab) ?? exploreTabs[0]);
 
+  // Height of the Local/Global/Trending switcher, fed to
+  // `--timeline-sticky-offset` so the feed's own sticky sort chips stack
+  // directly beneath it. Measured from the live element (while visible) so the
+  // offset stays correct; it stays constant while the bar is collapsed.
+  let topTabsEl: HTMLDivElement | undefined = $state();
+  let topTabsH = $state(0);
+
+  // The switcher hides on scroll-down and reveals on scroll-up (and at the
+  // top), in lock-step with the feed's sort chips (same thresholds) so the two
+  // stacked bars slide away and back together — the main header stays the only
+  // permanently-fixed chrome.
+  let barHidden = $state(false);
+  let lastDirY = 0;
+
+  function handleExploreScroll() {
+    const y = window.scrollY;
+    if (y < 50) barHidden = false;
+    else if (y > lastDirY + 6) barHidden = true;
+    else if (y < lastDirY - 6) barHidden = false;
+    lastDirY = y;
+  }
+
+  // Measure the switcher's height once, the first time it's shown (its size is
+  // constant), so the offset can't be read as 0 mid collapse/reveal animation.
+  $effect(() => {
+    if (topTabsEl && !barHidden && topTabsH === 0) topTabsH = topTabsEl.offsetHeight;
+  });
+
   onMount(() => {
     try {
       const saved = localStorage.getItem(TOP_TAB_KEY);
@@ -108,6 +136,8 @@
     } catch {
       /* ignore */
     }
+    window.addEventListener('scroll', handleExploreScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleExploreScroll);
   });
 
   // ── Search ───────────────────────────────────────────────────────────
@@ -175,7 +205,7 @@
   <title>Explore - {$instanceName}</title>
 </svelte:head>
 
-<div class="explore-page">
+<div class="explore-page" style="--timeline-sticky-offset: {topTabsH}px">
   {#if hasSearched}
     <Tabs tabs={searchTabs} bind:active={searchTab}>
       {#if searching}
@@ -242,7 +272,11 @@
       {/if}
     </Tabs>
   {:else}
-    <div class="explore-toptabs">
+    <div
+      class="explore-toptabs"
+      class:explore-toptabs-hidden={barHidden}
+      bind:this={topTabsEl}
+    >
       <FeedTabs tabs={TOP_TABS} active={topTab} onchange={changeTopTab} />
     </div>
     {#if topTab === 'trending'}
@@ -264,6 +298,33 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  /* Pin the Local/Global/Trending switcher under the header, but let it hide
+     on scroll-down and reveal on scroll-up (in lock-step with the feed's sort
+     chips) so it's reachable after a deep scroll without permanently taking a
+     second fixed row. The chips stack below it via --timeline-sticky-offset. */
+  .explore-toptabs {
+    position: sticky;
+    inset-block-start: var(--header-height);
+    z-index: 21;
+    background: var(--color-surface-base, var(--color-bg));
+    padding-block: var(--space-2);
+    /* Absorb the page's flex gap so the pinned bar has no seam above it. */
+    margin-block-start: calc(-1 * var(--space-2));
+    overflow: hidden;
+    max-height: 5rem;
+    transition:
+      max-height 0.22s ease,
+      opacity 0.18s ease,
+      padding-block 0.22s ease;
+  }
+
+  .explore-toptabs-hidden {
+    max-height: 0;
+    padding-block: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .search-loading {
