@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { onMount, onDestroy } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { hasPermission, hasAnyPermission } from '$lib/stores/auth.js';
+  import { sudoExpiresAt, isSudoValid } from '$lib/stores/admin-sudo.js';
   import { adminSections, type AdminItem, type AdminSection } from '$lib/admin-nav.js';
 
   function itemVisible(item: AdminItem): boolean {
@@ -25,16 +25,16 @@
   // without opening it. Moved here from the old user-management tab bar.
   let pendingApprovals = $state(0);
   let pendingAppeals = $state(0);
-  let countsTimer: ReturnType<typeof setInterval> | null = null;
+  let sudoOk = $derived(isSudoValid($sudoExpiresAt));
 
   async function loadCounts() {
     const [a, ap] = await Promise.all([
       api
-        .get<{ data: { id: string }[] }>('/api/v1/admin/pending_accounts')
+        .poll<{ data: { id: string }[] }>('/api/v1/admin/pending_accounts')
         .then((r) => (r.data || []).length)
         .catch(() => 0),
       api
-        .get<{ data: { id: string }[] }>('/api/v1/admin/appeals', { status: 'pending' })
+        .poll<{ data: { id: string }[] }>('/api/v1/admin/appeals', { status: 'pending' })
         .then((r) => (r.data || []).length)
         .catch(() => 0),
     ]);
@@ -42,13 +42,14 @@
     pendingAppeals = ap;
   }
 
-  onMount(() => {
+  // Both endpoints are sudo-gated and the sidebar renders outside the sudo
+  // gate, so only poll while unlocked. Polling while locked just 403s, and
+  // each 403 re-fires admin-sudo-required.
+  $effect(() => {
+    if (!sudoOk) return;
     loadCounts();
-    countsTimer = setInterval(loadCounts, 60_000);
-  });
-
-  onDestroy(() => {
-    if (countsTimer) clearInterval(countsTimer);
+    const timer = setInterval(loadCounts, 60_000);
+    return () => clearInterval(timer);
   });
 
   function badgeCount(item: AdminItem): number {

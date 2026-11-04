@@ -90,11 +90,12 @@
 
     window.addEventListener('admin-sudo-required', onSudoRequired);
 
-    // Watchdog: when the stored expiry passes, flip the gate back on
-    // without waiting for the next admin API call to 403.
+    // Watchdog: when the stored expiry passes, re-check before locking, since
+    // activity in another tab may have extended the same window. This covers
+    // the case without waiting for the next admin API call to 403.
     expiryTimer = setInterval(() => {
       const exp = get(sudoExpiresAt);
-      if (exp && !isSudoValid(exp)) sudoExpiresAt.set(null);
+      if (exp && !isSudoValid(exp)) fetchSudoStatus();
     }, 30000);
   });
 

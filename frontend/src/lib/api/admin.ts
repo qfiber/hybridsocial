@@ -238,11 +238,11 @@ export function getFederationPolicies(): Promise<FederationPolicy[]> {
 }
 
 export function createFederationPolicy(policy: Omit<FederationPolicy, 'id' | 'created_at' | 'updated_at'>): Promise<FederationPolicy> {
-  return api.post('/api/v1/admin/instance_policies', policy);
+  return api.post<{ data: FederationPolicy }>('/api/v1/admin/instance_policies', policy).then(r => r.data);
 }
 
 export function updateFederationPolicy(id: string, policy: Partial<FederationPolicy>): Promise<FederationPolicy> {
-  return api.put(`/api/v1/admin/instance_policies/${id}`, policy);
+  return api.put<{ data: FederationPolicy }>(`/api/v1/admin/instance_policies/${id}`, policy).then(r => r.data);
 }
 
 export function deleteFederationPolicy(id: string): Promise<void> {
