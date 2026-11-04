@@ -90,7 +90,7 @@
 
   async function loadMetrics() {
     try {
-      const res = await api.get<{ services: MetricRow[] }>('/api/v1/admin/metrics/summary');
+      const res = await api.poll<{ services: MetricRow[] }>('/api/v1/admin/metrics/summary');
       metricRows = res.services || [];
     } catch {
       metricRows = [];

@@ -6,6 +6,14 @@ defmodule HybridsocialWeb.Plugs.RequireSudo do
   window (rolling TTL), so active admin sessions stay unlocked but an
   idle tab times out after `Hybridsocial.Auth.sudo_ttl_seconds/0`.
 
+  Requests sent from a timer rather than by the operator set
+  `x-sudo-passive: 1`, which checks the window without extending it. Otherwise
+  an open tab's polling would keep the window alive forever. The header can
+  only ever give a client less than the default, so it needs no verification.
+
+  Every allowed response carries `x-sudo-expires-at`, so the client can track
+  the real expiry instead of guessing at the rolling window.
+
   Must run after `Auth` + `RequireAuth`.
   """
   import Plug.Conn
@@ -21,10 +29,18 @@ defmodule HybridsocialWeb.Plugs.RequireSudo do
         deny(conn)
 
       token ->
-        case Auth.check_and_extend_sudo(token) do
-          {:ok, _until} -> conn
+        case check(conn, token) do
+          {:ok, until} -> put_resp_header(conn, "x-sudo-expires-at", DateTime.to_iso8601(until))
           {:error, :sudo_required} -> deny(conn)
         end
+    end
+  end
+
+  defp check(conn, token) do
+    if get_req_header(conn, "x-sudo-passive") == ["1"] do
+      Auth.check_sudo(token)
+    else
+      Auth.check_and_extend_sudo(token)
     end
   end
 

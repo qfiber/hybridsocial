@@ -30,11 +30,11 @@
   async function loadCounts() {
     const [a, ap] = await Promise.all([
       api
-        .get<{ data: { id: string }[] }>('/api/v1/admin/pending_accounts')
+        .poll<{ data: { id: string }[] }>('/api/v1/admin/pending_accounts')
         .then((r) => (r.data || []).length)
         .catch(() => 0),
       api
-        .get<{ data: { id: string }[] }>('/api/v1/admin/appeals', { status: 'pending' })
+        .poll<{ data: { id: string }[] }>('/api/v1/admin/appeals', { status: 'pending' })
         .then((r) => (r.data || []).length)
         .catch(() => 0),
     ]);

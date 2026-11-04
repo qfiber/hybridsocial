@@ -5,7 +5,8 @@ import { writable } from 'svelte/store';
 //  - any admin API call responds 403 auth.sudo_required
 //  - the stored expiry passes (a setInterval in the layout watches this)
 //
-// Set to the expires_at ISO string when the sudo challenge succeeds.
+// Set to the expires_at ISO string when the sudo challenge succeeds, and
+// updated from x-sudo-expires-at on every gated response as the window rolls.
 export const sudoExpiresAt = writable<string | null>(null);
 
 export function isSudoValid(expiresAt: string | null): boolean {

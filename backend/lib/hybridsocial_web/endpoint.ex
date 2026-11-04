@@ -77,7 +77,14 @@ defmodule HybridsocialWeb.Endpoint do
         "http://localhost:4000"
       ])
 
-    opts = CORSPlug.init(origin: origins, expose: ["link"], credentials: true)
+    opts =
+      CORSPlug.init(
+        origin: origins,
+        expose: ["link", "x-sudo-expires-at"],
+        headers: CORSPlug.defaults()[:headers] ++ ["x-sudo-passive"],
+        credentials: true
+      )
+
     CORSPlug.call(conn, opts)
   end
 

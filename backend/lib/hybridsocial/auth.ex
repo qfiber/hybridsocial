@@ -292,36 +292,38 @@ defmodule Hybridsocial.Auth do
   end
 
   @doc """
+  Returns `{:ok, until}` if the token has a sudo window that hasn't lapsed,
+  without moving it. Background polling uses this: a timer firing in an open
+  tab isn't activity and mustn't keep the window alive.
+  """
+  def check_sudo(access_token) do
+    case sudo_expires_at(access_token) do
+      nil ->
+        {:error, :sudo_required}
+
+      until ->
+        if DateTime.compare(until, DateTime.utc_now()) == :gt do
+          {:ok, until}
+        else
+          {:error, :sudo_required}
+        end
+    end
+  end
+
+  @doc """
   Returns `{:ok, new_until}` if the token currently has a sudo window that
   hasn't lapsed, and extends it by the TTL (rolling window). Returns
   `{:error, :sudo_required}` otherwise.
   """
   def check_and_extend_sudo(access_token) do
-    token_hash = Token.hash_token(access_token)
-    now = DateTime.utc_now()
-    new_until = DateTime.add(now, @sudo_ttl_seconds, :second)
+    with {:ok, _until} <- check_sudo(access_token) do
+      new_until = DateTime.add(DateTime.utc_now(), @sudo_ttl_seconds, :second)
 
-    OAuthToken
-    |> where([t], t.token_hash == ^token_hash and is_nil(t.revoked_at))
-    |> select([t], t.sudo_until)
-    |> Repo.one()
-    |> case do
-      nil ->
-        {:error, :sudo_required}
+      OAuthToken
+      |> where([t], t.token_hash == ^Token.hash_token(access_token))
+      |> Repo.update_all(set: [sudo_until: new_until])
 
-      sudo_until when is_nil(sudo_until) ->
-        {:error, :sudo_required}
-
-      sudo_until ->
-        if DateTime.compare(sudo_until, now) == :gt do
-          OAuthToken
-          |> where([t], t.token_hash == ^token_hash)
-          |> Repo.update_all(set: [sudo_until: new_until])
-
-          {:ok, new_until}
-        else
-          {:error, :sudo_required}
-        end
+      {:ok, new_until}
     end
   end
 

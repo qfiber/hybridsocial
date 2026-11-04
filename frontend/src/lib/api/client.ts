@@ -1,4 +1,5 @@
 import type { ApiErrorBody } from './types.js';
+import { sudoExpiresAt } from '$lib/stores/admin-sudo.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -126,6 +127,11 @@ class ApiClient {
       throw new ApiError(response.status, body);
     }
 
+    // RequireSudo reports the real expiry on every gated response. The
+    // window rolls forward server-side, so the value from unlock goes stale.
+    const sudoUntil = response.headers.get('x-sudo-expires-at');
+    if (sudoUntil) sudoExpiresAt.set(sudoUntil);
+
     // Handle 204 No Content
     if (response.status === 204) {
       return undefined as T;
@@ -218,6 +224,15 @@ class ApiClient {
 
   get<T>(path: string, params?: Record<string, string>): Promise<T> {
     return this.request<T>('GET', path, { params });
+  }
+
+  /**
+   * GET from a timer rather than from something the operator did. It still
+   * needs a live sudo window on admin routes but doesn't extend it, so an
+   * open tab can idle out.
+   */
+  poll<T>(path: string, params?: Record<string, string>): Promise<T> {
+    return this.request<T>('GET', path, { params, headers: { 'x-sudo-passive': '1' } });
   }
 
   post<T>(path: string, body?: unknown): Promise<T> {
