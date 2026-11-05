@@ -6,6 +6,7 @@
   import DataTable from '$lib/components/admin/DataTable.svelte';
   import { addToast } from '$lib/stores/toast.js';
   import { t } from '$lib/stores/i18n.js';
+  import { ApiError } from '$lib/api/client.js';
   import {
     getReports, resolveReport, dismissReport,
     getContentFilters, createContentFilter, deleteContentFilter,
@@ -119,7 +120,6 @@
   let newHashtagAction = $state<HashtagBlock['action']>('no_trending');
   let newHashtagReason = $state('');
   let newHash = $state('');
-  let newHashType = $state<'md5' | 'sha256' | 'phash'>('sha256');
   let newHashDescription = $state('');
 
   const reportColumns = [
@@ -421,15 +421,21 @@
     try {
       const ban = await createMediaHashBan({
         hash: newHash.trim(),
-        hash_type: newHashType,
+        // The only kind uploads are checked against.
+        hash_type: 'sha256',
         description: newHashDescription.trim() || undefined,
       });
       mediaHashBans = [...mediaHashBans, ban];
       newHash = '';
       newHashDescription = '';
       addToast('Media hash banned', 'success');
-    } catch {
-      addToast('Failed to ban media hash', 'error');
+    } catch (err) {
+      addToast(
+        err instanceof ApiError && err.status === 422
+          ? $t('admin.moderation.media_hashes.invalid')
+          : 'Failed to ban media hash',
+        'error'
+      );
     }
   }
 
@@ -943,12 +949,14 @@
 
     {:else if activeTab === 'media-hashes'}
       <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleAddMediaHashBan(); }}>
-        <input class="input" type="text" bind:value={newHash} placeholder="Hash value…" required />
-        <select class="input" bind:value={newHashType} style="width: 120px">
-          <option value="sha256">SHA-256</option>
-          <option value="md5">MD5</option>
-          <option value="phash">pHash</option>
-        </select>
+        <input
+          class="input"
+          type="text"
+          bind:value={newHash}
+          placeholder={$t('admin.moderation.media_hashes.placeholder')}
+          aria-label={$t('admin.moderation.media_hashes.placeholder')}
+          required
+        />
         <input class="input" type="text" bind:value={newHashDescription} placeholder="Description (optional)" />
         <button class="btn btn-primary" type="submit">Ban hash</button>
       </form>
