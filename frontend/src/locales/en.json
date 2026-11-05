@@ -654,6 +654,7 @@
   "admin.email.report_emails.toggle": "Email staff about new reports",
   "admin.email.report_emails.toggle_hint": "Staff who can manage reports get an email when a report arrives, including reports from other servers. Reports for a group's own moderators don't send one.",
   "admin.reports.load_failed": "Failed to load reports",
+  "admin.users.search_placeholder": "Search by handle, name, domain or exact email",
   "admin.reports.load_more": "Load more",
   "admin.reports.loading": "Loading…",
   "admin.reports.filter_label": "Filter reports by status",

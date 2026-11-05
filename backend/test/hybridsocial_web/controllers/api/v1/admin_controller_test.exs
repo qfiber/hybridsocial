@@ -988,4 +988,126 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert is_nil(Hybridsocial.Repo.get!(Post, ctx.imported_post.id).deleted_at)
     end
   end
+
+  describe "account list paging" do
+    import Ecto.Query
+
+    alias Hybridsocial.Accounts
+    alias Hybridsocial.Accounts.Identity
+    alias Hybridsocial.Repo
+
+    setup %{conn: conn} do
+      %{conn: admin_conn(conn, create_admin("page_admin"))}
+    end
+
+    defp list(conn, params) do
+      conn |> get("/api/v1/admin/users", params) |> json_response(200)
+    end
+
+    defp handles(body), do: Enum.map(body["data"], & &1["handle"])
+
+    defp make_remote(identity, url) do
+      {1, _} =
+        Repo.update_all(from(i in Identity, where: i.id == ^identity.id),
+          set: [is_local: false, ap_actor_url: url]
+        )
+    end
+
+    test "returns one page and the full total", %{conn: conn} do
+      for n <- 1..5, do: create_user("page_user#{n}")
+      total = Repo.aggregate(where(Identity, [i], is_nil(i.deleted_at)), :count)
+
+      first = list(conn, %{"limit" => "2", "offset" => "0"})
+      second = list(conn, %{"limit" => "2", "offset" => "2"})
+
+      assert length(first["data"]) == 2
+      assert first["total"] == total
+      assert second["offset"] == 2
+      assert MapSet.disjoint?(MapSet.new(handles(first)), MapSet.new(handles(second)))
+    end
+
+    test "caps the page size when none is sensible", %{conn: conn} do
+      for n <- 1..3, do: create_user("cap_user#{n}")
+
+      assert length(list(conn, %{"limit" => "2"})["data"]) == 2
+      assert list(conn, %{"limit" => "100000"})["limit"] <= 40
+      assert list(conn, %{"offset" => "banana"})["offset"] == 0
+    end
+
+    test "searches handle and display name, treating wildcards literally", %{conn: conn} do
+      create_user("findme_handle")
+      other = create_user("other_person")
+
+      {1, _} =
+        Repo.update_all(from(i in Identity, where: i.id == ^other.id),
+          set: [display_name: "Findme Display"]
+        )
+
+      assert handles(list(conn, %{"search" => "@FINDME"})) |> Enum.sort() ==
+               ["findme_handle", "other_person"]
+
+      assert handles(list(conn, %{"search" => "fi%me"})) == []
+    end
+
+    test "finds a remote account by domain and by user@domain", %{conn: conn} do
+      remote = create_user("mangled_remote_1")
+      make_remote(remote, "https://evil.example/users/bob")
+
+      assert handles(list(conn, %{"search" => "evil.example"})) == ["bob"]
+      assert handles(list(conn, %{"search" => "bob@evil.example"})) == ["bob"]
+      assert handles(list(conn, %{"search" => "alice@evil.example"})) == []
+    end
+
+    test "a search for our own host doesn't match every local account", %{conn: conn} do
+      create_user("local_only")
+      host = URI.parse(HybridsocialWeb.Endpoint.url()).host
+
+      assert handles(list(conn, %{"search" => host})) == []
+    end
+
+    test "finds an email by its exact address only", %{conn: conn} do
+      create_user("mail_user", "mail_user@example.com")
+
+      assert handles(list(conn, %{"search" => "MAIL_user@example.com"})) == ["mail_user"]
+      assert handles(list(conn, %{"search" => "wrong@example.com"})) == []
+    end
+
+    test "filters by status, location, email state and type", %{conn: conn} do
+      suspended = create_user("filter_suspended")
+      {:ok, _} = Accounts.suspend_identity(suspended)
+      remote = create_user("filter_remote")
+      make_remote(remote, "https://far.example/users/farbob")
+      create_unconfirmed_user("filter_unconfirmed")
+
+      assert "filter_suspended" in handles(list(conn, %{"status" => "suspended"}))
+      refute "filter_suspended" in handles(list(conn, %{"status" => "active"}))
+
+      assert handles(list(conn, %{"local" => "false"})) == ["farbob"]
+      refute "farbob" in handles(list(conn, %{"local" => "true"}))
+
+      unverified = handles(list(conn, %{"email" => "unverified"}))
+      assert "filter_unconfirmed" in unverified
+      refute "farbob" in unverified
+      refute "filter_suspended" in unverified
+
+      assert list(conn, %{"type" => "group"})["data"] == []
+    end
+
+    test "sorts by an allowed column and ignores an unknown one", %{conn: conn} do
+      create_user("aaa_sort")
+      create_user("zzz_sort")
+
+      assert handles(list(conn, %{"sort" => "handle", "dir" => "asc"})) |> hd() <
+               handles(list(conn, %{"sort" => "handle", "dir" => "desc"})) |> hd()
+
+      assert %{"data" => [_ | _]} = list(conn, %{"sort" => "private_key; drop table"})
+    end
+
+    test "pins to one id, and an invalid id finds nothing", %{conn: conn} do
+      target = create_user("pinned_user")
+
+      assert handles(list(conn, %{"id" => target.id})) == ["pinned_user"]
+      assert list(conn, %{"id" => "not-a-uuid"})["total"] == 0
+    end
+  end
 end

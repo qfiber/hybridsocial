@@ -934,26 +934,134 @@ defmodule Hybridsocial.Accounts do
 
   # --- Listing ---
 
-  def list_identities(opts \\ []) do
-    Identity
-    |> where([i], is_nil(i.deleted_at))
-    |> filter_by_type(opts[:type])
-    |> filter_by_local(opts[:local])
-    |> order_by([i], desc: i.inserted_at)
-    |> Repo.all()
-    |> Repo.preload(:user)
+  @admin_sort_columns %{
+    "handle" => :handle,
+    "created_at" => :inserted_at,
+    "status" => :is_suspended,
+    "trust_level" => :trust_level
+  }
+
+  @doc """
+  One page of identities for the admin panel, as `{identities, total}`.
+
+  Options: `:limit`, `:offset`, `:id`, `:search`, `:status` ("active" or
+  "suspended"), `:local` (boolean), `:email` ("verified" or "unverified"), `:type`,
+  `:sort` (a key of `@admin_sort_columns`) and `:dir` ("asc" or "desc").
+
+  Offset paging is deliberate: this is a page-numbered table over a bounded set
+  with a choice of sort, not a feed. `id` is the tie-breaker, so pages stay stable
+  across the many rows that share a sort value.
+
+  Emails are encrypted at rest, so they can't be sorted or partially matched here.
+  `:search` finds an email only by its exact address, through the blind index.
+  """
+  def list_identities_page(opts \\ []) do
+    query =
+      Identity
+      |> where([i], is_nil(i.deleted_at))
+      |> filter_by_id(opts[:id])
+      |> filter_by_type(opts[:type])
+      |> filter_by_local(opts[:local])
+      |> filter_by_status(opts[:status])
+      |> filter_by_email_state(opts[:email])
+      |> filter_by_search(opts[:search])
+
+    total = Repo.aggregate(query, :count, :id)
+
+    identities =
+      query
+      |> order_identities(opts[:sort], opts[:dir])
+      |> limit(^Keyword.get(opts, :limit, 40))
+      |> offset(^Keyword.get(opts, :offset, 0))
+      |> Repo.all()
+      |> Repo.preload(:user)
+
+    {identities, total}
   end
+
+  defp filter_by_id(query, nil), do: query
+  defp filter_by_id(query, id), do: where(query, [i], i.id == ^id)
 
   defp filter_by_type(query, nil), do: query
   defp filter_by_type(query, type), do: where(query, [i], i.type == ^type)
 
+  # `is_local`, not the actor URL: local identities have one too.
   defp filter_by_local(query, nil), do: query
+  defp filter_by_local(query, local), do: where(query, [i], i.is_local == ^local)
 
-  defp filter_by_local(query, true),
-    do: where(query, [i], is_nil(i.ap_actor_url) or i.ap_actor_url == "")
+  defp filter_by_status(query, "active"), do: where(query, [i], i.is_suspended == false)
+  defp filter_by_status(query, "suspended"), do: where(query, [i], i.is_suspended == true)
+  defp filter_by_status(query, _status), do: query
 
-  defp filter_by_local(query, false),
-    do: where(query, [i], not is_nil(i.ap_actor_url) and i.ap_actor_url != "")
+  # Only accounts with a User row have an email to verify. Remote identities and
+  # subaccounts don't, so an email filter leaves them out.
+  defp filter_by_email_state(query, "verified") do
+    from i in query,
+      join: u in User,
+      on: u.identity_id == i.id,
+      where: not is_nil(u.confirmed_at)
+  end
+
+  defp filter_by_email_state(query, "unverified") do
+    from i in query, join: u in User, on: u.identity_id == i.id, where: is_nil(u.confirmed_at)
+  end
+
+  defp filter_by_email_state(query, _state), do: query
+
+  defp filter_by_search(query, search) when search in [nil, ""], do: query
+
+  defp filter_by_search(query, search) do
+    term = search |> String.trim() |> String.trim_leading("@") |> String.slice(0, 100)
+    pattern = "%#{escape_like_pattern(term)}%"
+
+    # The actor URL only counts for remote rows: every local URL contains our own
+    # host, so searching for it would match all local accounts.
+    matches =
+      dynamic(
+        [i],
+        ilike(i.handle, ^pattern) or ilike(i.display_name, ^pattern) or
+          (i.is_local == false and ilike(i.ap_actor_url, ^pattern))
+      )
+
+    where(query, ^(matches |> or_remote_acct(term) |> or_exact_email(term)))
+  end
+
+  # `bob@evil.example`: the actor URL holds both parts, but not with the @.
+  defp or_remote_acct(matches, term) do
+    case String.split(term, "@", parts: 2) do
+      [user, domain] when user != "" and domain != "" ->
+        user_pattern = "%#{escape_like_pattern(user)}%"
+        domain_pattern = "%://#{escape_like_pattern(domain)}%"
+
+        dynamic(
+          [i],
+          ^matches or
+            (i.is_local == false and ilike(i.ap_actor_url, ^user_pattern) and
+               ilike(i.ap_actor_url, ^domain_pattern))
+        )
+
+      _ ->
+        matches
+    end
+  end
+
+  defp or_exact_email(matches, term) do
+    with true <- String.contains?(term, "@"),
+         %User{identity_id: identity_id} <- get_user_by_email(term) do
+      dynamic([i], ^matches or i.id == ^identity_id)
+    else
+      _ -> matches
+    end
+  end
+
+  defp escape_like_pattern(term), do: String.replace(term, ~r/([\\\\%_])/, "\\\\\\1")
+
+  defp order_identities(query, sort, dir) do
+    column = Map.get(@admin_sort_columns, sort, :inserted_at)
+    direction = if dir == "asc", do: :asc, else: :desc
+
+    order_by(query, [i], [{^direction, field(i, ^column)}, {^direction, i.id}])
+  end
 
   # --- Password Reset ---
 

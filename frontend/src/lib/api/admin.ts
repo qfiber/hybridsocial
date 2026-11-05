@@ -55,7 +55,9 @@ export function getRecentReports(): Promise<AdminReport[]> {
 }
 
 // Users
-export function getAdminUsers(params?: Record<string, string>): Promise<PaginatedResponse<AdminUser>> {
+export function getAdminUsers(
+  params?: Record<string, string>
+): Promise<{ data: AdminUser[]; total: number; limit: number; offset: number }> {
   return api.get('/api/v1/admin/users', params);
 }
 

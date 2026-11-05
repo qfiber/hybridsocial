@@ -1219,22 +1219,62 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
   def list_accounts(conn, params) do
     with :ok <- require_permission(conn, "users.view") do
+      limit = clamp_limit(params["limit"])
+      offset = parse_account_offset(params["offset"])
+
       opts =
-        case params["local"] do
-          "true" -> [local: true]
-          "false" -> [local: false]
-          _ -> []
-        end
+        [
+          limit: limit,
+          offset: offset,
+          search: params["search"],
+          status: params["status"],
+          email: params["email"],
+          sort: params["sort"],
+          dir: params["dir"]
+        ]
+        |> maybe_put_account_location(params["local"])
+        |> maybe_put_identity_type(params["type"])
 
-      opts = maybe_put_identity_type(opts, params["type"])
+      case account_id_filter(params["id"]) do
+        :invalid ->
+          json(conn, %{data: [], total: 0, limit: limit, offset: offset})
 
-      accounts = Accounts.list_identities(opts)
+        id ->
+          {accounts, total} = Accounts.list_identities_page(Keyword.put(opts, :id, id))
 
-      conn
-      |> put_status(:ok)
-      |> json(%{data: Enum.map(accounts, &serialize_account/1)})
+          conn
+          |> put_status(:ok)
+          |> json(%{
+            data: Enum.map(accounts, &serialize_account/1),
+            total: total,
+            limit: limit,
+            offset: offset
+          })
+      end
     else
       {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp parse_account_offset(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {n, _} when n > 0 -> n
+      _ -> 0
+    end
+  end
+
+  defp parse_account_offset(_value), do: 0
+
+  defp maybe_put_account_location(opts, "true"), do: Keyword.put(opts, :local, true)
+  defp maybe_put_account_location(opts, "false"), do: Keyword.put(opts, :local, false)
+  defp maybe_put_account_location(opts, _value), do: opts
+
+  defp account_id_filter(id) when id in [nil, ""], do: nil
+
+  defp account_id_filter(id) do
+    case Ecto.UUID.cast(id) do
+      {:ok, uuid} -> uuid
+      :error -> :invalid
     end
   end
 
