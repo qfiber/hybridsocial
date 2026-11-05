@@ -925,4 +925,67 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert Moderation.list_blocked_hashtags() == []
     end
   end
+
+  describe "instance purge" do
+    alias Hybridsocial.Accounts.Identity
+    alias Hybridsocial.Social.{Post, Posts}
+
+    import Ecto.Query
+
+    defp set_actor(identity, url, is_local) do
+      {1, _} =
+        Hybridsocial.Repo.update_all(from(i in Identity, where: i.id == ^identity.id),
+          set: [ap_actor_url: url, is_local: is_local]
+        )
+
+      identity
+    end
+
+    setup %{conn: conn} do
+      remote =
+        "purge_remote" |> create_user() |> set_actor("https://evil.example/users/x", false)
+
+      imported =
+        "purge_imported" |> create_user() |> set_actor("https://evil.example/users/y", true)
+
+      {:ok, remote_post} = Posts.create_post(remote.id, %{"content" => "spam"})
+      {:ok, imported_post} = Posts.create_post(imported.id, %{"content" => "ours"})
+      {:ok, _} = Hybridsocial.Federation.set_instance_policy("evil.example", "suspend", nil, nil)
+
+      %{
+        conn: admin_conn(conn, create_admin("purge_admin")),
+        remote_post: remote_post,
+        imported_post: imported_post
+      }
+    end
+
+    # The admin modal reads these exact keys under `data`: a mismatch crashes it.
+    test "preview returns the counts without removing anything", ctx do
+      assert %{
+               "data" => %{
+                 "identities_affected" => 1,
+                 "posts_removed" => 1,
+                 "follows_removed" => 0,
+                 "reactions_removed" => 0,
+                 "boosts_removed" => 0,
+                 "dry_run" => true
+               }
+             } =
+               ctx.conn
+               |> post("/api/v1/admin/instance_policies/evil.example/purge_preview")
+               |> json_response(200)
+
+      assert is_nil(Hybridsocial.Repo.get!(Post, ctx.remote_post.id).deleted_at)
+    end
+
+    test "purge removes remote content but not imported local accounts'", ctx do
+      assert %{"data" => %{"posts_removed" => 1, "dry_run" => false}} =
+               ctx.conn
+               |> post("/api/v1/admin/instance_policies/evil.example/purge")
+               |> json_response(200)
+
+      refute is_nil(Hybridsocial.Repo.get!(Post, ctx.remote_post.id).deleted_at)
+      assert is_nil(Hybridsocial.Repo.get!(Post, ctx.imported_post.id).deleted_at)
+    end
+  end
 end

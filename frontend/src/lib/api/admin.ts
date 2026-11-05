@@ -578,7 +578,9 @@ export function banMediaFromPost(postId: string): Promise<void> {
 
 // Instance Purge
 export function purgeInstancePreview(policyId: string): Promise<InstancePurgePreview> {
-  return api.post(`/api/v1/admin/instance_policies/${encodeURIComponent(policyId)}/purge_preview`);
+  return api
+    .post<{ data: InstancePurgePreview }>(`/api/v1/admin/instance_policies/${encodeURIComponent(policyId)}/purge_preview`)
+    .then((r) => r.data);
 }
 
 export function purgeInstanceContent(policyId: string): Promise<void> {

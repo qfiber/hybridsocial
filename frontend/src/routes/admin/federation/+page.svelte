@@ -1081,23 +1081,31 @@
 
 <Modal bind:open={purgeModalOpen} title="Purge Instance Content">
   <p class="purge-warning">
-    This will permanently remove all cached content from <strong>{purgeDomain}</strong>.
+    {$t('admin.federation.purge_warning', { domain: purgeDomain ?? '' })}
   </p>
   {#if purgePreviewLoading}
     <div class="skeleton" style="height: 60px"></div>
   {:else if purgePreview}
     <div class="purge-stats">
       <div class="purge-stat">
-        <span class="purge-stat-label">Users</span>
-        <span class="purge-stat-value">{purgePreview.users_count.toLocaleString()}</span>
+        <span class="purge-stat-label">{$t('admin.federation.purge_accounts')}</span>
+        <span class="purge-stat-value">{purgePreview.identities_affected.toLocaleString()}</span>
       </div>
       <div class="purge-stat">
-        <span class="purge-stat-label">Posts</span>
-        <span class="purge-stat-value">{purgePreview.posts_count.toLocaleString()}</span>
+        <span class="purge-stat-label">{$t('admin.federation.purge_posts')}</span>
+        <span class="purge-stat-value">{purgePreview.posts_removed.toLocaleString()}</span>
       </div>
       <div class="purge-stat">
-        <span class="purge-stat-label">Media files</span>
-        <span class="purge-stat-value">{purgePreview.media_count.toLocaleString()}</span>
+        <span class="purge-stat-label">{$t('admin.federation.purge_follows')}</span>
+        <span class="purge-stat-value">{purgePreview.follows_removed.toLocaleString()}</span>
+      </div>
+      <div class="purge-stat">
+        <span class="purge-stat-label">{$t('admin.federation.purge_reactions')}</span>
+        <span class="purge-stat-value">{purgePreview.reactions_removed.toLocaleString()}</span>
+      </div>
+      <div class="purge-stat">
+        <span class="purge-stat-label">{$t('admin.federation.purge_boosts')}</span>
+        <span class="purge-stat-value">{purgePreview.boosts_removed.toLocaleString()}</span>
       </div>
     </div>
   {/if}
