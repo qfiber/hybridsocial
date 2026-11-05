@@ -1028,4 +1028,17 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert conn |> post("/api/v1/admin/media_hash_bans", params) |> json_response(422)
     end
   end
+
+  describe "moderation queue stats" do
+    # The admin Queue tab renders all four, and crashed when one was missing.
+    test "reports every status, even with an empty queue", %{conn: conn} do
+      assert %{
+               "data" => %{"pending" => 0, "approved" => 0, "rejected" => 0, "escalated" => 0}
+             } =
+               conn
+               |> admin_conn(create_admin("queue_stats_admin"))
+               |> get("/api/v1/admin/moderation_queue/stats")
+               |> json_response(200)
+    end
+  end
 end
