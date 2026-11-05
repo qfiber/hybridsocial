@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { addToast } from '$lib/stores/toast.js';
-  import { getEmailConfig, updateEmailConfig, sendTestEmail } from '$lib/api/admin.js';
+  import {
+    getEmailConfig,
+    updateEmailConfig,
+    sendTestEmail,
+    getAdminSettings,
+    updateAdminSettings
+  } from '$lib/api/admin.js';
+  import { t } from '$lib/stores/i18n.js';
   import type { EmailConfig } from '$lib/api/types.js';
   import Tabs from '$lib/components/ui/Tabs.svelte';
   import EmailTemplatesPanel from '$lib/components/admin/EmailTemplatesPanel.svelte';
@@ -22,6 +29,41 @@
   let testAddress = $state('');
   let sendingTest = $state(false);
 
+  // Instance-wide switch for emailing staff about new reports.
+  let reportEmailsEnabled = $state(false);
+  let reportEmailThrottle = $state(60);
+  let reportEmailsLoaded = $state(false);
+  let savingReportEmails = $state(false);
+
+  async function loadReportEmailSettings() {
+    try {
+      const byKey = new Map((await getAdminSettings()).map((r) => [r.key, r.value as unknown]));
+      const enabled = byKey.get('report_email_notifications_enabled');
+      reportEmailsEnabled = enabled === true || enabled === 'true';
+      const throttle = Number(byKey.get('report_email_throttle_seconds') ?? 60);
+      reportEmailThrottle = Number.isFinite(throttle) && throttle >= 0 ? throttle : 60;
+      reportEmailsLoaded = true;
+    } catch {
+      addToast($t('admin.email.report_emails.load_failed'), 'error');
+    }
+  }
+
+  async function saveReportEmailSettings() {
+    if (savingReportEmails) return;
+    savingReportEmails = true;
+    try {
+      await updateAdminSettings([
+        { key: 'report_email_notifications_enabled', value: reportEmailsEnabled },
+        { key: 'report_email_throttle_seconds', value: Math.max(0, Math.round(reportEmailThrottle)) }
+      ]);
+      addToast($t('admin.email.report_emails.saved'), 'success');
+    } catch {
+      addToast($t('admin.email.report_emails.save_failed'), 'error');
+    } finally {
+      savingReportEmails = false;
+    }
+  }
+
   // Editable fields
   let provider = $state('smtp');
   let fromAddress = $state('');
@@ -40,6 +82,7 @@
     p === 'resend' ? 'Resend' : p === 'smtp' ? 'SMTP' : (p ?? 'unknown');
 
   onMount(async () => {
+    loadReportEmailSettings();
     try {
       config = await getEmailConfig();
       provider = config.provider;
@@ -173,6 +216,37 @@
       </div>
     </section>
 
+    {#if reportEmailsLoaded}
+      <section class="card">
+        <h2 class="section-title">{$t('admin.email.report_emails.title')}</h2>
+        <form class="form-fields" onsubmit={(e) => { e.preventDefault(); saveReportEmailSettings(); }}>
+          <div class="form-field">
+            <label class="toggle-label-row">
+              <input type="checkbox" bind:checked={reportEmailsEnabled} class="toggle-cb" />
+              <span>{$t('admin.email.report_emails.toggle')}</span>
+            </label>
+            <p class="field-hint">{$t('admin.email.report_emails.toggle_hint')}</p>
+          </div>
+          <div class="form-field">
+            <label for="report-email-throttle" class="field-label">{$t('admin.email.report_emails.throttle')}</label>
+            <input
+              id="report-email-throttle"
+              class="input"
+              type="number"
+              min="0"
+              step="1"
+              bind:value={reportEmailThrottle}
+              disabled={!reportEmailsEnabled}
+            />
+            <p class="field-hint">{$t('admin.email.report_emails.throttle_hint')}</p>
+          </div>
+          <button class="btn btn-primary" type="submit" disabled={savingReportEmails}>
+            {$t('admin.email.report_emails.save')}
+          </button>
+        </form>
+      </section>
+    {/if}
+
     <section class="card">
       <h2 class="section-title">Test Email</h2>
       <p class="test-description">Send a test email to verify your configuration.</p>
@@ -271,6 +345,12 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-3);
+  }
+
+  .field-hint {
+    margin-block-start: var(--space-1);
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
   }
 
   .toggle-label-row {

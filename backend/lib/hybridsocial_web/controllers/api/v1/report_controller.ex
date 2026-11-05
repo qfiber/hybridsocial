@@ -31,22 +31,6 @@ defmodule HybridsocialWeb.Api.V1.ReportController do
           forwarded: forward?
         })
 
-        # Async staff fan-out — already rate-limited per-recipient in
-        # the dispatcher. Preload both sides of the report so the
-        # email template can render reporter/reported handles without
-        # a second DB hit per admin.
-        Task.Supervisor.start_child(Hybridsocial.TaskSupervisor, fn ->
-          preloaded = Hybridsocial.Repo.preload(report, [:reporter, :reported])
-
-          Hybridsocial.Notifications.StaffEmail.dispatch(
-            "admin_new_report",
-            "reports.manage",
-            fn to, staff_identity ->
-              Hybridsocial.Emails.admin_new_report_email(to, staff_identity, preloaded)
-            end
-          )
-        end)
-
         # Optional: reporter asked us to also block the reported user
         # locally. Fire-and-forget — a failed block doesn't invalidate
         # the report itself.

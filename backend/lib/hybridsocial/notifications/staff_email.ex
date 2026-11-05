@@ -31,15 +31,19 @@ defmodule Hybridsocial.Notifications.StaffEmail do
   `build_email`: 2-arity fn `(to_email, identity) -> Swoosh.Email`.
   The identity is passed so the builder can personalize (use handle,
   display_name) and log failures against a recipient.
+
+  Options:
+
+    * `:default_email` - whether staff with no stored preference get this email
+      (default `false`). They can still opt out with a stored preference.
+    * `:throttle_seconds` - overrides the shared throttle window. `0` turns
+      throttling off, so every event sends.
   """
-  def dispatch(notification_key, required_permission, build_email)
+  def dispatch(notification_key, required_permission, build_email, opts \\ [])
       when is_binary(notification_key) and is_binary(required_permission) and
              is_function(build_email, 2) do
-    throttle_sec =
-      case Hybridsocial.Config.get("moderation_email_throttle_seconds", 600) do
-        n when is_integer(n) and n > 0 -> n
-        _ -> 600
-      end
+    default_email = Keyword.get(opts, :default_email, false)
+    throttle_sec = Keyword.get_lazy(opts, :throttle_seconds, &shared_throttle_seconds/0)
 
     staff_ids =
       from(r in IdentityRole,
@@ -50,7 +54,7 @@ defmodule Hybridsocial.Notifications.StaffEmail do
       |> Repo.all()
 
     for identity_id <- staff_ids do
-      if eligible?(identity_id, notification_key, required_permission) do
+      if eligible?(identity_id, notification_key, required_permission, default_email) do
         maybe_send(identity_id, notification_key, throttle_sec, build_email)
       end
     end
@@ -58,10 +62,21 @@ defmodule Hybridsocial.Notifications.StaffEmail do
     :ok
   end
 
-  defp eligible?(identity_id, notification_key, required_permission) do
-    Notifications.should_notify?(identity_id, notification_key, :email) and
+  defp shared_throttle_seconds do
+    case Hybridsocial.Config.get("moderation_email_throttle_seconds", 600) do
+      n when is_integer(n) and n > 0 -> n
+      _ -> 600
+    end
+  end
+
+  defp eligible?(identity_id, notification_key, required_permission, default_email) do
+    Notifications.email_enabled?(identity_id, notification_key, default_email) and
       RBAC.staff?(identity_id) and
       RBAC.has_permission?(identity_id, required_permission)
+  end
+
+  defp maybe_send(identity_id, notification_key, 0, build_email) do
+    send_email(identity_id, notification_key, build_email)
   end
 
   defp maybe_send(identity_id, notification_key, throttle_sec, build_email) do
@@ -76,25 +91,28 @@ defmodule Hybridsocial.Notifications.StaffEmail do
         # inserts from different processes would otherwise both race
         # past the check.
         Cache.set(throttle_key, "1", throttle_sec)
-
-        with %Identity{} = identity <- Accounts.get_identity(identity_id),
-             %User{email: email} when is_binary(email) and email != "" <-
-               Accounts.get_user_by_identity(identity_id) do
-          try do
-            build_email.(email, identity) |> Mailer.deliver()
-            audit(:delivered, identity_id, notification_key, email, nil)
-          rescue
-            e ->
-              Logger.warning(
-                "staff email #{notification_key} failed for #{identity_id}: #{Exception.message(e)}"
-              )
-
-              audit(:failed, identity_id, notification_key, nil, Exception.message(e))
-          end
-        end
+        send_email(identity_id, notification_key, build_email)
 
       _ ->
         :ok
+    end
+  end
+
+  defp send_email(identity_id, notification_key, build_email) do
+    with %Identity{} = identity <- Accounts.get_identity(identity_id),
+         %User{email: email} when is_binary(email) and email != "" <-
+           Accounts.get_user_by_identity(identity_id) do
+      try do
+        build_email.(email, identity) |> Mailer.deliver()
+        audit(:delivered, identity_id, notification_key, email, nil)
+      rescue
+        e ->
+          Logger.warning(
+            "staff email #{notification_key} failed for #{identity_id}: #{Exception.message(e)}"
+          )
+
+          audit(:failed, identity_id, notification_key, nil, Exception.message(e))
+      end
     end
   end
 

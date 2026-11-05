@@ -42,9 +42,71 @@ defmodule Hybridsocial.Moderation do
       if report.target_type == "post" and is_binary(report.target_id) do
         bump_post_open_report_count(report.target_id, 1)
       end
+
+      # Here rather than in the API controller so reports federated in from
+      # other servers are covered too. Checked before spawning so an instance
+      # with this turned off doesn't pay for a task on every report.
+      if report_emails_enabled?() do
+        Task.Supervisor.start_child(Hybridsocial.TaskSupervisor, fn ->
+          notify_staff_of_report(report)
+        end)
+      end
     end
 
     result
+  end
+
+  @default_report_email_throttle_seconds 60
+
+  @doc "Whether the instance emails staff about new reports. Off by default."
+  def report_emails_enabled? do
+    Hybridsocial.Config.get("report_email_notifications_enabled", false) in [true, "true"]
+  end
+
+  @doc """
+  Emails staff who can manage reports about a new report. Staff get these without
+  opting in individually, because an admin turned them on for the instance.
+
+  Group-tier reports are skipped: they belong to the group's own moderators until
+  they're escalated, and instance staff can't act on them yet.
+
+  The throttle is per recipient and exists so mass-reporting can't flood staff
+  inboxes or burn the mail quota. A report that's throttled still reaches the
+  queue. Set `report_email_throttle_seconds` to 0 for one email per report.
+  """
+  def notify_staff_of_report(%Report{tier: "group"}), do: :ok
+
+  def notify_staff_of_report(%Report{} = report) do
+    preloaded = Repo.preload(report, [:reporter, :reported])
+
+    Hybridsocial.Notifications.StaffEmail.dispatch(
+      "admin_new_report",
+      "reports.manage",
+      fn to, staff_identity ->
+        Hybridsocial.Emails.admin_new_report_email(to, staff_identity, preloaded)
+      end,
+      default_email: true,
+      throttle_seconds: report_email_throttle_seconds()
+    )
+  end
+
+  defp report_email_throttle_seconds do
+    case Hybridsocial.Config.get(
+           "report_email_throttle_seconds",
+           @default_report_email_throttle_seconds
+         ) do
+      n when is_integer(n) and n >= 0 ->
+        n
+
+      n when is_binary(n) ->
+        case Integer.parse(n) do
+          {parsed, ""} when parsed >= 0 -> parsed
+          _ -> @default_report_email_throttle_seconds
+        end
+
+      _ ->
+        @default_report_email_throttle_seconds
+    end
   end
 
   # A group can decide what's off-topic in its own space. It cannot decide

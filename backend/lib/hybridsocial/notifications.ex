@@ -211,6 +211,18 @@ defmodule Hybridsocial.Notifications do
   # For channels not stored in preferences (e.g. :sms, :noop), default to true.
   def should_notify?(_identity_id, _type, _channel), do: true
 
+  @doc """
+  Whether this identity wants email for `type`, using `default` when they haven't
+  set a preference. A stored preference always wins, so it can opt out of an
+  email that's on by default.
+  """
+  def email_enabled?(identity_id, type, default) when is_boolean(default) do
+    case Repo.get_by(Preference, identity_id: identity_id, type: type) do
+      nil -> default
+      preference -> preference.email
+    end
+  end
+
   # ---------------------------------------------------------------------------
   # Convenience functions
   # ---------------------------------------------------------------------------
