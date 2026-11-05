@@ -76,7 +76,10 @@ defmodule Hybridsocial.Federation.Cleanup do
     # e.g., "https://example.com/users/alice"
     like_pattern = "%://#{domain}/%"
 
+    # `is_local` matters: actors imported from a migrated instance keep their old
+    # `ap_actor_url` but live here, so purging the old host must not touch them.
     Identity
+    |> where([i], i.is_local == false)
     |> where([i], like(i.ap_actor_url, ^like_pattern))
     |> where([i], is_nil(i.deleted_at))
     |> select([i], i.id)

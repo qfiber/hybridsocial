@@ -773,10 +773,12 @@ export interface HashtagBlock {
 }
 
 export interface InstancePurgePreview {
-  domain: string;
-  users_count: number;
-  posts_count: number;
-  media_count: number;
+  identities_affected: number;
+  posts_removed: number;
+  follows_removed: number;
+  reactions_removed: number;
+  boosts_removed: number;
+  dry_run: boolean;
 }
 
 export interface DeliveryQueueStats {
