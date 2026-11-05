@@ -1108,6 +1108,8 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
 
       assert handles(list(conn, %{"id" => target.id})) == ["pinned_user"]
       assert list(conn, %{"id" => "not-a-uuid"})["total"] == 0
+    end
+  end
 
   describe "media hash bans" do
     @sha256 String.duplicate("ab", 32)
