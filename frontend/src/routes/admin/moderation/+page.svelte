@@ -10,7 +10,6 @@
   import {
     getReports, resolveReport, dismissReport,
     getContentFilters, createContentFilter, deleteContentFilter,
-    getBannedDomains, banDomain, unbanDomain,
     getIpBlocks, createIpBlock, deleteIpBlock,
     getEmailDomainBans, createEmailDomainBan, deleteEmailDomainBan,
     getMediaHashBans, createMediaHashBan, deleteMediaHashBan,
@@ -19,7 +18,7 @@
   } from '$lib/api/admin.js';
   import ModerationQueuePanel from '$lib/components/admin/ModerationQueuePanel.svelte';
   import type {
-    AdminReport, ContentFilter, BannedDomain, IpBlock,
+    AdminReport, ContentFilter, IpBlock,
     EmailDomainBan, MediaHashBan, HashtagBlock,
   } from '$lib/api/types.js';
   import type { VerificationRequest } from '$lib/api/admin.js';
@@ -29,7 +28,6 @@
     { id: 'verifications', label: 'Verifications' },
     { id: 'queue', label: 'Queue' },
     { id: 'filters', label: 'Content Filters' },
-    { id: 'domains', label: 'Banned Domains' },
     { id: 'ipblocks', label: 'IP Blocks' },
     { id: 'email-domains', label: 'Email Domains' },
     { id: 'media-hashes', label: 'Media Hashes' },
@@ -79,23 +77,16 @@
   // Content Filters state
   let filters: ContentFilter[] = $state([]);
   let filtersLoading = $state(false);
-  let newFilterType = $state<'keyword' | 'regex' | 'domain'>('keyword');
+  let newFilterType = $state<'word' | 'phrase' | 'regex'>('word');
   let newFilterPattern = $state('');
-  let newFilterAction = $state<'warn' | 'hide' | 'reject'>('warn');
-  let newFilterReplacement = $state('');
-  let newFilterScope = $state<'all' | 'local' | 'remote'>('all');
+  let newFilterAction = $state<'flag' | 'reject'>('flag');
 
   // Banned Domains state
-  let bannedDomains: BannedDomain[] = $state([]);
-  let domainsLoading = $state(false);
-  let newDomain = $state('');
-  let newDomainReason = $state('');
 
   // IP Blocks state
   let ipBlocks: IpBlock[] = $state([]);
   let ipBlocksLoading = $state(false);
   let filtersLoaded = $state(false);
-  let domainsLoaded = $state(false);
   let ipBlocksLoaded = $state(false);
   let newIp = $state('');
   let newIpSubnetMask = $state('');
@@ -272,18 +263,6 @@
     }
   }
 
-  async function loadDomains() {
-    domainsLoading = true;
-    try {
-      bannedDomains = await getBannedDomains();
-    } catch {
-      addToast('Failed to load banned domains', 'error');
-    } finally {
-      domainsLoading = false;
-      domainsLoaded = true;
-    }
-  }
-
   async function loadIpBlocks() {
     ipBlocksLoading = true;
     try {
@@ -325,8 +304,6 @@
       loadVerifications();
     } else if (activeTab === 'filters' && !filtersLoaded && !filtersLoading) {
       loadFilters();
-    } else if (activeTab === 'domains' && !domainsLoaded && !domainsLoading) {
-      loadDomains();
     } else if (activeTab === 'ipblocks' && !ipBlocksLoaded && !ipBlocksLoading) {
       loadIpBlocks();
     } else if (activeTab === 'email-domains' && !emailBansLoaded && !emailBansLoading) {
@@ -397,12 +374,17 @@
     if (!newEmailDomain.trim()) return;
     try {
       const ban = await createEmailDomainBan(newEmailDomain.trim(), newEmailReason.trim() || undefined);
-      emailBans = [...emailBans, ban];
+      emailBans = [ban, ...emailBans];
       newEmailDomain = '';
       newEmailReason = '';
       addToast('Email domain blocked', 'success');
-    } catch {
-      addToast('Failed to block email domain', 'error');
+    } catch (err) {
+      addToast(
+        err instanceof ApiError && err.status === 422
+          ? $t('admin.moderation.email_domains.invalid')
+          : 'Failed to block email domain',
+        'error'
+      );
     }
   }
 
@@ -494,17 +476,19 @@
     try {
       const filter = await createContentFilter({
         type: newFilterType,
-        pattern: newFilterPattern,
-        action: newFilterAction,
-        replacement: newFilterReplacement || null,
-        scope: newFilterScope
+        pattern: newFilterPattern.trim(),
+        action: newFilterAction
       });
-      filters = [...filters, filter];
+      filters = [filter, ...filters];
       newFilterPattern = '';
-      newFilterReplacement = '';
       addToast('Content filter created', 'success');
-    } catch {
-      addToast('Failed to create content filter', 'error');
+    } catch (err) {
+      addToast(
+        err instanceof ApiError && err.status === 422
+          ? $t('admin.moderation.filters.invalid')
+          : 'Failed to create content filter',
+        'error'
+      );
     }
   }
 
@@ -515,29 +499,6 @@
       addToast('Content filter removed', 'success');
     } catch {
       addToast('Failed to remove content filter', 'error');
-    }
-  }
-
-  async function handleBanDomain() {
-    if (!newDomain.trim()) return;
-    try {
-      const domain = await banDomain(newDomain, newDomainReason || undefined);
-      bannedDomains = [...bannedDomains, domain];
-      newDomain = '';
-      newDomainReason = '';
-      addToast('Domain banned', 'success');
-    } catch {
-      addToast('Failed to ban domain', 'error');
-    }
-  }
-
-  async function handleUnbanDomain(id: string) {
-    try {
-      await unbanDomain(id);
-      bannedDomains = bannedDomains.filter((d) => d.id !== id);
-      addToast('Domain unbanned', 'success');
-    } catch {
-      addToast('Failed to unban domain', 'error');
     }
   }
 
@@ -817,25 +778,27 @@
 
     {:else if activeTab === 'filters'}
       <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleAddFilter(); }}>
-        <select class="input" bind:value={newFilterType} style="width: 120px">
-          <option value="keyword">Keyword</option>
-          <option value="regex">Regex</option>
-          <option value="domain">Domain</option>
+        <select class="input" bind:value={newFilterType} aria-label={$t('admin.moderation.filters.type_label')} style="width: 120px">
+          <option value="word">{$t('admin.moderation.filters.type_word')}</option>
+          <option value="phrase">{$t('admin.moderation.filters.type_phrase')}</option>
+          <option value="regex">{$t('admin.moderation.filters.type_regex')}</option>
         </select>
-        <input class="input" type="text" bind:value={newFilterPattern} placeholder="Pattern..." required />
-        <select class="input" bind:value={newFilterAction} style="width: 100px">
-          <option value="warn">Warn</option>
-          <option value="hide">Hide</option>
-          <option value="reject">Reject</option>
+        <input
+          class="input"
+          type="text"
+          bind:value={newFilterPattern}
+          placeholder={$t('admin.moderation.filters.pattern_placeholder')}
+          aria-label={$t('admin.moderation.filters.pattern_placeholder')}
+          required
+        />
+        <select class="input" bind:value={newFilterAction} aria-label={$t('admin.moderation.filters.action_label')} style="width: 170px">
+          <option value="flag">{$t('admin.moderation.filters.action_flag')}</option>
+          <option value="reject">{$t('admin.moderation.filters.action_reject')}</option>
         </select>
-        <select class="input" bind:value={newFilterScope} style="width: 120px">
-          <option value="all">All posts</option>
-          <option value="local">Local only</option>
-          <option value="remote">Remote only</option>
-        </select>
-        <input class="input" type="text" bind:value={newFilterReplacement} placeholder="Replacement (optional)" />
         <button class="btn btn-primary" type="submit">Add</button>
       </form>
+
+      <p class="text-secondary">{$t('admin.moderation.filters.help')}</p>
 
       <div class="list-items">
         {#each filters as filter (filter.id)}
@@ -859,33 +822,6 @@
           </div>
         {:else}
           <p class="empty-text">No content filters configured</p>
-        {/each}
-      </div>
-
-    {:else if activeTab === 'domains'}
-      <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleBanDomain(); }}>
-        <input class="input" type="text" bind:value={newDomain} placeholder="domain.example" required />
-        <input class="input" type="text" bind:value={newDomainReason} placeholder="Reason (optional)" />
-        <button class="btn btn-primary" type="submit">Ban Domain</button>
-      </form>
-
-      <div class="list-items">
-        {#each bannedDomains as domain (domain.id)}
-          <div class="list-item card">
-            <div class="list-item-info">
-              <strong>{domain.domain}</strong>
-              {#if domain.reason}
-                <span class="text-secondary">- {domain.reason}</span>
-              {/if}
-            </div>
-            <button
-              class="btn btn-sm btn-danger"
-              type="button"
-              onclick={() => handleUnbanDomain(domain.id)}
-            >Unban</button>
-          </div>
-        {:else}
-          <p class="empty-text">No banned domains</p>
         {/each}
       </div>
 
@@ -918,6 +854,8 @@
       </div>
 
     {:else if activeTab === 'email-domains'}
+      <p class="text-secondary">{$t('admin.moderation.email_domains.help')}</p>
+
       <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleAddEmailBan(); }}>
         <input class="input" type="text" bind:value={newEmailDomain} placeholder="domain.example" required />
         <input class="input" type="text" bind:value={newEmailReason} placeholder="Reason (optional)" />
@@ -1177,15 +1115,11 @@
     text-transform: capitalize;
   }
 
-  .badge-warn {
+  .badge-flag {
     background: var(--color-warning-soft);
     color: var(--color-on-warning-soft);
   }
 
-  .badge-hide {
-    background: var(--color-surface);
-    color: var(--color-text-secondary);
-  }
 
   .badge-reject {
     background: var(--color-danger-soft);

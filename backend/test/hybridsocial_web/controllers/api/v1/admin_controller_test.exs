@@ -1163,4 +1163,60 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
                |> json_response(200)
     end
   end
+
+  describe "email domain bans" do
+    setup %{conn: conn} do
+      %{conn: admin_conn(conn, create_admin("email_ban_admin"))}
+    end
+
+    # The admin tab reads the list and the created row from under `data`.
+    test "creates and lists under data, normalizing the domain", %{conn: conn} do
+      assert %{"data" => %{"id" => id, "domain" => "spam.example"}} =
+               conn
+               |> post("/api/v1/admin/email_domain_bans", %{"domain" => " @Spam.Example "})
+               |> json_response(201)
+
+      assert %{"data" => [%{"id" => ^id}]} =
+               conn |> get("/api/v1/admin/email_domain_bans") |> json_response(200)
+
+      assert Moderation.email_domain_banned?("spam.example")
+    end
+
+    test "rejects a value that could never match a signup", %{conn: conn} do
+      for domain <- ["bob@spam.example", "https://spam.example/", "spam"] do
+        assert conn
+               |> post("/api/v1/admin/email_domain_bans", %{"domain" => domain})
+               |> json_response(422)
+      end
+    end
+
+    test "a duplicate returns a validation error", %{conn: conn} do
+      params = %{"domain" => "dup.example"}
+
+      assert conn |> post("/api/v1/admin/email_domain_bans", params) |> json_response(201)
+      assert conn |> post("/api/v1/admin/email_domain_bans", params) |> json_response(422)
+    end
+  end
+
+  describe "content filter validation" do
+    test "rejects a regex that won't compile, since it could never match", %{conn: conn} do
+      conn = admin_conn(conn, create_admin("filter_regex_admin"))
+
+      assert conn
+             |> post("/api/v1/admin/content_filters", %{
+               "type" => "regex",
+               "pattern" => "(unclosed",
+               "action" => "flag"
+             })
+             |> json_response(422)
+
+      assert conn
+             |> post("/api/v1/admin/content_filters", %{
+               "type" => "regex",
+               "pattern" => "buy\\s+now",
+               "action" => "flag"
+             })
+             |> json_response(201)
+    end
+  end
 end

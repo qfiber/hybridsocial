@@ -34,6 +34,22 @@ defmodule Hybridsocial.Moderation.ContentFilter do
     |> validate_inclusion(:context, @contexts)
     |> validate_inclusion(:scope, @scopes)
     |> validate_replacement()
+    |> validate_regex()
+  end
+
+  # The engine skips a pattern that won't compile, so it would save and then never
+  # match anything. Same "i" flag the engine compiles with.
+  defp validate_regex(changeset) do
+    if get_field(changeset, :type) == "regex" do
+      validate_change(changeset, :pattern, fn :pattern, pattern ->
+        case Regex.compile(pattern, "i") do
+          {:ok, _} -> []
+          {:error, _} -> [pattern: "must be a valid regular expression"]
+        end
+      end)
+    else
+      changeset
+    end
   end
 
   defp validate_replacement(changeset) do
