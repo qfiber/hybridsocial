@@ -656,6 +656,7 @@
   "admin.moderation.media_hashes.invalid": "Enter a 64-character SHA-256 hash that isn't already banned.",
   "admin.moderation.media_hashes.placeholder": "SHA-256 hash",
   "admin.reports.load_failed": "Failed to load reports",
+  "admin.users.search_placeholder": "Search by handle, name, domain or exact email",
   "admin.reports.load_more": "Load more",
   "admin.reports.loading": "Loading…",
   "admin.reports.filter_label": "Filter reports by status",

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import DataTable from '$lib/components/admin/DataTable.svelte';
+  import { t } from '$lib/stores/i18n.js';
   import Modal from '$lib/components/ui/Modal.svelte';
   import { addToast } from '$lib/stores/toast.js';
   import {
@@ -22,17 +23,17 @@
   // users go through their origin instance's verification flow.
   let emailFilter = $state<'all' | 'verified' | 'unverified'>('all');
   // Pages and groups are Identity rows, so they were always in this list —
-  // just indistinguishable from users. Filtered client-side like the others,
-  // since the endpoint returns the full set and the page slices locally.
+  // just indistinguishable from users.
   let typeFilter = $state<'all' | 'user' | 'page' | 'group' | 'bot'>('all');
   let sortKey = $state('created_at');
   let sortDir = $state<'asc' | 'desc'>('desc');
 
-  // Client-side pagination — the admin endpoint returns the full set
-  // and we slice locally so search/filter/sort can stay snappy without
-  // round-tripping for every keystroke.
-  const PAGE_SIZE = 50;
+  // Paged, filtered and sorted by the server: an instance can hold tens of
+  // thousands of identities, far too many to fetch and slice in the browser.
+  // The endpoint caps a page at 40.
+  const PAGE_SIZE = 40;
   let currentPage = $state(1);
+  let totalUsers = $state(0);
 
   // Create user modal — admin-driven account creation. Bypasses the
   // public signup gates (turnstile / PoW / invite) on the backend, so
@@ -116,7 +117,8 @@
 
   const columns = [
     { key: 'handle', label: 'Handle', sortable: true },
-    { key: 'email', label: 'Email', sortable: true },
+    // Not sortable: emails are encrypted at rest.
+    { key: 'email', label: 'Email' },
     { key: 'created_at', label: 'Created', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'flags', label: 'Flags' },
@@ -124,71 +126,15 @@
     { key: 'actions', label: 'Actions', width: '220px' }
   ];
 
-  let filteredUsers = $derived(
-    users.filter((u) => {
-      // Exact-id filter short-circuits everything else. Used when a
-      // deep-link (e.g. "View author in admin" on a post) wants to
-      // pin the list to one specific identity regardless of search
-      // / status / location filters.
-      if (exactIdFilter) return u.id === exactIdFilter;
-
-      const matchesSearch =
-        !search ||
-        u.handle.toLowerCase().includes(search.toLowerCase()) ||
-        ((u as any).acct || '').toLowerCase().includes(search.toLowerCase()) ||
-        (u.display_name || '').toLowerCase().includes(search.toLowerCase()) ||
-        ((u as any).domain || '').toLowerCase().includes(search.toLowerCase()) ||
-        u.email?.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'suspended' && u.is_suspended) ||
-        (statusFilter === 'active' && !u.is_suspended);
-      const matchesLocation =
-        locationFilter === 'all' ||
-        (locationFilter === 'local' && (u as any).is_local !== false) ||
-        (locationFilter === 'remote' && (u as any).is_local === false);
-      const isLocal = (u as any).is_local !== false;
-      const isSubaccountUser = !!(u as any).parent_identity_id;
-      const matchesEmail =
-        emailFilter === 'all' ||
-        // Only apply the email filter to top-level local accounts.
-        // Remote rows have no local verification state we control;
-        // subaccounts (bots/groups/pages) inherit their parent's,
-        // so they never own an email of their own.
-        !isLocal ||
-        isSubaccountUser ||
-        (emailFilter === 'verified' && (u as any).email_confirmed === true) ||
-        (emailFilter === 'unverified' && (u as any).email_confirmed === false);
-      const matchesType = typeFilter === 'all' || u.type === typeFilter;
-      return matchesSearch && matchesStatus && matchesLocation && matchesEmail && matchesType;
-    })
-  );
-
-  // Reset to page 1 whenever a filter changes — pagination keyed off a
-  // larger result set is meaningless once the result set shrinks.
-  $effect(() => {
-    void search; void statusFilter; void locationFilter; void emailFilter; void typeFilter; void exactIdFilter;
-    currentPage = 1;
-  });
-
-  let sortedUsers = $derived(
-    [...filteredUsers].sort((a, b) => {
-      const aVal = a[sortKey as keyof AdminUser] ?? '';
-      const bVal = b[sortKey as keyof AdminUser] ?? '';
-      const cmp = String(aVal).localeCompare(String(bVal));
-      return sortDir === 'asc' ? cmp : -cmp;
-    })
-  );
-
   // Nest subaccounts under their parent. Each parent is followed
   // immediately by its child rows (in the same sort order), so the
-  // table reads like a tree. If the parent isn't in the visible set
-  // (filtered out, remote, whatever), orphan children fall back to
+  // table reads like a tree. If the parent isn't on this page (filtered
+  // out, sorted onto another page), orphan children fall back to
   // rendering as top-level rows — no surprise empty gaps.
   let groupedUsers = $derived.by(() => {
-    const byId = new Map(sortedUsers.map((u) => [u.id, u]));
+    const byId = new Map(users.map((u) => [u.id, u]));
     const childrenOf = new Map<string, AdminUser[]>();
-    for (const u of sortedUsers) {
+    for (const u of users) {
       if (u.parent_identity_id && byId.has(u.parent_identity_id)) {
         const list = childrenOf.get(u.parent_identity_id) ?? [];
         list.push(u);
@@ -198,7 +144,7 @@
 
     const out: AdminUser[] = [];
     const seen = new Set<string>();
-    for (const u of sortedUsers) {
+    for (const u of users) {
       if (u.parent_identity_id && byId.has(u.parent_identity_id)) continue;
       if (seen.has(u.id)) continue;
       out.push(u);
@@ -220,10 +166,7 @@
     } as Record<string, unknown>))
   );
 
-  let totalPages = $derived(Math.max(1, Math.ceil(tableRows.length / PAGE_SIZE)));
-  let pagedRows = $derived(
-    tableRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-  );
+  let totalPages = $derived(Math.max(1, Math.ceil(totalUsers / PAGE_SIZE)));
 
   // Paint local rows whose email isn't confirmed in a warning tint so
   // an admin scanning the table can spot stalled signups at a glance.
@@ -260,8 +203,26 @@
       if (q) search = q.replace(/^@/, '');
     }
 
-    await loadUsers();
   });
+
+  // Reload from the first page whenever a filter or the sort changes. Debounced
+  // so typing in the search box doesn't send a request per keystroke. Also does
+  // the initial load, picking up any deep-link params set in onMount.
+  $effect(() => {
+    void search; void statusFilter; void locationFilter; void emailFilter; void typeFilter;
+    void exactIdFilter; void sortKey; void sortDir;
+
+    const timer = setTimeout(() => {
+      currentPage = 1;
+      loadUsers();
+    }, 250);
+    return () => clearTimeout(timer);
+  });
+
+  function goToPage(page: number) {
+    currentPage = page;
+    loadUsers();
+  }
 
   // Any manual edit to search/status/location drops the pinned
   // single-user filter, so the admin can broaden the view without
@@ -270,15 +231,41 @@
     if (exactIdFilter) exactIdFilter = null;
   }
 
+  // Responses can arrive out of order while filters change, so only the latest
+  // request is allowed to update the table.
+  let latestRequest = 0;
+
   async function loadUsers() {
+    const request = ++latestRequest;
     loading = true;
+
+    const params: Record<string, string> = {
+      limit: String(PAGE_SIZE),
+      offset: String((currentPage - 1) * PAGE_SIZE),
+      sort: sortKey,
+      dir: sortDir
+    };
+
+    if (exactIdFilter) {
+      // Pins the list to one identity, regardless of the other filters.
+      params.id = exactIdFilter;
+    } else {
+      if (search.trim()) params.search = search.trim();
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (emailFilter !== 'all') params.email = emailFilter;
+      if (typeFilter !== 'all') params.type = typeFilter;
+      if (locationFilter !== 'all') params.local = String(locationFilter === 'local');
+    }
+
     try {
-      const result = await getAdminUsers();
+      const result = await getAdminUsers(params);
+      if (request !== latestRequest) return;
       users = result.data;
+      totalUsers = result.total;
     } catch {
-      addToast('Failed to load users', 'error');
+      if (request === latestRequest) addToast('Failed to load users', 'error');
     } finally {
-      loading = false;
+      if (request === latestRequest) loading = false;
     }
   }
 
@@ -354,7 +341,8 @@
       <input
         type="search"
         class="input"
-        placeholder="Search users..."
+        placeholder={$t('admin.users.search_placeholder')}
+        aria-label={$t('admin.users.search_placeholder')}
         bind:value={search}
         oninput={clearExactFilter}
       />
@@ -363,7 +351,6 @@
       <option value="all">All Statuses</option>
       <option value="active">Active</option>
       <option value="suspended">Suspended</option>
-      <option value="pending">Pending</option>
     </select>
     <select class="input status-select" bind:value={emailFilter} aria-label="Filter by email verification">
       <option value="all">All emails</option>
@@ -381,7 +368,7 @@
 
   <DataTable
     {columns}
-    rows={pagedRows}
+    rows={tableRows}
     bind:sortKey
     bind:sortDir
     {loading}
@@ -472,25 +459,25 @@
     {/snippet}
   </DataTable>
 
-  {#if !loading && tableRows.length > PAGE_SIZE}
+  {#if totalUsers > PAGE_SIZE}
     <nav class="pagination" aria-label="User list pagination">
       <button
         type="button"
         class="page-btn"
-        onclick={() => (currentPage = Math.max(1, currentPage - 1))}
-        disabled={currentPage === 1}
+        onclick={() => goToPage(currentPage - 1)}
+        disabled={currentPage === 1 || loading}
       >
         Previous
       </button>
       <span class="page-info">
         Page {currentPage} of {totalPages}
-        <span class="page-info-count">({tableRows.length.toLocaleString()} users)</span>
+        <span class="page-info-count">({totalUsers.toLocaleString()} users)</span>
       </span>
       <button
         type="button"
         class="page-btn"
-        onclick={() => (currentPage = Math.min(totalPages, currentPage + 1))}
-        disabled={currentPage >= totalPages}
+        onclick={() => goToPage(currentPage + 1)}
+        disabled={currentPage >= totalPages || loading}
       >
         Next
       </button>
@@ -597,10 +584,6 @@
 </Modal>
 
 <style>
-  .users-page {
-    max-width: 1200px;
-  }
-
   /* Clear-avatar / clear-banner rows in the Edit Profile modal. */
   .media-clear-row {
     display: flex;
@@ -824,6 +807,9 @@
     display: flex;
     gap: var(--space-2);
     align-items: center;
+    /* Size the column to its buttons, so a narrow screen scrolls the table
+       sideways instead of cutting them off. */
+    width: max-content;
   }
 
   .dropdown {
