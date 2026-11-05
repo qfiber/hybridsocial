@@ -268,6 +268,19 @@ defmodule Hybridsocial.Feeds.Visibility do
     |> select([i], i.id)
   end
 
+  @doc """
+  Of the given identity ids, the ones that are suspended, whether individually or
+  through their domain. One query per source however many ids there are, for
+  lists like a thread's replies where checking each author would be N+1.
+  """
+  def suspended_among(identity_ids) do
+    [suspended_account_ids(), authors_on_domains_under("suspend")]
+    |> Enum.flat_map(fn query ->
+      query |> where([i], i.id in ^identity_ids) |> Repo.all()
+    end)
+    |> MapSet.new()
+  end
+
   defp suspended_account_ids do
     Identity
     |> where([i], i.is_suspended == true)

@@ -653,6 +653,8 @@
   "admin.email.report_emails.title": "Report emails",
   "admin.email.report_emails.toggle": "Email staff about new reports",
   "admin.email.report_emails.toggle_hint": "Staff who can manage reports get an email when a report arrives, including reports from other servers. Reports for a group's own moderators don't send one.",
+  "admin.moderation.media_hashes.invalid": "Enter a 64-character SHA-256 hash that isn't already banned.",
+  "admin.moderation.media_hashes.placeholder": "SHA-256 hash",
   "admin.reports.load_failed": "Failed to load reports",
   "admin.reports.load_more": "Load more",
   "admin.reports.loading": "Loading…",

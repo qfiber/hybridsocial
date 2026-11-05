@@ -988,4 +988,57 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert is_nil(Hybridsocial.Repo.get!(Post, ctx.imported_post.id).deleted_at)
     end
   end
+
+  describe "media hash bans" do
+    @sha256 String.duplicate("ab", 32)
+
+    # The admin tab reads the list and the created row from under `data`.
+    test "creates and lists under data, normalizing the hash", %{conn: conn} do
+      conn = admin_conn(conn, create_admin("hash_admin"))
+
+      assert %{"data" => %{"id" => id, "hash" => @sha256}} =
+               conn
+               |> post("/api/v1/admin/media_hash_bans", %{
+                 "hash" => " #{String.upcase(@sha256)} ",
+                 "hash_type" => "sha256"
+               })
+               |> json_response(201)
+
+      assert %{"data" => [%{"id" => ^id}]} =
+               conn |> get("/api/v1/admin/media_hash_bans") |> json_response(200)
+
+      assert Moderation.media_hash_banned?(@sha256)
+    end
+
+    test "rejects a value that could never match an upload", %{conn: conn} do
+      assert conn
+             |> admin_conn(create_admin("hash_invalid"))
+             |> post("/api/v1/admin/media_hash_bans", %{
+               "hash" => "not-a-hash",
+               "hash_type" => "sha256"
+             })
+             |> json_response(422)
+    end
+
+    test "a duplicate returns a validation error, not a crash", %{conn: conn} do
+      conn = admin_conn(conn, create_admin("hash_dup"))
+      params = %{"hash" => @sha256, "hash_type" => "sha256"}
+
+      assert conn |> post("/api/v1/admin/media_hash_bans", params) |> json_response(201)
+      assert conn |> post("/api/v1/admin/media_hash_bans", params) |> json_response(422)
+    end
+  end
+
+  describe "moderation queue stats" do
+    # The admin Queue tab renders all four, and crashed when one was missing.
+    test "reports every status, even with an empty queue", %{conn: conn} do
+      assert %{
+               "data" => %{"pending" => 0, "approved" => 0, "rejected" => 0, "escalated" => 0}
+             } =
+               conn
+               |> admin_conn(create_admin("queue_stats_admin"))
+               |> get("/api/v1/admin/moderation_queue/stats")
+               |> json_response(200)
+    end
+  end
 end
