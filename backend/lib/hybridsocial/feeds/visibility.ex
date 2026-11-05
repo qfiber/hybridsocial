@@ -8,6 +8,7 @@ defmodule Hybridsocial.Feeds.Visibility do
 
   alias Hybridsocial.Social.{Follow, Block, Mute, PostMention, ListMember}
   alias Hybridsocial.Accounts.Identity
+  alias Hybridsocial.Moderation.BlockedHashtag
   alias Hybridsocial.Repo
 
   @doc """
@@ -225,6 +226,24 @@ defmodule Hybridsocial.Feeds.Visibility do
     |> where([b, _p], b.identity_id not in subquery(authors_on_domains_under("suspend")))
     |> where([_b, p], p.identity_id not in subquery(suspended_account_ids()))
     |> where([_b, p], p.identity_id not in subquery(authors_on_domains_under("suspend")))
+  end
+
+  @doc """
+  Excludes posts carrying a hashtag blocked with `hide` or `reject`. For public
+  surfaces only: followers of the author still see these posts at home.
+  """
+  def apply_blocked_hashtag_filter(query) do
+    hiding_actions = BlockedHashtag.hiding_actions()
+
+    where(
+      query,
+      [p],
+      fragment(
+        "NOT EXISTS (SELECT 1 FROM post_hashtags ph JOIN hashtags h ON h.id = ph.hashtag_id JOIN blocked_hashtags bh ON bh.name = h.name WHERE ph.post_id = ? AND bh.action = ANY(?))",
+        p.id,
+        ^hiding_actions
+      )
+    )
   end
 
   @doc """

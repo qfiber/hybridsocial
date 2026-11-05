@@ -13,6 +13,7 @@ defmodule Hybridsocial.Trending do
   import Ecto.Query
 
   alias Hybridsocial.Feeds.Visibility
+  alias Hybridsocial.Moderation.BlockedHashtag
   alias Hybridsocial.Repo
   alias Hybridsocial.Search.TrendingData
   alias Hybridsocial.Social.{Post, Hashtag}
@@ -87,6 +88,7 @@ defmodule Hybridsocial.Trending do
       |> where([p], is_nil(p.deleted_at))
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
+      |> Visibility.apply_blocked_hashtag_filter()
       |> Repo.all()
       |> Repo.preload(:identity)
       |> Map.new(&{&1.id, &1})
@@ -104,8 +106,11 @@ defmodule Hybridsocial.Trending do
     limit = parse_limit(opts)
     offset = parse_offset(opts)
 
+    # Filtered at read time rather than at compute time, so a block or unblock
+    # takes effect immediately instead of on the next compute tick.
     TrendingData
     |> where([t], t.type == "hashtag")
+    |> where([t], t.target_id not in subquery(from(b in BlockedHashtag, select: b.name)))
     |> order_by([t], desc: t.score)
     |> limit(^limit)
     |> offset(^offset)
@@ -152,6 +157,7 @@ defmodule Hybridsocial.Trending do
       |> where([p], p.visibility == "public")
       |> where([p], p.published_at >= ^cutoff)
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
+      |> Visibility.apply_blocked_hashtag_filter()
       |> join(:left, [p], r in "reactions", on: r.post_id == p.id and r.inserted_at >= ^cutoff)
       |> join(:left, [p, _r], b in "boosts",
         on: b.post_id == p.id and b.inserted_at >= ^cutoff and is_nil(b.deleted_at)

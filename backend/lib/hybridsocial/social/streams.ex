@@ -135,6 +135,7 @@ defmodule Hybridsocial.Social.Streams do
       |> where([p], is_nil(p.spoiler_text) or p.spoiler_text == "")
       |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
       |> Hybridsocial.Feeds.Visibility.apply_silence_filter()
+      |> Hybridsocial.Feeds.Visibility.apply_blocked_hashtag_filter()
       |> apply_viewer_blocks(viewer_id)
       |> maybe_apply_locality(include_federated)
       |> filter_by_qualifying_video(orientation, min_duration)

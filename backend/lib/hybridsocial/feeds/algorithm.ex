@@ -119,6 +119,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> Visibility.apply_shadow_ban_filter(identity_id)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
+      |> Visibility.apply_blocked_hashtag_filter()
       |> preload([:identity, :quote])
       |> Repo.all()
 

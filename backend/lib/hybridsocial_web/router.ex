@@ -1043,6 +1043,11 @@ defmodule HybridsocialWeb.Router do
     post "/media_hash_bans/from_post/:post_id", AdminController, :create_media_hash_ban_from_post
     delete "/media_hash_bans/:id", AdminController, :delete_media_hash_ban
 
+    # Hashtag Blocks
+    get "/hashtag_blocks", AdminController, :list_hashtag_blocks
+    post "/hashtag_blocks", AdminController, :create_hashtag_block
+    delete "/hashtag_blocks/:id", AdminController, :delete_hashtag_block
+
     # Appeals
     get "/appeals", AdminController, :list_appeals
     post "/appeals/:id/approve", AdminController, :approve_appeal

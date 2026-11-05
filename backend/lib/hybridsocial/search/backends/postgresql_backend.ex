@@ -56,6 +56,7 @@ defmodule Hybridsocial.Search.Backends.PostgresqlBackend do
       |> where([p], is_nil(p.deleted_at))
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
+      |> Visibility.apply_blocked_hashtag_filter()
       |> where([p], fragment("? @@ to_tsquery('english', ?)", p.search_vector, ^tsquery))
       |> apply_visibility_filter(viewer_id)
       |> apply_account_filter(account_id)
@@ -70,6 +71,7 @@ defmodule Hybridsocial.Search.Backends.PostgresqlBackend do
         |> where([p], is_nil(p.deleted_at))
         |> Visibility.apply_suspension_filter()
         |> Visibility.apply_silence_filter()
+        |> Visibility.apply_blocked_hashtag_filter()
         |> where([p], ilike(p.content, ^ilike_pattern))
         |> apply_visibility_filter(viewer_id)
         |> apply_account_filter(account_id)
@@ -92,6 +94,7 @@ defmodule Hybridsocial.Search.Backends.PostgresqlBackend do
 
     results =
       Hashtag
+      |> where([h], h.name not in subquery(Hybridsocial.Moderation.hidden_hashtag_names()))
       |> where([h], ilike(h.name, ^ilike_pattern))
       |> order_by([h], desc: h.usage_count)
       |> limit(^limit)

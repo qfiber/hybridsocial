@@ -7,7 +7,9 @@ defmodule Hybridsocial.Federation.MRF do
   """
 
   alias Hybridsocial.Config
-  alias Hybridsocial.Federation.MRF.SimplePolicy
+  alias Hybridsocial.Federation.MRF.{BlockedHashtagPolicy, SimplePolicy}
+
+  @always_on [SimplePolicy, BlockedHashtagPolicy]
 
   require Logger
 
@@ -31,12 +33,12 @@ defmodule Hybridsocial.Federation.MRF do
   end
 
   @doc """
-  Returns the MRF policy modules to run: `SimplePolicy` first, then whatever the
-  `mrf_policies` setting adds.
+  Returns the MRF policy modules to run: the always-on ones first, then whatever
+  the `mrf_policies` setting adds.
 
-  `SimplePolicy` isn't optional. It is what enforces the admin panel's instance
-  policies, and those must not silently stop working because of an unset or
-  differently-configured setting.
+  The always-on policies enforce what admins set in the panel (instance policies
+  and hashtag blocks), and those must not silently stop working because of an
+  unset or differently-configured setting.
   """
   def configured_policies do
     configured =
@@ -50,7 +52,7 @@ defmodule Hybridsocial.Federation.MRF do
           []
       end
 
-    [SimplePolicy | List.delete(configured, SimplePolicy)]
+    @always_on ++ (configured -- @always_on)
   end
 
   @doc "Returns descriptions from all configured policies."

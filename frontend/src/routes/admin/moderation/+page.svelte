@@ -13,12 +13,13 @@
     getIpBlocks, createIpBlock, deleteIpBlock,
     getEmailDomainBans, createEmailDomainBan, deleteEmailDomainBan,
     getMediaHashBans, createMediaHashBan, deleteMediaHashBan,
+    getHashtagBlocks, createHashtagBlock, deleteHashtagBlock,
     getVerifications, approveVerification, rejectVerification,
   } from '$lib/api/admin.js';
   import ModerationQueuePanel from '$lib/components/admin/ModerationQueuePanel.svelte';
   import type {
     AdminReport, ContentFilter, BannedDomain, IpBlock,
-    EmailDomainBan, MediaHashBan,
+    EmailDomainBan, MediaHashBan, HashtagBlock,
   } from '$lib/api/types.js';
   import type { VerificationRequest } from '$lib/api/admin.js';
 
@@ -31,6 +32,7 @@
     { id: 'ipblocks', label: 'IP Blocks' },
     { id: 'email-domains', label: 'Email Domains' },
     { id: 'media-hashes', label: 'Media Hashes' },
+    { id: 'hashtags', label: $t('admin.moderation.hashtags.tab') },
   ];
 
   const validTabs = tabs.map((tab) => tab.id);
@@ -110,6 +112,12 @@
   let mediaHashBans: MediaHashBan[] = $state([]);
   let mediaHashBansLoading = $state(false);
   let mediaHashBansLoaded = $state(false);
+  let hashtagBlocks: HashtagBlock[] = $state([]);
+  let hashtagBlocksLoading = $state(false);
+  let hashtagBlocksLoaded = $state(false);
+  let newHashtags = $state('');
+  let newHashtagAction = $state<HashtagBlock['action']>('no_trending');
+  let newHashtagReason = $state('');
   let newHash = $state('');
   let newHashType = $state<'md5' | 'sha256' | 'phash'>('sha256');
   let newHashDescription = $state('');
@@ -325,8 +333,65 @@
       loadEmailBans();
     } else if (activeTab === 'media-hashes' && !mediaHashBansLoaded && !mediaHashBansLoading) {
       loadMediaHashBans();
+    } else if (activeTab === 'hashtags' && !hashtagBlocksLoaded && !hashtagBlocksLoading) {
+      loadHashtagBlocks();
     }
   });
+
+  async function loadHashtagBlocks() {
+    hashtagBlocksLoading = true;
+    try {
+      hashtagBlocks = await getHashtagBlocks();
+    } catch {
+      addToast($t('admin.moderation.hashtags.load_failed'), 'error');
+    } finally {
+      hashtagBlocksLoading = false;
+      hashtagBlocksLoaded = true;
+    }
+  }
+
+  // Accepts several tags at once, since spam tends to arrive as a batch. Each
+  // saves on its own, so one bad entry doesn't lose the others: failures stay
+  // in the input to be corrected.
+  async function handleAddHashtagBlocks() {
+    const names = [...new Set(newHashtags.split(/[\s,]+/).filter(Boolean))];
+    if (names.length === 0) return;
+
+    const results = await Promise.allSettled(
+      names.map((name) =>
+        createHashtagBlock({
+          name,
+          action: newHashtagAction,
+          reason: newHashtagReason.trim() || null
+        })
+      )
+    );
+
+    const saved = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+    const failed = names.filter((_, i) => results[i].status === 'rejected');
+    const savedNames = new Set(saved.map((b) => b.name));
+
+    // A re-blocked tag updates its existing row rather than adding one.
+    hashtagBlocks = [...saved, ...hashtagBlocks.filter((b) => !savedNames.has(b.name))];
+    newHashtags = failed.join(' ');
+
+    if (failed.length > 0) {
+      addToast($t('admin.moderation.hashtags.add_failed', { tags: failed.join(' ') }), 'error');
+    } else {
+      newHashtagReason = '';
+      addToast($t('admin.moderation.hashtags.added'), 'success');
+    }
+  }
+
+  async function handleRemoveHashtagBlock(id: string) {
+    try {
+      await deleteHashtagBlock(id);
+      hashtagBlocks = hashtagBlocks.filter((b) => b.id !== id);
+      addToast($t('admin.moderation.hashtags.removed'), 'success');
+    } catch {
+      addToast($t('admin.moderation.hashtags.remove_failed'), 'error');
+    }
+  }
 
   async function handleAddEmailBan() {
     if (!newEmailDomain.trim()) return;
@@ -908,6 +973,63 @@
             </div>
           {:else}
             <p class="empty-text">No media hash bans</p>
+          {/each}
+        </div>
+      {/if}
+    {:else if activeTab === 'hashtags'}
+      <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleAddHashtagBlocks(); }}>
+        <input
+          class="input"
+          type="text"
+          bind:value={newHashtags}
+          placeholder={$t('admin.moderation.hashtags.tags_placeholder')}
+          aria-label={$t('admin.moderation.hashtags.tags_placeholder')}
+          required
+        />
+        <select
+          class="input"
+          bind:value={newHashtagAction}
+          aria-label={$t('admin.moderation.hashtags.action_label')}
+          style="width: 200px"
+        >
+          <option value="no_trending">{$t('admin.moderation.hashtags.action_no_trending')}</option>
+          <option value="hide">{$t('admin.moderation.hashtags.action_hide')}</option>
+          <option value="reject">{$t('admin.moderation.hashtags.action_reject')}</option>
+        </select>
+        <input
+          class="input"
+          type="text"
+          bind:value={newHashtagReason}
+          placeholder={$t('admin.moderation.hashtags.reason_placeholder')}
+          aria-label={$t('admin.moderation.hashtags.reason_placeholder')}
+        />
+        <button class="btn btn-primary" type="submit">{$t('admin.moderation.hashtags.submit')}</button>
+      </form>
+
+      <p class="text-secondary">{$t('admin.moderation.hashtags.help_no_trending')}</p>
+      <p class="text-secondary">{$t('admin.moderation.hashtags.help_hide')}</p>
+      <p class="text-secondary">{$t('admin.moderation.hashtags.help_reject')}</p>
+
+      {#if hashtagBlocksLoading}
+        <div class="skeleton" style="height: 50px"></div>
+      {:else}
+        <div class="list-items">
+          {#each hashtagBlocks as block (block.id)}
+            <div class="list-item card">
+              <div class="list-item-info">
+                <strong>#{block.name}</strong>
+                <span class="badge-type">{$t(`admin.moderation.hashtags.action_${block.action}`)}</span>
+                {#if block.reason}
+                  <span class="text-secondary">{block.reason}</span>
+                {/if}
+                <span class="text-tertiary" style="font-size: var(--text-xs)">{formatDate(block.created_at)}</span>
+              </div>
+              <button class="btn btn-sm btn-danger" type="button" onclick={() => handleRemoveHashtagBlock(block.id)}>
+                {$t('admin.moderation.hashtags.remove')}
+              </button>
+            </div>
+          {:else}
+            <p class="empty-text">{$t('admin.moderation.hashtags.empty')}</p>
           {/each}
         </div>
       {/if}

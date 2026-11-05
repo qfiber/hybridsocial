@@ -2895,7 +2895,83 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     end
   end
 
+  # ── Hashtag Blocks ───────────────────────────────────────────────────
+
+  def list_hashtag_blocks(conn, _params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      blocks = Moderation.list_blocked_hashtags()
+      conn |> put_status(:ok) |> json(%{data: Enum.map(blocks, &serialize_hashtag_block/1)})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def create_hashtag_block(conn, params) do
+    with :ok <- require_permission(conn, "content.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      attrs = %{
+        "name" => params["name"],
+        "action" => params["action"] || "no_trending",
+        "reason" => params["reason"],
+        "created_by" => admin_id
+      }
+
+      case Moderation.block_hashtag(attrs) do
+        {:ok, block} ->
+          Moderation.log(admin_id, "hashtag_block.created", "hashtag_block", block.id, %{
+            name: block.name,
+            action: block.action,
+            reason: block.reason
+          })
+
+          conn |> put_status(:created) |> json(%{data: serialize_hashtag_block(block)})
+
+        {:error, changeset} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  def delete_hashtag_block(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "content.manage"),
+         {:ok, block_id} <- Ecto.UUID.cast(id),
+         {:ok, block} <- Moderation.unblock_hashtag(block_id) do
+      admin_id = conn.assigns.current_identity.id
+
+      Moderation.log(admin_id, "hashtag_block.deleted", "hashtag_block", block.id, %{
+        name: block.name
+      })
+
+      conn |> put_status(:ok) |> json(%{message: "hashtag_block.deleted"})
+    else
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "hashtag_block.not_found"})
+
+      :error ->
+        conn |> put_status(:not_found) |> json(%{error: "hashtag_block.not_found"})
+
+      {:error, perm} ->
+        deny(conn, perm)
+    end
+  end
+
   # ── Serializers ──────────────────────────────────────────────────────
+
+  defp serialize_hashtag_block(block) do
+    %{
+      id: block.id,
+      name: block.name,
+      action: block.action,
+      reason: block.reason,
+      created_by: block.created_by,
+      created_at: block.inserted_at
+    }
+  end
 
   defp serialize_media_hash_ban(ban) do
     %{
