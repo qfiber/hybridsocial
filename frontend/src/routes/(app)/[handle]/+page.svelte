@@ -9,6 +9,7 @@
   import { getAccountStatuses } from '$lib/api/statuses.js';
   import { api } from '$lib/api/client.js';
   import { authStore, currentUser, isStaffMember } from '$lib/stores/auth.js';
+  import { t } from '$lib/stores/i18n.js';
   import ProfileHeader from '$lib/components/profile/ProfileHeader.svelte';
   import AdminProfileActions from '$lib/components/admin/AdminProfileActions.svelte';
   import Tabs from '$lib/components/ui/Tabs.svelte';
@@ -406,6 +407,17 @@
       <button class="btn btn-outline" type="button" onclick={loadProfile}>Try again</button>
     </div>
   {:else if account}
+    {#if account.suspension}
+      <div class="suspended-banner" role="status">
+        <span class="material-symbols-outlined" aria-hidden="true">block</span>
+        <span>
+          {account.suspension.source === 'domain'
+            ? $t('admin.profile.suspended_domain')
+            : $t('admin.profile.suspended_account')}
+        </span>
+      </div>
+    {/if}
+
     <ProfileHeader
       {account}
       {relationship}
@@ -521,6 +533,19 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .suspended-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    margin-block-end: var(--space-3);
+    border: 1px solid var(--color-error);
+    border-radius: var(--radius-lg);
+    color: var(--color-error);
+    font-size: var(--text-sm);
+    font-weight: 600;
   }
 
   .vouch-banner {

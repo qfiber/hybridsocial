@@ -636,6 +636,8 @@
   "admin.moderation.hashtags.submit": "Block",
   "admin.moderation.hashtags.tab": "Hashtags",
   "admin.moderation.hashtags.tags_placeholder": "Hashtags, separated by spaces",
+  "admin.profile.suspended_account": "This account is suspended. Only staff can see this profile and its posts.",
+  "admin.profile.suspended_domain": "This account's domain is suspended. Only staff can see this profile and its posts.",
   "admin.reports.load_failed": "Failed to load reports",
   "admin.reports.load_more": "Load more",
   "admin.reports.loading": "Loading…",

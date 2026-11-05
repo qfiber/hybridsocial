@@ -128,9 +128,16 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
         |> json(%{error: "status.not_found"})
 
       post ->
-        conn
-        |> put_status(:ok)
-        |> Compat.json(serialize_post(conn, post), :status)
+        if Hybridsocial.Accounts.hidden_from_viewer?(
+             Hybridsocial.Repo.preload(post, :identity).identity,
+             viewer_id
+           ) do
+          conn |> put_status(:not_found) |> json(%{error: "status.not_found"})
+        else
+          conn
+          |> put_status(:ok)
+          |> Compat.json(serialize_post(conn, post), :status)
+        end
     end
   end
 

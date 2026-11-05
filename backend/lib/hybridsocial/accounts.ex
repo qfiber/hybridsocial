@@ -121,6 +121,35 @@ defmodule Hybridsocial.Accounts do
     |> Repo.one()
   end
 
+  @doc """
+  Why an identity is suspended: `:account` for a suspension of that account,
+  `:domain` for a remote account on a domain under a `suspend` instance policy,
+  or `nil` when it isn't suspended.
+  """
+  def suspension_source(%Identity{is_suspended: true}), do: :account
+
+  def suspension_source(%Identity{is_local: false, ap_actor_url: url}) when is_binary(url) do
+    case Hybridsocial.Federation.ActivityMapper.extract_domain(url) do
+      nil -> nil
+      domain -> if Hybridsocial.Federation.domain_allowed?(domain), do: nil, else: :domain
+    end
+  end
+
+  def suspension_source(%Identity{}), do: nil
+
+  @doc """
+  Whether a suspended identity's profile and posts are off limits to this viewer.
+  Only staff, who need to review them, and the account itself can still see them.
+  """
+  def hidden_from_viewer?(%Identity{} = identity, viewer_id) do
+    cond do
+      is_nil(suspension_source(identity)) -> false
+      is_nil(viewer_id) -> true
+      viewer_id == identity.id -> false
+      true -> not Hybridsocial.Auth.RBAC.staff?(viewer_id)
+    end
+  end
+
   def get_identity_with_user(id) do
     Identity
     |> where([i], is_nil(i.deleted_at))
