@@ -340,7 +340,7 @@ defmodule Hybridsocial.Emails.Defaults do
     """
 
     footer =
-      "You're receiving this because \"admin_new_report\" email notifications are enabled on your staff account."
+      "You're receiving this because report emails are turned on for {{instance_name}} and you can manage reports."
 
     layout(content, footer)
   end

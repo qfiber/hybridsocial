@@ -195,7 +195,9 @@ defmodule Hybridsocial.Emails do
         "target_type" => to_string(report.target_type || ""),
         "reporter_handle" => (report.reporter && report.reporter.handle) || "",
         "reported_handle" => (report.reported && report.reported.handle) || "",
-        "comment" => to_string(Map.get(report, :comment) || "")
+        # Reporter-supplied, and from any server for a federated report. The
+        # renderer escapes it; the cap just keeps the email a sensible size.
+        "comment" => report.description |> to_string() |> String.slice(0, 1000)
       },
       "reports_url" => "#{base_url()}/admin/moderation?tab=reports"
     }

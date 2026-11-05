@@ -192,7 +192,8 @@ defmodule Hybridsocial.Emails.Templates do
     %{
       key: "admin_new_report",
       name: "Admin: new report",
-      description: "Sent to admins (with reports.manage) when a user files a new report.",
+      description:
+        "Sent to staff with reports.manage when someone files a report, if report emails are turned on in Email Settings.",
       variables: %{
         "instance_name" => "Instance display name",
         "staff.display_name" => "Recipient admin's display name",
