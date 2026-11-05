@@ -584,10 +584,6 @@
 </Modal>
 
 <style>
-  .users-page {
-    max-width: 1200px;
-  }
-
   /* Clear-avatar / clear-banner rows in the Edit Profile modal. */
   .media-clear-row {
     display: flex;
@@ -811,6 +807,9 @@
     display: flex;
     gap: var(--space-2);
     align-items: center;
+    /* Size the column to its buttons, so a narrow screen scrolls the table
+       sideways instead of cutting them off. */
+    width: max-content;
   }
 
   .dropdown {
