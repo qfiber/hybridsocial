@@ -12,13 +12,26 @@ defmodule Hybridsocial.Streaming do
     event = %{event: "update", payload: post}
     visibility = post[:visibility] || post["visibility"]
 
-    maybe_broadcast_public(event, visibility)
+    tags = post[:tags] || post["tags"] || []
+    hidden? = Hybridsocial.Moderation.any_hashtag_hidden?(tag_names(tags))
+
+    # A post carrying a hidden hashtag still reaches its author and followers,
+    # but must not arrive on public streams after being filtered from the feeds.
+    unless hidden?, do: maybe_broadcast_public(event, visibility)
     maybe_broadcast_author_and_followers(event, author_id_from(post), visibility)
     maybe_broadcast_group(event, post[:group_id] || post["group_id"])
-    broadcast_tags(event, post[:tags] || post["tags"] || [])
+    unless hidden?, do: broadcast_tags(event, tags)
 
     :ok
   end
+
+  defp tag_names(tags) when is_list(tags) do
+    tags
+    |> Enum.map(fn tag -> if is_map(tag), do: tag["name"] || tag[:name], else: tag end)
+    |> Enum.filter(&is_binary/1)
+  end
+
+  defp tag_names(_), do: []
 
   # Public + unlisted land on the explore/public stream; followers
   # and direct posts do not.

@@ -107,6 +107,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
       |> Visibility.apply_shadow_ban_filter(identity_id)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
+      |> Visibility.apply_blocked_hashtag_filter()
       |> order_by([p],
         desc: fragment("? + ? * 2 + ?", p.reaction_count, p.boost_count, p.reply_count),
         desc: p.id

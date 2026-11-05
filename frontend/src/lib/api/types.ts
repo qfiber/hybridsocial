@@ -764,6 +764,14 @@ export interface MediaHashBan {
   created_at: string;
 }
 
+export interface HashtagBlock {
+  id: string;
+  name: string;
+  action: 'no_trending' | 'hide' | 'reject';
+  reason: string | null;
+  created_at: string;
+}
+
 export interface InstancePurgePreview {
   domain: string;
   users_count: number;

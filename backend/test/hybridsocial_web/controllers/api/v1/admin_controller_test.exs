@@ -875,4 +875,54 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
       assert conn.status in [401, 403]
     end
   end
+
+  describe "hashtag blocks" do
+    test "an admin can block, list and unblock a hashtag", %{conn: conn} do
+      admin = create_admin("tagblock_admin")
+      conn = admin_conn(conn, admin)
+
+      created =
+        conn
+        |> post("/api/v1/admin/hashtag_blocks", %{"name" => "#Spam", "action" => "hide"})
+        |> json_response(201)
+
+      assert %{"name" => "spam", "action" => "hide", "id" => id} = created["data"]
+
+      assert %{"data" => [%{"id" => ^id}]} =
+               conn |> get("/api/v1/admin/hashtag_blocks") |> json_response(200)
+
+      assert conn |> delete("/api/v1/admin/hashtag_blocks/#{id}") |> json_response(200)
+      assert Moderation.list_blocked_hashtags() == []
+    end
+
+    test "an invalid tag returns a validation error", %{conn: conn} do
+      admin = create_admin("tagblock_invalid")
+
+      assert %{"error" => "validation.failed"} =
+               conn
+               |> admin_conn(admin)
+               |> post("/api/v1/admin/hashtag_blocks", %{"name" => "two words"})
+               |> json_response(422)
+    end
+
+    test "deleting an unknown or malformed id returns 404", %{conn: conn} do
+      conn = admin_conn(conn, create_admin("tagblock_missing"))
+
+      for id <- [Ecto.UUID.generate(), "not-a-uuid"] do
+        assert conn |> delete("/api/v1/admin/hashtag_blocks/#{id}") |> json_response(404)
+      end
+    end
+
+    test "a regular user can't manage hashtag blocks", %{conn: conn} do
+      user = create_user("tagblock_user")
+
+      response =
+        conn
+        |> auth_conn(user)
+        |> post("/api/v1/admin/hashtag_blocks", %{"name" => "spam"})
+
+      assert response.status in [401, 403]
+      assert Moderation.list_blocked_hashtags() == []
+    end
+  end
 end

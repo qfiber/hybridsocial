@@ -20,6 +20,7 @@ defmodule Hybridsocial.Moderation do
     ModerationNote,
     QueuedItem,
     MediaHashBan,
+    BlockedHashtag,
     Takedown
   }
 
@@ -1649,6 +1650,96 @@ defmodule Hybridsocial.Moderation do
     MediaHashBan
     |> where([b], b.hash == ^hash)
     |> Repo.exists?()
+  end
+
+  # ── Hashtag Blocks ───────────────────────────────────────────────────
+
+  @doc "Lists all hashtag blocks, most recent first."
+  def list_blocked_hashtags do
+    BlockedHashtag
+    |> order_by([b], desc: b.inserted_at)
+    |> Repo.all()
+  end
+
+  @doc "Blocks a hashtag, or updates the existing block on it."
+  def block_hashtag(attrs) do
+    result =
+      %BlockedHashtag{}
+      |> BlockedHashtag.changeset(attrs)
+      |> Repo.insert(
+        on_conflict: {:replace, [:action, :reason, :created_by, :updated_at]},
+        conflict_target: :name,
+        returning: true
+      )
+
+    with {:ok, _} <- result, do: flush_feed_caches()
+    result
+  end
+
+  @doc "Removes a hashtag block by ID."
+  def unblock_hashtag(id) do
+    case Repo.get(BlockedHashtag, id) do
+      nil ->
+        {:error, :not_found}
+
+      block ->
+        result = Repo.delete(block)
+        flush_feed_caches()
+        result
+    end
+  end
+
+  @doc "A query of the tag names whose posts are hidden from public surfaces."
+  def hidden_hashtag_names do
+    hiding_actions = BlockedHashtag.hiding_actions()
+
+    BlockedHashtag
+    |> where([b], b.action in ^hiding_actions)
+    |> select([b], b.name)
+  end
+
+  @doc "Returns true if posts carrying this tag are hidden from public surfaces."
+  def hashtag_hidden?(name) when is_binary(name) do
+    normalized = BlockedHashtag.normalize_name(name)
+
+    hidden_hashtag_names()
+    |> where([b], b.name == ^normalized)
+    |> Repo.exists?()
+  end
+
+  @doc "Returns true if any of these tags is hidden from public surfaces."
+  def any_hashtag_hidden?([]), do: false
+
+  def any_hashtag_hidden?(names) when is_list(names) do
+    normalized = Enum.map(names, &BlockedHashtag.normalize_name/1)
+
+    hidden_hashtag_names()
+    |> where([b], b.name in ^normalized)
+    |> Repo.exists?()
+  end
+
+  @doc "Returns the first of these tags blocked with `reject`, or nil."
+  def rejected_hashtag_among([]), do: nil
+
+  def rejected_hashtag_among(names) when is_list(names) do
+    BlockedHashtag
+    |> where([b], b.action == "reject" and b.name in ^names)
+    |> select([b], b.name)
+    |> limit(1)
+    |> Repo.one()
+  end
+
+  # Timelines and tag pages are served from snapshots, so without this a block
+  # would take up to a few minutes to reach them. Admin blocks are rare, and the
+  # next read or prewarm cycle refills the cache. Best-effort: an unavailable
+  # cache must not fail the block, and the snapshots expire on their own anyway.
+  defp flush_feed_caches do
+    Hybridsocial.Cache.flush_pattern("feed:*")
+    :ok
+  rescue
+    e ->
+      Logger.warning("Failed to flush feed caches: #{inspect(e)}")
+      :ok
   end
 
   # ── Pagination Helper ────────────────────────────────────────────────

@@ -28,6 +28,7 @@ import type {
   InviteCode,
   EmailDomainBan,
   MediaHashBan,
+  HashtagBlock,
   InstancePurgePreview,
   AdminRole
 } from './types.js';
@@ -557,6 +558,18 @@ export function createMediaHashBan(params: { hash: string; hash_type: string; de
 
 export function deleteMediaHashBan(id: string): Promise<void> {
   return api.delete(`/api/v1/admin/media_hash_bans/${id}`);
+}
+
+export function getHashtagBlocks(): Promise<HashtagBlock[]> {
+  return api.get<{ data: HashtagBlock[] }>('/api/v1/admin/hashtag_blocks').then((r) => r.data || []);
+}
+
+export function createHashtagBlock(params: Pick<HashtagBlock, 'name' | 'action' | 'reason'>): Promise<HashtagBlock> {
+  return api.post<{ data: HashtagBlock }>('/api/v1/admin/hashtag_blocks', params).then((r) => r.data);
+}
+
+export function deleteHashtagBlock(id: string): Promise<void> {
+  return api.delete(`/api/v1/admin/hashtag_blocks/${id}`);
 }
 
 export function banMediaFromPost(postId: string): Promise<void> {

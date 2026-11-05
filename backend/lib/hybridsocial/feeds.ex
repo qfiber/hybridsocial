@@ -129,6 +129,7 @@ defmodule Hybridsocial.Feeds do
       |> apply_cursor_filters(opts)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
+      |> Visibility.apply_blocked_hashtag_filter()
       |> Visibility.apply_shadow_ban_filter(viewer_id)
       |> maybe_filter_local(local_only)
       |> apply_public_order(Keyword.get(opts, :sort))
@@ -274,6 +275,14 @@ defmodule Hybridsocial.Feeds do
     * `:since_id` - return posts newer than this id
   """
   def hashtag_timeline(hashtag, opts \\ []) do
+    if Hybridsocial.Moderation.hashtag_hidden?(hashtag) do
+      []
+    else
+      fetch_hashtag_timeline(hashtag, opts)
+    end
+  end
+
+  defp fetch_hashtag_timeline(hashtag, opts) do
     limit = parse_limit(opts)
     tag_pattern = "%##{hashtag}%"
     viewer_id = Keyword.get(opts, :viewer_id)
@@ -287,6 +296,7 @@ defmodule Hybridsocial.Feeds do
       |> apply_cursor_filters(opts)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
+      |> Visibility.apply_blocked_hashtag_filter()
       |> Visibility.apply_shadow_ban_filter(viewer_id)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
@@ -391,6 +401,7 @@ defmodule Hybridsocial.Feeds do
       |> apply_cursor_filters(opts)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
+      |> Visibility.apply_blocked_hashtag_filter()
       |> Visibility.apply_shadow_ban_filter(viewer_id)
       |> apply_global_order(Keyword.get(opts, :sort))
       |> limit(^limit)

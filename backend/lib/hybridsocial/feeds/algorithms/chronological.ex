@@ -42,6 +42,15 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
     followed_tag_ids =
       FollowedTag
       |> where([ft], ft.identity_id == ^identity_id)
+      |> where(
+        [ft],
+        ft.hashtag_id not in subquery(
+          from(h in Hybridsocial.Social.Hashtag,
+            where: h.name in subquery(Hybridsocial.Moderation.hidden_hashtag_names()),
+            select: h.id
+          )
+        )
+      )
       |> select([ft], ft.hashtag_id)
 
     # Post IDs from followed hashtags

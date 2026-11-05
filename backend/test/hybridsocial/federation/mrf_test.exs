@@ -13,6 +13,7 @@ defmodule Hybridsocial.Federation.MRFTest do
 
   alias Hybridsocial.Federation.MRF.{
     AntiLinkSpamPolicy,
+    BlockedHashtagPolicy,
     DropPolicy,
     HellthreadPolicy,
     KeywordPolicy,
@@ -272,10 +273,10 @@ defmodule Hybridsocial.Federation.MRFTest do
 
     test "SimplePolicy always runs first, whatever the setting says" do
       :ok = Config.set("mrf_policies", [])
-      assert MRF.configured_policies() == [SimplePolicy]
+      assert MRF.configured_policies() == [SimplePolicy, BlockedHashtagPolicy]
 
       :ok = Config.set("mrf_policies", ["drop", "simple"])
-      assert MRF.configured_policies() == [SimplePolicy, DropPolicy]
+      assert MRF.configured_policies() == [SimplePolicy, BlockedHashtagPolicy, DropPolicy]
     end
 
     test "halts on first rejection" do

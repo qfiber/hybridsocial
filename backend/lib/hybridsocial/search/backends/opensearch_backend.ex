@@ -115,6 +115,7 @@ defmodule Hybridsocial.Search.Backends.OpensearchBackend do
           |> where([p], is_nil(p.deleted_at))
           |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
           |> Hybridsocial.Feeds.Visibility.apply_silence_filter()
+          |> Hybridsocial.Feeds.Visibility.apply_blocked_hashtag_filter()
           |> Repo.all()
           |> Repo.preload(:identity)
           |> Map.new(&{&1.id, &1})
@@ -149,6 +150,7 @@ defmodule Hybridsocial.Search.Backends.OpensearchBackend do
         hashtags =
           Hashtag
           |> where([h], h.id in ^ids)
+          |> where([h], h.name not in subquery(Hybridsocial.Moderation.hidden_hashtag_names()))
           |> Repo.all()
           |> Map.new(&{&1.id, &1})
 
