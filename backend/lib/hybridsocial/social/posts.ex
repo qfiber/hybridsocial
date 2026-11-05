@@ -1578,12 +1578,16 @@ defmodule Hybridsocial.Social.Posts do
     base =
       Post
       |> where([p], is_nil(p.deleted_at))
-      |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
       # `id DESC` is the explicit tie-breaker for posts published in
       # the same instant; without it the row-tuple cursor below
       # couldn't pick a deterministic next-page boundary.
       |> order_by([p], desc: p.published_at, desc: p.id)
       |> limit(^limit)
+
+    base =
+      if Keyword.get(opts, :include_suspended, false),
+        do: base,
+        else: Hybridsocial.Feeds.Visibility.apply_suspension_filter(base)
 
     base = if pinned, do: where(base, [p], p.is_pinned == true), else: base
 

@@ -32,6 +32,8 @@ export function displayAcct(identity: { handle?: string; acct?: string | null })
 }
 
 export interface Identity {
+  /** Staff only, and only on a suspended account. */
+  suspension?: { source: 'account' | 'domain'; suspended_at: string | null };
   id: string;
   type: 'user' | 'bot' | 'group' | 'page';
   handle: string;

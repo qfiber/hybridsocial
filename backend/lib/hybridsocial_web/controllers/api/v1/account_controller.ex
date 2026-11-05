@@ -31,10 +31,10 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       identity ->
         viewer_id = viewer_identity_id(conn)
 
-        # If either party has blocked the other, the profile is
-        # invisible to the viewer — don't even leak the row's
-        # existence. Behaves the same as a real 404.
-        if viewer_id && either_blocked?(viewer_id, identity.id) do
+        # If either party has blocked the other, or the account is
+        # suspended, the profile is invisible to the viewer — don't even
+        # leak the row's existence. Behaves the same as a real 404.
+        if profile_hidden?(identity, viewer_id) do
           conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
         else
           conn
@@ -160,7 +160,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       identity ->
         viewer_id = viewer_identity_id(conn)
 
-        if viewer_id && either_blocked?(viewer_id, identity.id) do
+        if profile_hidden?(identity, viewer_id) do
           conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
         else
           conn
@@ -175,15 +175,15 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       nil ->
         conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
 
-      _identity ->
+      identity ->
         viewer_id = viewer_identity_id(conn)
 
-        # If either direction has a block, the profile feed is
-        # invisible to the viewer — same gate as the show endpoint
-        # above. Empty list, not 404, so the UI can render its own
-        # "no posts" state if the profile loaded via a different
+        # If either direction has a block, or the account is suspended,
+        # the profile feed is invisible to the viewer — same gate as the
+        # show endpoint above. Empty list, not 404, so the UI can render
+        # its own "no posts" state if the profile loaded via a different
         # path. (The /accounts/:id show endpoint already 404s.)
-        if viewer_id && either_blocked?(viewer_id, id) do
+        if profile_hidden?(identity, viewer_id) do
           conn |> put_status(:ok) |> json([])
         else
           do_statuses(conn, id, viewer_id, params)
@@ -209,7 +209,10 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
         only_direct: only_direct,
         pinned: params["pinned"] == "true",
         max_id: params["max_id"],
-        viewer_id: viewer_id
+        viewer_id: viewer_id,
+        # Reaching this point means the viewer may see the account, so only
+        # staff reviewing a suspended one need its posts left in.
+        include_suspended: staff?(viewer_id)
       ]
 
       posts =
@@ -347,7 +350,10 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   end
 
   def followers(conn, %{"id" => id}) do
-    identities = Social.followers(id, conn_pagination_opts(conn))
+    identities =
+      if account_visible?(id, conn),
+        do: Social.followers(id, conn_pagination_opts(conn)),
+        else: []
 
     conn
     |> put_status(:ok)
@@ -355,7 +361,10 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   end
 
   def following(conn, %{"id" => id}) do
-    identities = Social.following(id, conn_pagination_opts(conn))
+    identities =
+      if account_visible?(id, conn),
+        do: Social.following(id, conn_pagination_opts(conn)),
+        else: []
 
     conn
     |> put_status(:ok)
@@ -522,7 +531,43 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       onboarded_at: identity.onboarded_at,
       created_at: identity.inserted_at
     }
+    |> maybe_put_suspension(identity, viewer_id)
   end
+
+  # Staff-only, for the banner on a suspended profile. The account itself can
+  # still load its profile, but doesn't get this.
+  defp maybe_put_suspension(payload, _identity, nil), do: payload
+
+  defp maybe_put_suspension(payload, identity, viewer_id) do
+    case Accounts.suspension_source(identity) do
+      nil ->
+        payload
+
+      source ->
+        if staff?(viewer_id) do
+          Map.put(payload, :suspension, %{source: source, suspended_at: identity.suspended_at})
+        else
+          payload
+        end
+    end
+  end
+
+  defp profile_hidden?(identity, viewer_id) do
+    Accounts.hidden_from_viewer?(identity, viewer_id) or
+      (not is_nil(viewer_id) and either_blocked?(viewer_id, identity.id))
+  end
+
+  # Missing accounts stay visible here so the follow lists keep returning an
+  # empty page for them, as they always have.
+  defp account_visible?(id, conn) do
+    case Accounts.get_identity(id) do
+      nil -> true
+      identity -> not Accounts.hidden_from_viewer?(identity, viewer_identity_id(conn))
+    end
+  end
+
+  defp staff?(nil), do: false
+  defp staff?(viewer_id), do: Hybridsocial.Auth.RBAC.staff?(viewer_id)
 
   defp viewer_identity_id(conn) do
     case conn.assigns[:current_identity] do
