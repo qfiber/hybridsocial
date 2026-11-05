@@ -122,7 +122,9 @@ defmodule Hybridsocial.Federation do
   def set_instance_policy(domain, policy, reason, admin_id) do
     attrs = %{domain: domain, policy: policy, reason: reason, created_by: admin_id}
 
-    %InstancePolicy{domain: domain}
+    # Don't preset `domain` on the struct: cast sees an unchanged value and
+    # records no change, which would skip normalizing and validating it.
+    %InstancePolicy{}
     |> InstancePolicy.changeset(attrs)
     |> Repo.insert(
       on_conflict: {:replace, [:policy, :reason, :created_by, :updated_at]},
@@ -148,7 +150,7 @@ defmodule Hybridsocial.Federation do
 
   @doc "Returns true if the domain is not suspended."
   def domain_allowed?(domain) do
-    case get_instance_policy(domain) do
+    case get_instance_policy(String.downcase(domain)) do
       nil -> true
       %InstancePolicy{policy: "suspend"} -> false
       _ -> true

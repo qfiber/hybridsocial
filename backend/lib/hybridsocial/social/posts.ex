@@ -1578,6 +1578,7 @@ defmodule Hybridsocial.Social.Posts do
     base =
       Post
       |> where([p], is_nil(p.deleted_at))
+      |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
       # `id DESC` is the explicit tie-breaker for posts published in
       # the same instant; without it the row-tuple cursor below
       # couldn't pick a deterministic next-page boundary.

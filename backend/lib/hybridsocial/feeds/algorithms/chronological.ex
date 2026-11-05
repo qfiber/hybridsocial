@@ -74,6 +74,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)
       |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.apply_suspension_filter()
       # `id DESC` is the explicit tie-breaker for posts inserted in
       # the same instant; without it the row-tuple cursor below
       # couldn't deterministically pick a "next page" boundary.
@@ -88,6 +89,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Chronological do
       |> where([b], b.identity_id in subquery(followed_ids) or b.identity_id == ^identity_id)
       |> where([b], is_nil(b.deleted_at))
       |> join(:inner, [b], p in Post, on: b.post_id == p.id and is_nil(p.deleted_at))
+      |> Visibility.apply_boost_suspension_filter()
       |> apply_boost_cursor(cursor)
       |> order_by([b], desc: b.inserted_at)
       |> limit(^limit)

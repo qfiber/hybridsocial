@@ -194,7 +194,85 @@ defmodule Hybridsocial.Feeds.Visibility do
       )
       |> select([i], i.id)
 
-    where(query, [p], p.identity_id not in subquery(silenced_ids))
+    query
+    |> where([p], p.identity_id not in subquery(silenced_ids))
+    |> where([p], p.identity_id not in subquery(authors_on_domains_under("silence")))
+  end
+
+  @doc """
+  Excludes posts by suspended accounts and by remote authors on a domain under
+  a `suspend` instance policy. Unlike silence this applies to every feed,
+  followers included.
+
+  This is a read-time filter on purpose: suspending takes effect on posts we
+  already hold, and lifting it brings them back. Deleting them for good is the
+  separate, explicit `Federation.Cleanup.purge_instance_content/2`.
+  """
+  def apply_suspension_filter(query) do
+    query
+    |> where([p], p.identity_id not in subquery(suspended_account_ids()))
+    |> where([p], p.identity_id not in subquery(authors_on_domains_under("suspend")))
+  end
+
+  @doc """
+  `apply_suspension_filter/1` for a Boost query joined to its Post as the second
+  binding. Drops the boost when either the booster or the boosted author is
+  suspended, since a boost would otherwise carry a suspended post into a feed.
+  """
+  def apply_boost_suspension_filter(query) do
+    query
+    |> where([b, _p], b.identity_id not in subquery(suspended_account_ids()))
+    |> where([b, _p], b.identity_id not in subquery(authors_on_domains_under("suspend")))
+    |> where([_b, p], p.identity_id not in subquery(suspended_account_ids()))
+    |> where([_b, p], p.identity_id not in subquery(authors_on_domains_under("suspend")))
+  end
+
+  @doc """
+  Every identity whose posts must not count towards public surfaces such as
+  trending: suspended, silenced or shadow-banned accounts, and remote authors on
+  a suspended or silenced domain.
+  """
+  def publicly_hidden_author_ids do
+    now = DateTime.utc_now()
+
+    Identity
+    |> where(
+      [i],
+      i.is_suspended == true or i.is_shadow_banned == true or
+        (i.is_silenced == true and (is_nil(i.silenced_until) or i.silenced_until > ^now)) or
+        (i.is_local == false and
+           fragment(
+             "lower(split_part(split_part(?, '/', 3), ':', 1)) IN (SELECT domain FROM instance_policies WHERE policy IN ('suspend', 'silence'))",
+             i.ap_actor_url
+           ))
+    )
+    |> select([i], i.id)
+  end
+
+  defp suspended_account_ids do
+    Identity
+    |> where([i], i.is_suspended == true)
+    |> select([i], i.id)
+  end
+
+  # Remote identities carry no domain column, so the host comes from
+  # `ap_actor_url`. This expression must stay identical to the one in the
+  # `identities_remote_host_index` migration or the index stops being used.
+  #
+  # `is_local` matters: actors imported from a migrated instance keep their old
+  # `ap_actor_url` but live here, so a policy on the old host must not hide them.
+  defp authors_on_domains_under(policy) do
+    Identity
+    |> where([i], i.is_local == false)
+    |> where(
+      [i],
+      fragment(
+        "lower(split_part(split_part(?, '/', 3), ':', 1)) IN (SELECT domain FROM instance_policies WHERE policy::text = ?)",
+        i.ap_actor_url,
+        ^policy
+      )
+    )
+    |> select([i], i.id)
   end
 
   @doc """

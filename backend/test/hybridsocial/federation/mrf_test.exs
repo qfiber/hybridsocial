@@ -265,9 +265,17 @@ defmodule Hybridsocial.Federation.MRFTest do
   # --------------------------------------------------------------------------
 
   describe "filter_pipeline/1" do
-    test "default config (no policies) uses NoOpPolicy and passes everything" do
+    test "with no policies configured, passes activities from unrestricted domains" do
       :ok = Config.set("mrf_policies", [])
       assert {:ok, _} = MRF.filter_pipeline(create_activity())
+    end
+
+    test "SimplePolicy always runs first, whatever the setting says" do
+      :ok = Config.set("mrf_policies", [])
+      assert MRF.configured_policies() == [SimplePolicy]
+
+      :ok = Config.set("mrf_policies", ["drop", "simple"])
+      assert MRF.configured_policies() == [SimplePolicy, DropPolicy]
     end
 
     test "halts on first rejection" do
