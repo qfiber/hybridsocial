@@ -150,6 +150,26 @@ defmodule Hybridsocial.Accounts do
     end
   end
 
+  @doc """
+  The batch form of `hidden_from_viewer?/2`: of these identity ids, the ones whose
+  content this viewer can't see. Staff are only looked up when there's something
+  to hide from them.
+  """
+  def hidden_identity_ids(identity_ids, viewer_id) do
+    suspended =
+      identity_ids
+      |> Enum.uniq()
+      |> Hybridsocial.Feeds.Visibility.suspended_among()
+      |> MapSet.delete(viewer_id)
+
+    cond do
+      MapSet.size(suspended) == 0 -> suspended
+      is_nil(viewer_id) -> suspended
+      Hybridsocial.Auth.RBAC.staff?(viewer_id) -> MapSet.new()
+      true -> suspended
+    end
+  end
+
   def get_identity_with_user(id) do
     Identity
     |> where([i], is_nil(i.deleted_at))

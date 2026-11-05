@@ -761,7 +761,7 @@ export interface EmailDomainBan {
 export interface MediaHashBan {
   id: string;
   hash: string;
-  hash_type: 'md5' | 'sha256' | 'phash';
+  hash_type: 'sha256' | 'phash';
   description: string | null;
   created_at: string;
 }

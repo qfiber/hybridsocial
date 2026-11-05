@@ -483,8 +483,17 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       nil ->
         conn |> put_status(:not_found) |> json(%{error: "status.not_found"})
 
-      _post ->
-        fetch_thread(conn, id, identity_id, media_filter)
+      post ->
+        # Same gate as `show/2`: a suspended author's post is a 404, so its
+        # thread can't be read through this door instead.
+        if Hybridsocial.Accounts.hidden_from_viewer?(
+             Hybridsocial.Repo.preload(post, :identity).identity,
+             identity_id
+           ) do
+          conn |> put_status(:not_found) |> json(%{error: "status.not_found"})
+        else
+          fetch_thread(conn, id, identity_id, media_filter)
+        end
     end
   end
 
@@ -546,6 +555,17 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
           descendants
           |> Enum.filter(&Posts.viewer_can_read?(&1, identity_id))
           |> filter_by_target_media(id, media_filter)
+
+        # Suspended authors drop out of the thread, and the tombstones below
+        # keep the replies to their posts attached to the conversation.
+        hidden =
+          Hybridsocial.Accounts.hidden_identity_ids(
+            Enum.map(ancestors ++ descendants, & &1.identity_id),
+            identity_id
+          )
+
+        ancestors = Enum.reject(ancestors, &MapSet.member?(hidden, &1.identity_id))
+        descendants = Enum.reject(descendants, &MapSet.member?(hidden, &1.identity_id))
 
         serialized_ancestors =
           PostSerializer.serialize_many(ancestors, current_identity_id: identity_id)

@@ -1674,11 +1674,18 @@ defmodule Hybridsocial.Moderation do
   Returns counts of queued items grouped by status for the dashboard.
   """
   def queue_stats do
-    QueuedItem
-    |> group_by([q], q.status)
-    |> select([q], {q.status, count(q.id)})
-    |> Repo.all()
-    |> Map.new()
+    counts =
+      QueuedItem
+      |> group_by([q], q.status)
+      |> select([q], {q.status, count(q.id)})
+      |> Repo.all()
+      |> Map.new()
+
+    # GROUP BY only returns statuses that have rows, so start from zero for all
+    # of them. The admin panel renders every count, and a missing one crashed it.
+    QueuedItem.statuses()
+    |> Map.new(&{&1, 0})
+    |> Map.merge(counts)
   end
 
   # ── Media Hash Bans ─────────────────────────────────────────────────

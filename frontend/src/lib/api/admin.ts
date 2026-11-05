@@ -551,11 +551,11 @@ export function deleteEmailDomainBan(id: string): Promise<void> {
 
 // Media Hash Bans
 export function getMediaHashBans(): Promise<MediaHashBan[]> {
-  return api.get('/api/v1/admin/media_hash_bans');
+  return api.get<{ data: MediaHashBan[] }>('/api/v1/admin/media_hash_bans').then((r) => r.data || []);
 }
 
 export function createMediaHashBan(params: { hash: string; hash_type: string; description?: string }): Promise<MediaHashBan> {
-  return api.post('/api/v1/admin/media_hash_bans', params);
+  return api.post<{ data: MediaHashBan }>('/api/v1/admin/media_hash_bans', params).then((r) => r.data);
 }
 
 export function deleteMediaHashBan(id: string): Promise<void> {
