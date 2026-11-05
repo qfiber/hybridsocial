@@ -12,6 +12,7 @@ defmodule Hybridsocial.Trending do
   """
   import Ecto.Query
 
+  alias Hybridsocial.Feeds.Visibility
   alias Hybridsocial.Repo
   alias Hybridsocial.Search.TrendingData
   alias Hybridsocial.Social.{Post, Hashtag}
@@ -85,6 +86,7 @@ defmodule Hybridsocial.Trending do
       |> where([p], p.id in ^post_ids)
       |> where([p], is_nil(p.deleted_at))
       |> where([p], is_nil(p.hidden_at))
+      |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> Repo.all()
       |> Repo.preload(:identity)
       |> Map.new(&{&1.id, &1})
@@ -149,6 +151,7 @@ defmodule Hybridsocial.Trending do
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.visibility == "public")
       |> where([p], p.published_at >= ^cutoff)
+      |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> join(:left, [p], r in "reactions", on: r.post_id == p.id and r.inserted_at >= ^cutoff)
       |> join(:left, [p, _r], b in "boosts",
         on: b.post_id == p.id and b.inserted_at >= ^cutoff and is_nil(b.deleted_at)
@@ -233,6 +236,12 @@ defmodule Hybridsocial.Trending do
         on:
           p.id == ph.post_id and p.inserted_at >= ^cutoff and is_nil(p.deleted_at) and
             is_nil(p.hidden_at)
+      )
+      # Moderated authors must not be able to push a tag into trending: a few
+      # flooding accounts are otherwise enough to fill the list on their own.
+      |> where(
+        [_h, _ph, p],
+        p.identity_id not in subquery(Visibility.publicly_hidden_author_ids())
       )
       |> group_by([h, _ph, _p], [h.id, h.name])
       |> select([h, _ph, p], %{

@@ -60,6 +60,14 @@ defmodule Hybridsocial.Federation.MRFIntegrationTest do
   # --------------------------------------------------------------------------
 
   describe "SimplePolicy via Inbox.process" do
+    test "enforces a silence policy without any mrf_policies setting" do
+      configure_policies([])
+      {:ok, _} = Federation.set_instance_policy("remote.example", "silence", "loud", nil)
+
+      assert {:ok, post} = Inbox.process(create_activity())
+      assert post.visibility != "public"
+    end
+
     test "rejects a Create from a suspended domain with mrf_rejected" do
       configure_policies(["simple"])
       {:ok, _} = Federation.set_instance_policy("remote.example", "suspend", "spam", nil)

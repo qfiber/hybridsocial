@@ -103,6 +103,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)
       |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.apply_suspension_filter()
       |> preload([:identity, :quote])
       |> Repo.all()
 
@@ -116,6 +117,7 @@ defmodule Hybridsocial.Feeds.Algorithm do
       |> where([p], p.reaction_count >= 1 or p.boost_count >= 1)
       |> apply_post_cursor(cursor)
       |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
       |> preload([:identity, :quote])
       |> Repo.all()

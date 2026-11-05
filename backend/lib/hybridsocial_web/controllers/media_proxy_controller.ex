@@ -373,7 +373,7 @@ defmodule HybridsocialWeb.MediaProxyController do
     domain = URI.parse(url).host
 
     if is_binary(domain) do
-      case Repo.get(InstancePolicy, domain) do
+      case Repo.get(InstancePolicy, String.downcase(domain)) do
         %InstancePolicy{policy: policy} when policy in @blocking_policies ->
           {:error, :instance_blocked}
 

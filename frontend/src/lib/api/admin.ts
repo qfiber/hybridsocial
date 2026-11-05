@@ -246,7 +246,7 @@ export function updateFederationPolicy(id: string, policy: Partial<FederationPol
 }
 
 export function deleteFederationPolicy(id: string): Promise<void> {
-  return api.delete(`/api/v1/admin/instance_policies/${id}`);
+  return api.delete(`/api/v1/admin/instance_policies/${encodeURIComponent(id)}`);
 }
 
 export function getDeliveryQueueStats(): Promise<DeliveryQueueStats> {
@@ -565,11 +565,11 @@ export function banMediaFromPost(postId: string): Promise<void> {
 
 // Instance Purge
 export function purgeInstancePreview(policyId: string): Promise<InstancePurgePreview> {
-  return api.post(`/api/v1/admin/instance_policies/${policyId}/purge_preview`);
+  return api.post(`/api/v1/admin/instance_policies/${encodeURIComponent(policyId)}/purge_preview`);
 }
 
 export function purgeInstanceContent(policyId: string): Promise<void> {
-  return api.post(`/api/v1/admin/instance_policies/${policyId}/purge`);
+  return api.post(`/api/v1/admin/instance_policies/${encodeURIComponent(policyId)}/purge`);
 }
 
 // Admin Post Actions

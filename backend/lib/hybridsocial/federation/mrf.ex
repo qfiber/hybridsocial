@@ -7,6 +7,7 @@ defmodule Hybridsocial.Federation.MRF do
   """
 
   alias Hybridsocial.Config
+  alias Hybridsocial.Federation.MRF.SimplePolicy
 
   require Logger
 
@@ -29,17 +30,27 @@ defmodule Hybridsocial.Federation.MRF do
     end)
   end
 
-  @doc "Returns the list of configured MRF policy modules."
-  def configured_policies do
-    case Config.get("mrf_policies", []) do
-      [_ | _] = policies ->
-        policies
-        |> Enum.map(&resolve_policy_module/1)
-        |> Enum.reject(&is_nil/1)
+  @doc """
+  Returns the MRF policy modules to run: `SimplePolicy` first, then whatever the
+  `mrf_policies` setting adds.
 
-      _ ->
-        [Hybridsocial.Federation.MRF.NoOpPolicy]
-    end
+  `SimplePolicy` isn't optional. It is what enforces the admin panel's instance
+  policies, and those must not silently stop working because of an unset or
+  differently-configured setting.
+  """
+  def configured_policies do
+    configured =
+      case Config.get("mrf_policies", []) do
+        [_ | _] = policies ->
+          policies
+          |> Enum.map(&resolve_policy_module/1)
+          |> Enum.reject(&is_nil/1)
+
+        _ ->
+          []
+      end
+
+    [SimplePolicy | List.delete(configured, SimplePolicy)]
   end
 
   @doc "Returns descriptions from all configured policies."

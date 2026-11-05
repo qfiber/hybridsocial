@@ -113,6 +113,8 @@ defmodule Hybridsocial.Search.Backends.OpensearchBackend do
           Post
           |> where([p], p.id in ^ids)
           |> where([p], is_nil(p.deleted_at))
+          |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
+          |> Hybridsocial.Feeds.Visibility.apply_silence_filter()
           |> Repo.all()
           |> Repo.preload(:identity)
           |> Map.new(&{&1.id, &1})

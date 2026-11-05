@@ -11,7 +11,9 @@
     purgeInstancePreview, purgeInstanceContent,
     getAdminSettings, updateAdminSettings
   } from '$lib/api/admin.js';
-  import { api } from '$lib/api/client.js';
+  import { api, ApiError } from '$lib/api/client.js';
+  import { t } from '$lib/stores/i18n.js';
+  import { t as translate } from '$lib/utils/i18n.js';
   import Sparkline from '$lib/components/admin/Sparkline.svelte';
   import RelaysPanel from '$lib/components/admin/RelaysPanel.svelte';
   import type { KnownInstance, FederationPolicy, DeliveryQueueStats, InstancePurgePreview } from '$lib/api/types.js';
@@ -530,7 +532,9 @@
         policy: newPolicyType,
         reason: newPolicyReason || null
       });
-      policies = [...policies, policy];
+      // The backend upserts by normalized domain, so this may update a listed
+      // row rather than add one. Appending would duplicate the keyed {#each} entry.
+      policies = [...policies.filter((p) => p.domain !== policy.domain), policy];
       // The new policy is appended, so once the list spills past one
       // page it would land on the last one and look like nothing
       // happened. Follow it there.
@@ -538,8 +542,13 @@
       newPolicyDomain = '';
       newPolicyReason = '';
       addToast('Federation policy created', 'success');
-    } catch {
-      addToast('Failed to create policy', 'error');
+    } catch (err) {
+      addToast(
+        err instanceof ApiError && err.status === 422
+          ? translate('admin.federation.policy_invalid_domain')
+          : 'Failed to create policy',
+        'error'
+      );
     }
   }
 
@@ -681,6 +690,8 @@
         <button class="btn btn-primary" type="submit">Add Policy</button>
       </form>
 
+      <p class="text-secondary">{$t('admin.federation.policy_scope_help')}</p>
+
       <div class="policy-help">
         <div class="policy-help-item">
           <strong>Allow</strong>
@@ -692,7 +703,7 @@
         </div>
         <div class="policy-help-item">
           <strong>Suspend</strong>
-          <span>Completely block all communication. No posts, follows, or messages from this domain.</span>
+          <span>{$t('admin.federation.policy_suspend_help')}</span>
         </div>
         <div class="policy-help-item">
           <strong>Force NSFW</strong>
