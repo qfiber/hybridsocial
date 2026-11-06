@@ -192,6 +192,13 @@ viewer's own interaction state layered on by `apply_viewer_state`.
   (moderator), while `can_manage?` (owner/admin only) gates role grants and settings. Gate any
   "act as / edit the page" path on the matching predicate; instance staff don't implicitly get it.
 
+**Public profiles.** `Accounts.PublicProfile` is the one definition of what a logged-out visitor
+(`public?/1`) and a search engine (`indexable?/1`) may see. A route opts into the logged-out view by
+returning `publicView` from its `+page.server.ts`; `(app)/+layout.svelte` then renders `PublicLayout`
+instead of redirecting to login. Mark controls that need an account with `data-requires-login`.
+Staff block indexing with `identities.search_indexing_blocked`, and sitemap queries must stay in step
+with `indexable?/1`. SSR fetches to the backend need `x-forwarded-proto: https`, or they get a 301.
+
 **Staff moderation & takedowns.** A staff (`:staff`) deletion of a group/page/post is an
 accountable **takedown**, not a raw delete: `moderation/takedown.ex` (`moderation_takedowns`
 table) records target/owner/moderator/reason, notifies the owner, and starts a 60-day appeal

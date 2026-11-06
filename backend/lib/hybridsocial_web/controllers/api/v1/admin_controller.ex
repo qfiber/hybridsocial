@@ -3514,6 +3514,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       is_shadow_banned: identity.is_shadow_banned,
       force_sensitive: identity.force_sensitive,
       post_limits: identity.post_limits || %{},
+      search_indexing_blocked: Map.get(identity, :search_indexing_blocked, false),
       is_admin: identity.is_admin,
       is_bot: identity.is_bot,
       force_bot: Map.get(identity, :force_bot, false),
@@ -4245,6 +4246,38 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     else
       {:error, perm} -> deny(conn, perm)
     end
+  end
+
+  # PUT /api/v1/admin/users/:id/search_indexing
+  # Body: {blocked: true | false}. Keeps search engines off the profile and its
+  # posts. The page itself stays viewable.
+  def set_search_indexing(conn, %{"id" => id, "blocked" => blocked}) when is_boolean(blocked) do
+    with :ok <- require_permission(conn, "users.moderate"),
+         %{} = identity <- Accounts.get_identity(id),
+         {:ok, updated} <-
+           identity
+           |> Ecto.Changeset.change(search_indexing_blocked: blocked)
+           |> Hybridsocial.Repo.update() do
+      ip = conn.remote_ip |> :inet.ntoa() |> to_string()
+
+      Moderation.log(
+        conn.assigns.current_identity.id,
+        "user.search_indexing_set",
+        "identity",
+        id,
+        %{blocked: blocked},
+        ip
+      )
+
+      json(conn, %{identity_id: id, search_indexing_blocked: updated.search_indexing_blocked})
+    else
+      {:error, perm} when is_binary(perm) -> deny(conn, perm)
+      nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+    end
+  end
+
+  def set_search_indexing(conn, _params) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "search_indexing.invalid"})
   end
 
   # GET /api/v1/admin/post_limits/defaults

@@ -5,6 +5,7 @@
   import { addToast } from '$lib/stores/toast.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import {
+    setUserSearchIndexing,
     getPostLimitDefaults,
     setUserPostLimits,
     type PostLimitDefaults,
@@ -338,6 +339,16 @@
     return value === 0 ? 'Default: unlimited' : `Default: ${value}`;
   }
 
+  async function handleSearchIndexing(e: Event) {
+    if (!user) return;
+    const blocked = (e.target as HTMLInputElement).checked;
+    await run(
+      'indexing',
+      () => setUserSearchIndexing(user!.id, blocked),
+      blocked ? 'Search engines blocked for this profile' : 'Search engines allowed for this profile',
+    );
+  }
+
   async function handlePostLimits() {
     if (!user) return;
     const limits: Record<string, number> = {};
@@ -640,6 +651,23 @@
 
     <!-- Moderation -->
     {#if user.is_local}
+      <section class="card sect">
+        <h2 class="sect-title">Search engines</h2>
+        <p class="muted">
+          Blocking asks search engines not to index this profile and its posts, and removes
+          them from the sitemap. The page can still be viewed without logging in.
+        </p>
+        <label class="inline-row">
+          <input
+            type="checkbox"
+            checked={user.search_indexing_blocked ?? false}
+            disabled={busy === 'indexing'}
+            onchange={handleSearchIndexing}
+          />
+          <span>Block search engines from this profile</span>
+        </label>
+      </section>
+
       <section class="card sect">
         <h2 class="sect-title">Posting limits</h2>
         <p class="muted">

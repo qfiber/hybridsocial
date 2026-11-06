@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
+  import { page as pageState } from '$app/state';
   import type { Identity, Relationship, Post } from '$lib/api/types.js';
   import { lookupAccount, getRelationship, follow, unfollow, block, unblock, mute, unmute } from '$lib/api/accounts.js';
   import { getAccountStatuses } from '$lib/api/statuses.js';
@@ -389,7 +390,18 @@
 </svelte:head>
 
 <div class="profile-page">
-  {#if loading}
+  {#if loading && pageState.data.seo}
+    <!-- Readable in the initial HTML, for search engines and before scripts load.
+         The live profile replaces it. -->
+    <article class="seo-content">
+      <h1>{pageState.data.seo.name}</h1>
+      <p>@{pageState.data.seo.handle}</p>
+      {#if pageState.data.seo.bio}<p>{pageState.data.seo.bio}</p>{/if}
+      {#each pageState.data.seo.posts as post (post.id)}
+        <p><a href="/post/{post.id}">{post.text}</a></p>
+      {/each}
+    </article>
+  {:else if loading}
     <div class="profile-skeleton">
       <Skeleton width="100%" height="210px" />
       <div class="profile-skeleton-info">
@@ -527,6 +539,11 @@
 </Modal>
 
 <style>
+  .seo-content {
+    padding: var(--space-4);
+    overflow-wrap: anywhere;
+  }
+
   .profile-page {
     max-width: var(--feed-max-width);
     margin: 0 auto;
