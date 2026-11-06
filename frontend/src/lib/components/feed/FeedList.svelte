@@ -18,6 +18,7 @@
     hasMore = true,
     compact = false,
     emptyMessage = '',
+    emptyAction,
     filterContext = 'home',
     viewerContext = null,
     removeOnEvents = [],
@@ -28,6 +29,7 @@
     hasMore?: boolean;
     compact?: boolean;
     emptyMessage?: string;
+    emptyAction?: { label: string; onclick: () => void };
     filterContext?: string;
     // Threaded through to PostCard so the pin badge / Unpin entry are
     // scope-correct. See PostCard.viewerContext.
@@ -285,6 +287,11 @@
       </div>
       <h2 class="feed-empty-title">{$t('feed.empty_title')}</h2>
       <p class="feed-empty-text">{emptyMessage || $t('feed.no_posts')}</p>
+      {#if emptyAction}
+        <button type="button" class="feed-empty-action" onclick={emptyAction.onclick}>
+          {emptyAction.label}
+        </button>
+      {/if}
     </div>
   {/if}
 
@@ -507,6 +514,17 @@
     font-weight: 700;
     color: var(--color-text);
     margin-block-end: var(--space-2);
+  }
+
+  .feed-empty-action {
+    margin-block-start: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--color-primary);
+    color: var(--color-on-primary, #fff);
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .feed-empty-text {

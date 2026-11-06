@@ -13,32 +13,19 @@
     type TimelineTab,
   } from '$lib/components/feed/TimelineFeed.svelte';
   import FeedTabs from '$lib/components/feed/FeedTabs.svelte';
-  import ExploreTrending from '$lib/components/explore/ExploreTrending.svelte';
+  import { exploreFeedCache } from '$lib/stores/explore-feed-cache.js';
+  import { t } from '$lib/stores/i18n.js';
   import { onMount } from 'svelte';
 
   // ── Public feeds (Local / Global / Trending) ─────────────────────────
-  async function loadPublic(base: string, cursor: string | null, sort?: string): Promise<Post[]> {
-    const params: string[] = [];
-    // `newest` is the server default → omit it.
-    if (sort && sort !== 'newest') params.push(`sort=${sort}`);
-    if (cursor) {
-      // Oldest is ascending, so "load more" fetches posts NEWER than the last
-      // shown → min_id. Every other order is descending → max_id (older).
-      params.push(`${sort === 'oldest' ? 'min_id' : 'max_id'}=${encodeURIComponent(cursor)}`);
-    }
+  async function loadPublic(base: string, cursor: string | null): Promise<Post[]> {
     let endpoint = base;
-    if (params.length) endpoint += (endpoint.includes('?') ? '&' : '?') + params.join('&');
+    if (cursor) {
+      endpoint += `${endpoint.includes('?') ? '&' : '?'}max_id=${encodeURIComponent(cursor)}`;
+    }
     const items = await api.get<Post[]>(endpoint);
     return Array.isArray(items) ? items : [];
   }
-
-  // Reels-style sort chips for the Local/Global feeds. Order is display order;
-  // `newest` stays the default (chronological), matching the prior behavior.
-  const EXPLORE_SORTS = [
-    { value: 'trending', label: 'Trending' },
-    { value: 'newest', label: 'Newest' },
-    { value: 'oldest', label: 'Oldest' },
-  ];
 
   // Local tab shows only posts authored on this instance. Remote federated
   // authors (acct contains '@', or a foreign URL host) belong on Global.
@@ -50,48 +37,32 @@
     return authorHost === host;
   }
 
-  const exploreTabs: TimelineTab[] = [
-    {
-      id: 'local',
-      label: 'Local',
-      icon: 'home',
-      load: (c, sort) => loadPublic('/api/v1/timelines/public?local=true', c, sort),
-      sorts: EXPLORE_SORTS,
-      defaultSort: 'newest',
-      sortStorageKey: 'hs-explore-local-sort',
-      stream: {
-        kind: 'public',
-        filter: (p) => !(((p.account as any)?.acct ?? '') as string).includes('@'),
-      },
-      accepts: isLocalPost,
-      emptyMessage: 'No local posts yet',
-    },
-    {
-      id: 'global',
-      label: 'Global',
-      icon: 'public',
-      load: (c, sort) => loadPublic('/api/v1/timelines/global', c, sort),
-      sorts: EXPLORE_SORTS,
-      defaultSort: 'newest',
-      sortStorageKey: 'hs-explore-global-sort',
-      stream: { kind: 'public' },
-      emptyMessage: 'No posts from the fediverse yet',
-    },
-  ];
+  type TopTab = 'local' | 'global' | 'trending';
+  const isTopTab = (id: string | null): id is TopTab =>
+    id === 'local' || id === 'global' || id === 'trending';
 
-  // Top-level Explore tabs. Local/Global are post feeds (TimelineFeed);
-  // Trending is a distinct view (tags / accounts / posts) — see ExploreTrending.
-  const TOP_TABS = [
-    { id: 'local', label: 'Local', icon: 'home' },
-    { id: 'global', label: 'Global', icon: 'public' },
-    { id: 'trending', label: 'Trending', icon: 'trending_up' },
-  ];
   const TOP_TAB_KEY = 'hs-explore-tab';
-  let topTab = $state<'local' | 'global' | 'trending'>('local');
+
+  // A link's choice, then the visitor's last tab, then Trending, the best first
+  // impression for someone who doesn't follow anyone yet. Read up front rather
+  // than in onMount, so the feed never starts loading the wrong tab.
+  function initialTab(): TopTab {
+    const linked = page.url.searchParams.get('tab');
+    if (isTopTab(linked)) return linked;
+    try {
+      const saved = localStorage.getItem(TOP_TAB_KEY);
+      if (isTopTab(saved)) return saved;
+    } catch {
+      /* storage unavailable */
+    }
+    return 'trending';
+  }
+
+  let topTab = $state<TopTab>(initialTab());
 
   function changeTopTab(id: string) {
-    if (id === topTab) return;
-    topTab = id as 'local' | 'global' | 'trending';
+    if (id === topTab || !isTopTab(id)) return;
+    topTab = id;
     try {
       localStorage.setItem(TOP_TAB_KEY, id);
     } catch {
@@ -99,19 +70,55 @@
     }
   }
 
-  let feedTab = $derived(exploreTabs.find((t) => t.id === topTab) ?? exploreTabs[0]);
+  // A link followed while already on this page (the sidebar's "See what's
+  // trending"). Tracks the param, so it doesn't undo a later tab click.
+  let lastLinkedTab = page.url.searchParams.get('tab');
+  $effect(() => {
+    const linked = page.url.searchParams.get('tab');
+    if (linked === lastLinkedTab) return;
+    lastLinkedTab = linked;
+    if (isTopTab(linked)) changeTopTab(linked);
+  });
 
-  // Height of the Local/Global/Trending switcher, fed to
-  // `--timeline-sticky-offset` so the feed's own sticky sort chips stack
-  // directly beneath it. Measured from the live element (while visible) so the
-  // offset stays correct; it stays constant while the bar is collapsed.
-  let topTabsEl: HTMLDivElement | undefined = $state();
-  let topTabsH = $state(0);
+  let exploreTabs = $derived<TimelineTab[]>([
+    {
+      id: 'local',
+      label: $t('explore.tab_local'),
+      icon: 'home',
+      load: (c) => loadPublic('/api/v1/timelines/public?local=true', c),
+      stream: {
+        kind: 'public',
+        filter: (p) => !(((p.account as any)?.acct ?? '') as string).includes('@'),
+      },
+      accepts: isLocalPost,
+      emptyMessage: $t('explore.empty_local'),
+    },
+    {
+      id: 'global',
+      label: $t('explore.tab_global'),
+      icon: 'public',
+      load: (c) => loadPublic('/api/v1/timelines/global', c),
+      stream: { kind: 'public' },
+      emptyMessage: $t('explore.empty_global'),
+    },
+    {
+      // A ranked feed: neither live posts nor the composer's optimistic post
+      // belong at the top of it.
+      id: 'trending',
+      label: $t('explore.tab_trending'),
+      icon: 'trending_up',
+      load: (c) => loadPublic('/api/v1/timelines/trending', c),
+      stream: null,
+      accepts: () => false,
+      emptyMessage: $t('explore.trending_empty'),
+      emptyAction: { label: $t('explore.see_latest'), onclick: () => changeTopTab('local') },
+    },
+  ]);
+
+  let feedTab = $derived(exploreTabs.find((tab) => tab.id === topTab) ?? exploreTabs[0]);
 
   // The switcher hides on scroll-down and reveals on scroll-up (and at the
-  // top), in lock-step with the feed's sort chips (same thresholds) so the two
-  // stacked bars slide away and back together — the main header stays the only
-  // permanently-fixed chrome.
+  // top), so the main header stays the only permanently-fixed chrome.
   let barHidden = $state(false);
   let lastDirY = 0;
 
@@ -123,19 +130,7 @@
     lastDirY = y;
   }
 
-  // Measure the switcher's height once, the first time it's shown (its size is
-  // constant), so the offset can't be read as 0 mid collapse/reveal animation.
-  $effect(() => {
-    if (topTabsEl && !barHidden && topTabsH === 0) topTabsH = topTabsEl.offsetHeight;
-  });
-
   onMount(() => {
-    try {
-      const saved = localStorage.getItem(TOP_TAB_KEY);
-      if (saved === 'local' || saved === 'global' || saved === 'trending') topTab = saved;
-    } catch {
-      /* ignore */
-    }
     window.addEventListener('scroll', handleExploreScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleExploreScroll);
   });
@@ -205,7 +200,7 @@
   <title>Explore - {$instanceName}</title>
 </svelte:head>
 
-<div class="explore-page" style="--timeline-sticky-offset: {topTabsH}px">
+<div class="explore-page">
   {#if hasSearched}
     <Tabs tabs={searchTabs} bind:active={searchTab}>
       {#if searching}
@@ -275,19 +270,14 @@
     <div
       class="explore-toptabs"
       class:explore-toptabs-hidden={barHidden}
-      bind:this={topTabsEl}
     >
-      <FeedTabs tabs={TOP_TABS} active={topTab} onchange={changeTopTab} />
+      <FeedTabs tabs={exploreTabs} active={topTab} onchange={changeTopTab} />
     </div>
-    {#if topTab === 'trending'}
-      <ExploreTrending />
-    {:else}
-      <!-- One feed at a time (its own tab bar hidden since a single tab is
-           passed); keyed so switching Local↔Global remounts with the right feed. -->
-      {#key topTab}
-        <TimelineFeed tabs={[feedTab]} filterContext="public" />
-      {/key}
-    {/if}
+    <!-- One feed at a time (its own tab bar hidden since a single tab is
+         passed); keyed so switching tabs remounts with the right feed. -->
+    {#key topTab}
+      <TimelineFeed tabs={[feedTab]} filterContext="public" cache={exploreFeedCache(topTab)} />
+    {/key}
   {/if}
 </div>
 
@@ -301,9 +291,8 @@
   }
 
   /* Pin the Local/Global/Trending switcher under the header, but let it hide
-     on scroll-down and reveal on scroll-up (in lock-step with the feed's sort
-     chips) so it's reachable after a deep scroll without permanently taking a
-     second fixed row. The chips stack below it via --timeline-sticky-offset. */
+     on scroll-down and reveal on scroll-up, so it's reachable after a deep
+     scroll without permanently taking a second fixed row. */
   .explore-toptabs {
     position: sticky;
     inset-block-start: var(--header-height);

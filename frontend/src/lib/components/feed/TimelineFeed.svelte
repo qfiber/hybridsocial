@@ -8,24 +8,8 @@
     icon?: string;
     /**
      * Fetch a page of entries for the given cursor (null = first page).
-     * `sort` is the currently-selected sort value when the tab defines `sorts`,
-     * so the loader can pass it (and pick max_id vs min_id for asc/desc).
      */
-    load: (cursor: string | null, sort?: string) => Promise<Post[]>;
-    /**
-     * Optional per-tab sort control (Reels-style chips under the tabs). When
-     * present, the first entry is the default. Persisted per device under
-     * `sortStorageKey` if given.
-     */
-    sorts?: { value: string; label: string }[];
-    sortStorageKey?: string;
-    /**
-     * The sort value that is chronological-newest (live-streamable). Defaults
-     * to the first entry. Live posts prepend / the composer's optimistic post
-     * only apply in this order; under trending/oldest a new post shouldn't jump
-     * to the top, so streaming is suppressed there.
-     */
-    defaultSort?: string;
+    load: (cursor: string | null) => Promise<Post[]>;
     /**
      * Live-stream wiring for this tab, or null for no streaming (e.g.
      * algorithmic feeds where a brand-new post shouldn't jump in).
@@ -38,6 +22,8 @@
      */
     accepts?: (p: Post) => boolean;
     emptyMessage: string;
+    /** Optional way out of an empty feed, e.g. a link to another tab. */
+    emptyAction?: { label: string; onclick: () => void };
   }
 
   export interface TimelineSnapshot {
@@ -51,9 +37,8 @@
   }
 
   /**
-   * Optional session cache for scroll restoration. The home feed provides
-   * one so a back-nav from a post detail lands on the same posts in the
-   * same DOM positions; explore doesn't need it.
+   * Optional session cache for scroll restoration, so a back-nav from a
+   * post detail lands on the same posts in the same DOM positions.
    */
   export interface TimelineCache {
     read: () => TimelineSnapshot | null;
@@ -93,47 +78,6 @@
 
   let activeTab = $derived(tabs.find((t) => t.id === activeId) ?? tabs[0]);
 
-  // Per-tab sort (Reels-style chips). Remembered per device so the choice
-  // survives navigation (the component remounts each visit).
-  function readSort(tab: TimelineTab | undefined): string | null {
-    if (!tab?.sorts?.length) return null;
-    const def = tab.defaultSort ?? tab.sorts[0].value;
-    if (!tab.sortStorageKey) return def;
-    try {
-      const saved = localStorage.getItem(tab.sortStorageKey);
-      return saved && tab.sorts.some((s) => s.value === saved) ? saved : def;
-    } catch {
-      return def;
-    }
-  }
-  let activeSort = $state<string | null>(readSort(activeTab));
-
-  function changeSort(next: string) {
-    if (next === activeSort) return;
-    activeSort = next;
-    if (activeTab?.sortStorageKey) {
-      try {
-        localStorage.setItem(activeTab.sortStorageKey, next);
-      } catch {
-        /* storage unavailable — the choice just won't persist */
-      }
-    }
-    feed.reset();
-    wireStream();
-    scrollToTop();
-  }
-
-  // The sort row auto-hides on scroll-down and reappears on scroll-up (and at
-  // the top), mirroring the Streams reveal behavior.
-  let sortHidden = $state(false);
-  let lastDirY = 0;
-
-  // Live posts (stream + optimistic composer) only belong at the top in the
-  // chronological-newest order. Under trending/oldest, suppress them.
-  let streamable = $derived(
-    !activeTab?.sorts || activeSort === (activeTab.defaultSort ?? activeTab.sorts[0]?.value),
-  );
-
   // Latest known window scroll offset. Kept current by handleScroll so
   // whatever persist() writes carries the depth the user is actually at
   // when they tap into a post.
@@ -155,7 +99,7 @@
   // optimistic composer updates and scroll restoration on top. The fetch
   // closure reads `activeTab` at call time, so a reset after switchTab
   // fetches the newly-selected tab.
-  const feed = createEntityFeed((cursor) => activeTab.load(cursor, activeSort ?? undefined), 20, {
+  const feed = createEntityFeed((cursor) => activeTab.load(cursor), 20, {
     initial: cached
       ? { posts: cached.posts, cursor: cached.cursor, hasMore: cached.hasMore }
       : null,
@@ -166,10 +110,6 @@
   function switchTab(id: string) {
     if (id === activeId) return;
     activeId = id;
-    // Re-init the sort from the newly-selected tab. `activeTab` (a $derived)
-    // recomputes on read now that activeId changed.
-    activeSort = readSort(activeTab);
-    sortHidden = false;
     feed.reset();
     wireStream();
   }
@@ -177,8 +117,8 @@
   function wireStream() {
     const apiBase = import.meta.env.VITE_API_URL || '';
     const s = activeTab.stream;
-    // No stream config, or a non-newest sort is active → nothing to prepend.
-    if (!s || !streamable) {
+    // No stream config → nothing to prepend.
+    if (!s) {
       disconnectStream();
       return;
     }
@@ -186,6 +126,9 @@
   }
 
   function mergeQueued() {
+    // The queue outlives a disconnect (so a brief reconnect loses nothing).
+    // A tab with no stream must not take in what another tab queued.
+    if (!activeTab.stream) return;
     const queued = flushQueue();
     if (queued.length > 0) {
       const existing = new Set(feed.posts.map((p) => p.id));
@@ -218,17 +161,6 @@
     setAtTop(atTop);
     if (atTop && !prevAtTop) mergeQueued();
     prevAtTop = atTop;
-
-    // Sort row: visible at the top; hide when scrolling down, reveal on the
-    // first upward flick. Small deadband so tiny jitters don't toggle it.
-    if (atTop) {
-      sortHidden = false;
-    } else if (y > lastDirY + 6) {
-      sortHidden = true;
-    } else if (y < lastDirY - 6) {
-      sortHidden = false;
-    }
-    lastDirY = y;
 
     // Record scroll depth into the session cache so a back-nav from a
     // post detail can return to it. Coalesce to one write per frame —
@@ -272,8 +204,6 @@
   function handleNewPost(e: Event) {
     const p = (e as CustomEvent<Post>).detail;
     if (!p || p.parent_id) return;
-    // Under trending/oldest a fresh post shouldn't jump to the top.
-    if (!streamable) return;
     if (activeTab.accepts && !activeTab.accepts(p)) return;
     feed.prepend(p);
   }
@@ -337,35 +267,15 @@
 </script>
 
 <div class="timeline-feed">
-  {#if tabs.length > 1 || activeTab?.sorts?.length}
+  {#if tabs.length > 1}
     <!-- Sticky feed switcher: pinned under the header so switching feeds
-         deep in a long timeline doesn't force a scroll to top. Renders when
-         there's a feed switcher (>1 tab) OR a sort control — Explore drives a
-         single tab at a time but still needs its Trending/Newest/Oldest chips
-         (their absence for single-tab feeds was the regression). -->
+         deep in a long timeline doesn't force a scroll to top. -->
     <div class="timeline-sticky-bar">
-      {#if tabs.length > 1}
-        <FeedTabs {tabs} active={activeId} onchange={switchTab} />
-      {/if}
-      {#if activeTab?.sorts?.length}
-        <div class="timeline-sort" class:timeline-sort-hidden={sortHidden} role="group" aria-label="Sort">
-          {#each activeTab.sorts as s (s.value)}
-            <button
-              type="button"
-              class="timeline-sort-chip"
-              class:on={activeSort === s.value}
-              aria-pressed={activeSort === s.value}
-              onclick={() => changeSort(s.value)}
-            >
-              {s.label}
-            </button>
-          {/each}
-        </div>
-      {/if}
+      <FeedTabs {tabs} active={activeId} onchange={switchTab} />
     </div>
   {/if}
 
-  {#if activeTab?.stream && streamable}
+  {#if activeTab?.stream}
     <NewPostsBanner count={$queuedCount} onclick={mergeQueued} />
   {/if}
 
@@ -375,6 +285,7 @@
     hasMore={feed.hasMore}
     onloadmore={feed.loadMore}
     emptyMessage={activeTab?.emptyMessage ?? ''}
+    emptyAction={activeTab?.emptyAction}
     {filterContext}
   />
 </div>
@@ -388,10 +299,7 @@
 
   .timeline-sticky-bar {
     position: sticky;
-    /* `--timeline-sticky-offset` lets a host stack another sticky bar above
-       this one (Explore's Local/Global/Trending switcher). Defaults to 0 so
-       the Home timeline is unaffected. */
-    inset-block-start: calc(var(--header-height) + var(--timeline-sticky-offset, 0px));
+    inset-block-start: var(--header-height);
     z-index: 20;
     display: flex;
     flex-direction: column;
@@ -404,53 +312,6 @@
     padding: var(--space-3) 0;
     margin-inline: calc(-1 * var(--space-2));
     padding-inline: var(--space-2);
-  }
-
-  .timeline-sort {
-    display: flex;
-    gap: var(--space-2, 8px);
-    align-items: center;
-    overflow: hidden;
-    /* Collapse smoothly when hidden on scroll-down. */
-    max-height: 44px;
-    opacity: 1;
-    transition:
-      max-height 0.22s ease,
-      opacity 0.18s ease,
-      margin 0.22s ease;
-  }
-
-  .timeline-sort-hidden {
-    max-height: 0;
-    opacity: 0;
-    margin-block-start: calc(-1 * var(--space-2, 8px));
-    pointer-events: none;
-  }
-
-  .timeline-sort-chip {
-    padding: 4px 12px;
-    border-radius: var(--radius-full, 999px);
-    border: 1px solid var(--color-border);
-    background: transparent;
-    color: var(--color-text-secondary);
-    font-size: var(--text-sm, 0.875rem);
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    transition:
-      background-color 0.12s ease,
-      color 0.12s ease,
-      border-color 0.12s ease;
-  }
-
-  .timeline-sort-chip:hover {
-    background: var(--color-surface-hover, rgba(0, 0, 0, 0.06));
-  }
-
-  .timeline-sort-chip.on {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
-    color: var(--color-on-primary, #fff);
   }
 
   /* On mobile the translucent blur on this sticky bar repaints every

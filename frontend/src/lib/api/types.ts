@@ -127,6 +127,10 @@ export interface Post {
   boost_count: number;
   reaction_count: number;
   is_pinned: boolean;
+  /** Explore's Trending feed only: why a post is there, when not self-evident. */
+  trending_reason?: { type: 'tag' | 'account'; tag?: string } | null;
+  /** Explore's Trending feed only: false offers an inline Follow button. */
+  viewer_follows_author?: boolean | null;
   // Which container the pin actually belongs to. Lets the UI hide the
   // "Pinned" badge / Unpin entry on feeds outside that scope so a
   // group-pin doesn't read as a profile-pin when the same row shows

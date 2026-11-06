@@ -155,7 +155,9 @@ defmodule Hybridsocial.Trending do
       # the trending row.
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.visibility == "public")
-      |> where([p], p.published_at >= ^cutoff)
+      # A remote `published` is whatever the sender claims. A future date would
+      # make the decay below exceed 1 and pin the post to the top.
+      |> where([p], p.published_at >= ^cutoff and p.published_at <= ^now)
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> Visibility.apply_blocked_hashtag_filter()
       |> join(:left, [p], r in "reactions", on: r.post_id == p.id and r.inserted_at >= ^cutoff)
@@ -241,7 +243,7 @@ defmodule Hybridsocial.Trending do
       |> join(:inner, [_h, ph], p in Post,
         on:
           p.id == ph.post_id and p.inserted_at >= ^cutoff and is_nil(p.deleted_at) and
-            is_nil(p.hidden_at)
+            is_nil(p.hidden_at) and p.visibility == "public"
       )
       # Moderated authors must not be able to push a tag into trending: a few
       # flooding accounts are otherwise enough to fill the list on their own.

@@ -153,7 +153,12 @@ is pluggable: `home_timeline` dispatches through `AlgorithmResolver.impl(opts)` 
 `Feeds.Algorithms.{Chronological, Algorithmic, Trending}`, chosen by the `algorithm`/`sort`
 query param (Home's Latest/For You/Top; Explore's tabs). `Trending` scores public posts by
 engagement × velocity × time-decay over a config window and caps posts-per-author for
-diversity. **Cursor pagination is keyset, not id-based** — post ids are random UUIDv4, so a
+diversity. Explore's Trending tab is a separate feed, `Trending.ExploreFeed`: `Trending.Worker`
+precomputes a blend of engaged posts, trending tags' top posts and trending accounts' best posts
+into `trending_feed_entries`, ranking local and remote apart and interleaving them by
+`explore_trending_local_share`, and `GET /api/v1/timelines/trending` keysets over the stored slot
+with moderation and viewer filters applied on read. Its tunables are `explore_trending_*` settings.
+**Cursor pagination is keyset, not id-based** — post ids are random UUIDv4, so a
 `p.id < max_id` compare returns an arbitrary slice; the public/global timelines resolve a
 cursor id to its `(activity_ts, id)` tuple (`lookup_activity_cursor`) and row-tuple compare,
 `max_id` for older / `min_id` for newer (so ascending "oldest" paginates via `min_id`). Never

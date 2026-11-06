@@ -303,4 +303,145 @@ defmodule HybridsocialWeb.Api.V1.TimelineControllerTest do
       assert entry["current_user_reaction"] == "love"
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # GET /api/v1/timelines/trending
+  # ---------------------------------------------------------------------------
+
+  describe "GET /api/v1/timelines/trending" do
+    alias Hybridsocial.Accounts.Identity
+    alias Hybridsocial.Social.Posts
+    alias Hybridsocial.Trending.ExploreFeed
+
+    defp engaged_post(author, content, count) do
+      post = create_post(author, %{content: content})
+
+      for n <- 1..count do
+        {:ok, _} =
+          Posts.react(
+            post.id,
+            create_user("tf#{n}_#{System.unique_integer([:positive])}").id,
+            "like"
+          )
+      end
+
+      post
+    end
+
+    defp make_remote(identity) do
+      identity
+      |> Ecto.Changeset.change(
+        is_local: false,
+        ap_actor_url: "https://remote.example/users/#{identity.id}"
+      )
+      |> Repo.update!()
+
+      Repo.get!(Identity, identity.id)
+    end
+
+    defp put_access(level) do
+      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+      start_supervised!(Hybridsocial.Config.Store)
+      :ok = Hybridsocial.Config.set("public_timeline_access", level)
+    end
+
+    test "returns the blended feed with the viewer's follow state", %{conn: conn} do
+      viewer = create_user("tviewer")
+      followed = create_user("tfollowed")
+      stranger = create_user("tstranger")
+      create_follow(viewer, followed)
+
+      followed_post = engaged_post(followed, "followed", 1)
+      stranger_post = engaged_post(stranger, "stranger", 1)
+      own_post = engaged_post(viewer, "own", 1)
+      :ok = ExploreFeed.refresh()
+
+      response =
+        conn |> auth_conn(viewer) |> get("/api/v1/timelines/trending") |> json_response(200)
+
+      by_id = Map.new(response, &{&1["id"], &1})
+
+      assert by_id[followed_post.id]["viewer_follows_author"] == true
+      assert by_id[own_post.id]["viewer_follows_author"] == true
+      assert by_id[stranger_post.id]["viewer_follows_author"] == false
+      assert Map.has_key?(by_id[stranger_post.id], "trending_reason")
+    end
+
+    test "an anonymous viewer gets no follow state", %{conn: conn} do
+      post = engaged_post(create_user("tanon"), "anon", 1)
+      :ok = ExploreFeed.refresh()
+
+      [entry] = conn |> get("/api/v1/timelines/trending") |> json_response(200)
+
+      assert entry["id"] == post.id
+      assert entry["viewer_follows_author"] == nil
+    end
+
+    test "pages by the last post's id", %{conn: conn} do
+      posts = for n <- 1..3, do: engaged_post(create_user("tpage#{n}"), "p#{n}", 1)
+      :ok = ExploreFeed.refresh()
+
+      first = conn |> get("/api/v1/timelines/trending?limit=2") |> json_response(200)
+      assert length(first) == 2
+
+      second =
+        conn
+        |> get("/api/v1/timelines/trending?limit=2&max_id=#{List.last(first)["id"]}")
+        |> json_response(200)
+
+      assert length(second) == 1
+
+      assert Enum.sort(Enum.map(first ++ second, & &1["id"])) ==
+               Enum.sort(Enum.map(posts, & &1.id))
+    end
+
+    test "a page size does not leak through the first-page cache", %{conn: conn} do
+      for n <- 1..3, do: engaged_post(create_user("tcache#{n}"), "p#{n}", 1)
+      :ok = ExploreFeed.refresh()
+
+      assert [_] = conn |> get("/api/v1/timelines/trending?limit=1") |> json_response(200)
+      assert length(conn |> get("/api/v1/timelines/trending") |> json_response(200)) == 3
+    end
+
+    test "under \"local\" access an anonymous viewer gets only local posts", %{conn: conn} do
+      local = engaged_post(create_user("tlocal"), "local", 1)
+      remote = engaged_post(make_remote(create_user("tremote")), "remote", 3)
+      :ok = ExploreFeed.refresh()
+      put_access("local")
+
+      anon =
+        conn
+        |> get("/api/v1/timelines/trending")
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert local.id in anon
+      refute remote.id in anon
+
+      member =
+        conn
+        |> auth_conn(create_user("tmember"))
+        |> get("/api/v1/timelines/trending")
+        |> json_response(200)
+        |> Enum.map(& &1["id"])
+
+      assert remote.id in member
+    end
+
+    test "under \"none\" access an anonymous viewer is refused", %{conn: conn} do
+      put_access("none")
+      assert conn |> get("/api/v1/timelines/trending") |> json_response(401)
+    end
+  end
+
+  describe "GET /api/v1/timelines/public access" do
+    test "local=false needs the same access as Global", %{conn: conn} do
+      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+      start_supervised!(Hybridsocial.Config.Store)
+      :ok = Hybridsocial.Config.set("public_timeline_access", "local")
+
+      assert conn |> get("/api/v1/timelines/public?local=false") |> json_response(401)
+      assert conn |> get("/api/v1/timelines/public") |> json_response(200)
+    end
+  end
 end

@@ -3,6 +3,7 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   alias Hybridsocial.Feeds
   alias Hybridsocial.Feeds.Snapshot
+  alias Hybridsocial.Trending.ExploreFeed
   alias Hybridsocial.Config
   alias Hybridsocial.Cache
   alias HybridsocialWeb.Serializers.PostSerializer
@@ -84,7 +85,10 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/public - Public timeline (optional auth)"
   def public(conn, params) do
-    case check_timeline_access(conn, :local) do
+    # `local=false` serves remote posts, so it needs the same access as Global.
+    level = if Map.get(params, "local", "true") == "true", do: :local, else: :global
+
+    case check_timeline_access(conn, level) do
       :denied ->
         deny_access(conn)
 
@@ -222,6 +226,60 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   end
 
   @doc "GET /api/v1/timelines/global - Global timeline (optional auth)"
+  # Explore's Trending tab. Under "local" access an anonymous visitor may read
+  # trending but not remote posts, so they get the local half of the feed.
+  def trending(conn, params) do
+    case check_timeline_access(conn, :local) do
+      :denied ->
+        deny_access(conn)
+
+      :ok ->
+        identity = conn.assigns[:current_identity]
+        viewer_id = identity && identity.id
+        local_only = is_nil(identity) and timeline_access() == "local"
+
+        opts =
+          parse_pagination_params(params)
+          |> Keyword.merge(viewer_id: viewer_id, local_only: local_only)
+
+        cache_key =
+          "feed:trending:ser:#{viewer_id || "anon"}:#{local_only}:#{Keyword.get(opts, :limit)}"
+
+        serialized =
+          cached_feed(cache_key, first_page?(params), fn ->
+            opts |> ExploreFeed.list() |> serialize_trending(viewer_id)
+          end)
+
+        conn
+        |> put_link_headers(serialized, "/api/v1/timelines/trending")
+        |> put_status(:ok)
+        |> Compat.json(serialized, :statuses)
+    end
+  end
+
+  # Adds what only this feed shows: why a post is here, and whether to offer a
+  # follow button for its author.
+  defp serialize_trending(rows, viewer_id) do
+    posts = Enum.map(rows, &elem(&1, 0))
+    authors = Map.new(posts, &{&1.id, &1.identity_id})
+    reasons = Map.new(rows, fn {post, reason} -> {post.id, reason} end)
+
+    followed =
+      if viewer_id,
+        do: ExploreFeed.followed_author_ids(viewer_id, Enum.uniq(Map.values(authors)))
+
+    posts
+    |> PostSerializer.serialize_many(current_identity_id: viewer_id)
+    |> Enum.map(fn entry ->
+      entry
+      |> Map.put(:trending_reason, reasons[entry.id])
+      |> Map.put(
+        :viewer_follows_author,
+        if(followed, do: MapSet.member?(followed, authors[entry.id]))
+      )
+    end)
+  end
+
   def global(conn, params) do
     case check_timeline_access(conn, :global) do
       :denied ->

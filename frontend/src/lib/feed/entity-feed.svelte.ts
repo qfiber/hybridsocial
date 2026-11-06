@@ -60,6 +60,8 @@ export interface EntityFeedOptions {
   onError?: (error: unknown) => void;
 }
 
+const MAX_EMPTY_PAGES = 3;
+
 export function createEntityFeed(
   fetchPage: (cursor: string | null) => Promise<Page>,
   pageSize = 20,
@@ -85,27 +87,37 @@ export function createEntityFeed(
     }
     loading = true;
     try {
-      const page = await fetchPage(cursor);
-      const items = Array.isArray(page) ? page : page.items;
+      // A page of nothing but posts we already hold adds no height, so the
+      // scroll sentinel never fires again and the feed would stall. Fetch on
+      // from it, a bounded number of times.
+      for (let attempt = 0; attempt < MAX_EMPTY_PAGES; attempt++) {
+        const page = await fetchPage(cursor);
+        const items = Array.isArray(page) ? page : page.items;
+        let added = items.length;
 
-      if (reset) {
-        posts = items;
-      } else {
-        // The boundary post can repeat across pages — dedupe on append.
-        const seen = new Set(posts.map((p) => p.id));
-        posts = [...posts, ...items.filter((p) => !seen.has(p.id))];
-      }
+        if (reset) {
+          posts = items;
+        } else {
+          // The boundary post can repeat across pages — dedupe on append.
+          const seen = new Set(posts.map((p) => p.id));
+          const fresh = items.filter((p) => !seen.has(p.id));
+          added = fresh.length;
+          posts = [...posts, ...fresh];
+        }
 
-      if (Array.isArray(page)) {
-        // Cursor must be a POST id — reach through a boost entry at the
-        // tail so the next page's row-tuple WHERE anchors to a real row.
-        const last: any = items.length > 0 ? items[items.length - 1] : null;
-        cursor = last?.type === 'boost' ? (last.post?.id ?? null) : (last?.id ?? null);
-        hasMore = items.length >= pageSize;
-      } else {
-        // Server-provided cursor — trust it verbatim for both fields.
-        cursor = page.nextCursor;
-        hasMore = page.nextCursor != null;
+        if (Array.isArray(page)) {
+          // Cursor must be a POST id — reach through a boost entry at the
+          // tail so the next page's row-tuple WHERE anchors to a real row.
+          const last: any = items.length > 0 ? items[items.length - 1] : null;
+          cursor = last?.type === 'boost' ? (last.post?.id ?? null) : (last?.id ?? null);
+          hasMore = items.length >= pageSize;
+        } else {
+          // Server-provided cursor — trust it verbatim for both fields.
+          cursor = page.nextCursor;
+          hasMore = page.nextCursor != null;
+        }
+
+        if (added > 0 || !hasMore) break;
       }
       changed();
     } catch (error) {

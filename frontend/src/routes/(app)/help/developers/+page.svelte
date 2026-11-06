@@ -453,6 +453,7 @@ app.post('/webhook', express.raw({ type: '*/*' }), (req, res) => {
           <div class="endpoint-paths">
             <code>GET /api/v1/timelines/home</code>,
             <code>GET /api/v1/timelines/public</code>,
+            <code>GET /api/v1/timelines/trending</code>,
             <code>GET /api/v1/timelines/list/:id</code>,
             <code>GET /api/v1/timelines/group/:id</code>
           </div>
