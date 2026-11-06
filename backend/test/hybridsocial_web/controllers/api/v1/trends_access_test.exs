@@ -81,16 +81,16 @@ defmodule HybridsocialWeb.Api.V1.TrendsAccessTest do
     end
   end
 
-  describe "trending accounts leave out" do
+  describe "trending accounts" do
     setup %{conn: conn} do
       %{conn: conn, path: "/api/v1/trends/accounts"}
     end
 
-    test "an ordinary account drawing engagement is listed", %{conn: conn, path: path} do
+    test "list an ordinary account drawing engagement", %{conn: conn, path: path} do
       assert engaged_post(user("ok")).identity_id in ids(conn, path)
     end
 
-    test "shadow-banned, silenced and suspended accounts", %{conn: conn, path: path} do
+    test "leave out shadow-banned, silenced and suspended accounts", %{conn: conn, path: path} do
       for field <- [:is_shadow_banned, :is_silenced, :is_suspended] do
         identity = user("mod")
         engaged_post(identity)
@@ -100,7 +100,7 @@ defmodule HybridsocialWeb.Api.V1.TrendsAccessTest do
       end
     end
 
-    test "accounts on a silenced or suspended domain", %{conn: conn, path: path} do
+    test "leave out accounts on a silenced or suspended domain", %{conn: conn, path: path} do
       for {policy, domain} <- [{"silence", "quiet.example"}, {"suspend", "gone.example"}] do
         identity =
           user("dom")
@@ -117,7 +117,7 @@ defmodule HybridsocialWeb.Api.V1.TrendsAccessTest do
       end
     end
 
-    test "accounts that opted out of discovery", %{conn: conn, path: path} do
+    test "leave out accounts that opted out of discovery", %{conn: conn, path: path} do
       identity = user("opt")
       engaged_post(identity)
       set_identity(identity, discoverable: false)
@@ -125,24 +125,27 @@ defmodule HybridsocialWeb.Api.V1.TrendsAccessTest do
       refute identity.id in ids(conn, path)
     end
 
-    test "dormant accounts, whatever their follower count", %{conn: conn, path: path} do
-      dormant = user("big")
-      for _ <- 1..3, do: {:ok, _} = Social.follow(user("f").id, dormant.id)
-
-      refute dormant.id in ids(conn, path)
-    end
-
-    test "accounts whose only engagement is on a hidden post", %{conn: conn, path: path} do
-      identity = user("hid")
-      post = engaged_post(identity)
+    test "don't count engagement on a hidden post", %{conn: conn, path: path} do
+      hidden = user("hid")
+      post = engaged_post(hidden)
 
       from(p in Post, where: p.id == ^post.id)
-      |> Repo.update_all(set: [hidden_at: DateTime.utc_now()])
+      |> Repo.update_all(set: [hidden_at: DateTime.utc_now(), reaction_count: 500])
 
-      refute identity.id in ids(conn, path)
+      small = user("small")
+      small_post = engaged_post(small)
+      from(p in Post, where: p.id == ^small_post.id) |> Repo.update_all(set: [reaction_count: 1])
+
+      ranked = ids(conn, path)
+
+      assert Enum.find_index(ranked, &(&1 == small.id)) <
+               Enum.find_index(ranked, &(&1 == hidden.id))
     end
 
-    test "someone the viewer blocked or muted, for that viewer", %{conn: conn, path: path} do
+    test "leave out someone the viewer blocked or muted, for that viewer", %{
+      conn: conn,
+      path: path
+    } do
       identity = user("blk")
       engaged_post(identity)
       viewer = user("viewer")

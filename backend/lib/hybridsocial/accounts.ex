@@ -1435,8 +1435,6 @@ defmodule Hybridsocial.Accounts do
           is_nil(p.deleted_at) and is_nil(p.hidden_at) and p.inserted_at >= ^cutoff and
             p.visibility == "public",
         group_by: p.identity_id,
-        having:
-          fragment("SUM(? + ? * 2 + ?)", p.reaction_count, p.boost_count, p.reply_count) > 0,
         select: %{
           identity_id: p.identity_id,
           score: fragment("SUM(? + ? * 2 + ?)", p.reaction_count, p.boost_count, p.reply_count)
@@ -1461,14 +1459,12 @@ defmodule Hybridsocial.Accounts do
             i.id not in subquery(Hybridsocial.Feeds.Visibility.publicly_hidden_author_ids()) and
             (^include_locked or i.is_locked == false) and
             (^any_instance or i.is_local == true),
-        # An inner join, so an account has to be drawing engagement right now. A big
-        # dormant account doesn't trend on its follower count alone.
-        join: e in subquery(engagement),
+        left_join: e in subquery(engagement),
         on: e.identity_id == i.id,
         left_join: fo in subquery(followers),
         on: fo.identity_id == i.id,
         order_by: [
-          desc: e.score + coalesce(fo.n, 0),
+          desc: coalesce(e.score, 0) + coalesce(fo.n, 0),
           desc: i.inserted_at
         ],
         limit: ^limit
