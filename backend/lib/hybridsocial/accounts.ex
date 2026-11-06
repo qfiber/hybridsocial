@@ -138,11 +138,16 @@ defmodule Hybridsocial.Accounts do
   def suspension_source(%Identity{}), do: nil
 
   @doc """
-  Whether a suspended identity's profile and posts are off limits to this viewer.
-  Only staff, who need to review them, and the account itself can still see them.
+  Whether an identity's profile and posts are off limits to this viewer.
+
+  A locked account is hidden from anyone not logged in, whatever its posts'
+  visibility, because someone who locked their account expects it to be private.
+  A suspended one is hidden from everyone but staff, who need to review it, and
+  the account itself.
   """
   def hidden_from_viewer?(%Identity{} = identity, viewer_id) do
     cond do
+      is_nil(viewer_id) and identity.is_locked -> true
       is_nil(suspension_source(identity)) -> false
       is_nil(viewer_id) -> true
       viewer_id == identity.id -> false

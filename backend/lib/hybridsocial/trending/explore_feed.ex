@@ -202,7 +202,10 @@ defmodule Hybridsocial.Trending.ExploreFeed do
     )
   end
 
-  defp maybe_filter_sensitive(query, nil), do: where(query, [p], p.sensitive == false)
+  defp maybe_filter_sensitive(query, nil) do
+    where(query, [p, e, i], p.sensitive == false and i.is_locked == false)
+  end
+
   defp maybe_filter_sensitive(query, _viewer_id), do: query
 
   defp maybe_local_only(query, true), do: where(query, [p, e], e.is_local == true)

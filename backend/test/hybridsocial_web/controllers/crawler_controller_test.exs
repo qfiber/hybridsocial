@@ -311,7 +311,6 @@ defmodule HybridsocialWeb.CrawlerControllerTest do
       for fields <- [
             [discoverable: false],
             [allow_unfurl: false],
-            [is_locked: true],
             [is_silenced: true]
           ] do
         identity = register("seo_opt") |> set_identity(fields)
@@ -321,6 +320,23 @@ defmodule HybridsocialWeb.CrawlerControllerTest do
         assert body["indexable"] == false, "#{inspect(fields)} should not be indexable"
         assert body["seo"] == nil
       end
+    end
+
+    test "a locked account isn't public, and its link preview gives nothing away" do
+      identity =
+        register("seo_locked")
+        |> set_identity(is_locked: true, display_name: "Real Name", bio: "Secret bio")
+
+      post = public_post(identity, %{"content" => "marked public"})
+
+      body = profile_meta(identity)
+      assert %{"public" => false, "indexable" => false, "seo" => nil} = body
+      refute inspect(body) =~ "Real Name"
+      refute inspect(body) =~ "Secret bio"
+
+      post_body = post_meta(post)
+      assert %{"public" => false, "indexable" => false, "seo" => nil} = post_body
+      refute inspect(post_body) =~ "marked public"
     end
 
     test "a shadow-banned account isn't public" do

@@ -967,6 +967,11 @@ defmodule Hybridsocial.Social.Posts do
         viewer_id
       ) do
     cond do
+      # A locked account is private to anyone not logged in, even for posts marked
+      # public. See Accounts.hidden_from_viewer?/2.
+      is_nil(viewer_id) and author_locked?(post) ->
+        false
+
       vis in ["public", "unlisted"] ->
         true
 
@@ -995,6 +1000,16 @@ defmodule Hybridsocial.Social.Posts do
   end
 
   def viewer_can_read?(_, _), do: false
+
+  defp author_locked?(%Post{identity: %Hybridsocial.Accounts.Identity{is_locked: locked}}),
+    do: locked
+
+  defp author_locked?(%Post{identity_id: author_id}) do
+    Repo.exists?(
+      from i in Hybridsocial.Accounts.Identity,
+        where: i.id == ^author_id and i.is_locked == true
+    )
+  end
 
   defp list_member?(nil, _viewer_id), do: false
 

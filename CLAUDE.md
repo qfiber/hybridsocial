@@ -195,7 +195,7 @@ viewer's own interaction state layered on by `apply_viewer_state`.
 **Public profiles.** `Accounts.PublicProfile` is the one definition of what a logged-out visitor
 (`public?/1`) and a search engine (`indexable?/1`) may see. A route opts into the logged-out view by
 returning `publicView` from its `+page.server.ts`; `(app)/+layout.svelte` then renders `PublicLayout`
-instead of redirecting to login. Mark controls that need an account with `data-requires-login`.
+instead of redirecting to login. A locked account is never public, and `Accounts.hidden_from_viewer?/2` hides it from anonymous API requests too. Mark controls that need an account with `data-requires-login`.
 Staff block indexing with `identities.search_indexing_blocked`, and sitemap queries must stay in step
 with `indexable?/1`. SSR fetches to the backend need `x-forwarded-proto: https`, or they get a 301.
 
