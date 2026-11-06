@@ -1422,6 +1422,7 @@ defmodule Hybridsocial.Accounts do
     limit = Keyword.get(opts, :limit, 20)
     window_hours = Keyword.get(opts, :window_hours, 24 * 7)
     cutoff = DateTime.add(DateTime.utc_now(), -window_hours * 3600, :second)
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     engagement =
       from(p in Hybridsocial.Social.Post,
@@ -1429,9 +1430,13 @@ defmodule Hybridsocial.Accounts do
         # group, list, or direct post feeds a ranking shown to everyone —
         # activity inside a private group could put its author at the top of
         # Explore. Mirrors `Feeds.Algorithms.Trending`, which scores only
-        # `visibility == "public"` posts.
-        where: is_nil(p.deleted_at) and p.inserted_at >= ^cutoff and p.visibility == "public",
+        # `visibility == "public"` posts. Admin-hidden posts don't count either.
+        where:
+          is_nil(p.deleted_at) and is_nil(p.hidden_at) and p.inserted_at >= ^cutoff and
+            p.visibility == "public",
         group_by: p.identity_id,
+        having:
+          fragment("SUM(? + ? * 2 + ?)", p.reaction_count, p.boost_count, p.reply_count) > 0,
         select: %{
           identity_id: p.identity_id,
           score: fragment("SUM(? + ? * 2 + ?)", p.reaction_count, p.boost_count, p.reply_count)
@@ -1445,24 +1450,35 @@ defmodule Hybridsocial.Accounts do
         select: %{identity_id: f.followee_id, n: count(f.id)}
       )
 
-    include_locked = not is_nil(Keyword.get(opts, :viewer_id))
+    include_locked = not is_nil(viewer_id)
+    any_instance = not Keyword.get(opts, :local_only, false)
 
-    from(i in Identity,
-      where:
-        i.type == "user" and is_nil(i.parent_identity_id) and is_nil(i.deleted_at) and
-          i.is_suspended == false and i.is_silenced == false and
-          (^include_locked or i.is_locked == false),
-      left_join: e in subquery(engagement),
-      on: e.identity_id == i.id,
-      left_join: fo in subquery(followers),
-      on: fo.identity_id == i.id,
-      order_by: [
-        desc: coalesce(e.score, 0) + coalesce(fo.n, 0),
-        desc: i.inserted_at
-      ],
-      limit: ^limit
-    )
-    |> Repo.all()
+    accounts =
+      from(i in Identity,
+        where:
+          i.type == "user" and is_nil(i.parent_identity_id) and is_nil(i.deleted_at) and
+            i.discoverable == true and
+            i.id not in subquery(Hybridsocial.Feeds.Visibility.publicly_hidden_author_ids()) and
+            (^include_locked or i.is_locked == false) and
+            (^any_instance or i.is_local == true),
+        # An inner join, so an account has to be drawing engagement right now. A big
+        # dormant account doesn't trend on its follower count alone.
+        join: e in subquery(engagement),
+        on: e.identity_id == i.id,
+        left_join: fo in subquery(followers),
+        on: fo.identity_id == i.id,
+        order_by: [
+          desc: e.score + coalesce(fo.n, 0),
+          desc: i.inserted_at
+        ],
+        limit: ^limit
+      )
+      |> Repo.all()
+
+    hidden =
+      Hybridsocial.Social.QuoteVisibility.hidden_by_viewer(Enum.map(accounts, & &1.id), viewer_id)
+
+    Enum.reject(accounts, &MapSet.member?(hidden, &1.id))
   end
 
   # --- Account Approval ---
