@@ -946,6 +946,8 @@ defmodule HybridsocialWeb.Router do
     # Name revocation
     post "/users/:id/revoke_name", AdminController, :revoke_name
     post "/users/:id/bot_rate_limit", AdminController, :set_bot_rate_limit
+    put "/users/:id/post_limits", AdminController, :set_post_limits
+    get "/post_limits/defaults", AdminController, :post_limit_defaults
     post "/users/:id/force_bot", AdminController, :force_bot
     post "/users/:id/unforce_bot", AdminController, :unforce_bot
 

@@ -532,6 +532,7 @@ export interface NotificationPreferences {
 
 export interface AdminUser {
   id: string;
+  post_limits?: { per_minute?: number; per_hour?: number; per_day?: number };
   handle: string;
   /**
    * Identity kind as the API names it — note `page`, not the stored

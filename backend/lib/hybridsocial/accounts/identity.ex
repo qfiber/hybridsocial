@@ -36,6 +36,9 @@ defmodule Hybridsocial.Accounts.Identity do
     # Remote actor's human HTML profile URL (AP `url`), for "view on original".
     field :profile_url, :string
     field :metadata, :map, default: %{}
+    # Staff-set posting limits; see Social.PostRateLimit. Deliberately in no
+    # changeset's cast list: it is only written by the admin endpoint.
+    field :post_limits, :map, default: %{}
     field :is_locked, :boolean, default: false
     # Who can invite this identity into a group or organization
     # (page). Values: "anyone" (default), "only_follows" (only users
