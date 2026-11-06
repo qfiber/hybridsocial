@@ -143,22 +143,38 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
           |> Keyword.put(:viewer_id, viewer_id)
 
         serialized =
-          if first_page?(params) do
-            # Hashtag feeds are as expensive as the global feed and had no
-            # cache at all. Popular tags are prewarmed by
-            # Feeds.PrewarmWorker; long-tail tags fall back to a lazy
-            # snapshot on first view. Either way, layer viewer state on top.
-            Snapshot.hashtag_key(hashtag)
-            |> Snapshot.fetch(fn ->
+          cond do
+            # Snapshots are shared with logged-in members, so they hold locked
+            # accounts' public posts. Anonymous requests get a filtered query
+            # with its own short cache instead.
+            is_nil(viewer_id) ->
+              cached_feed(
+                "feed:tag:anon:#{hashtag}:#{Keyword.get(opts, :limit)}",
+                first_page?(params),
+                fn ->
+                  hashtag
+                  |> Feeds.hashtag_timeline(opts)
+                  |> PostSerializer.serialize_many(current_identity_id: nil)
+                end
+              )
+
+            first_page?(params) ->
+              # Hashtag feeds are as expensive as the global feed and had no
+              # cache at all. Popular tags are prewarmed by
+              # Feeds.PrewarmWorker; long-tail tags fall back to a lazy
+              # snapshot on first view. Either way, layer viewer state on top.
+              Snapshot.hashtag_key(hashtag)
+              |> Snapshot.fetch(fn ->
+                hashtag
+                |> Feeds.hashtag_timeline(viewer_id: nil, include_locked: true)
+                |> PostSerializer.serialize_many(current_identity_id: nil)
+              end)
+              |> PostSerializer.apply_viewer_state(viewer_id)
+
+            true ->
               hashtag
-              |> Feeds.hashtag_timeline(viewer_id: nil)
-              |> PostSerializer.serialize_many(current_identity_id: nil)
-            end)
-            |> PostSerializer.apply_viewer_state(viewer_id)
-          else
-            hashtag
-            |> Feeds.hashtag_timeline(opts)
-            |> PostSerializer.serialize_many(current_identity_id: viewer_id)
+              |> Feeds.hashtag_timeline(opts)
+              |> PostSerializer.serialize_many(current_identity_id: viewer_id)
           end
 
         conn
@@ -304,23 +320,39 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
         default_order? = Keyword.get(opts, :sort) in [nil, "newest"]
 
         serialized =
-          if default_order? and first_page?(params) do
-            # Serve the prewarmed, viewer-independent snapshot (kept hot by
-            # Feeds.PrewarmWorker) and layer this viewer's interaction
-            # state on top. Anonymous viewers get the base unchanged.
-            Snapshot.global_key(include_replies)
-            |> Snapshot.fetch(fn ->
-              [viewer_id: nil, include_replies: include_replies]
+          cond do
+            # The snapshot is shared with logged-in members, so it holds locked
+            # accounts' public posts. Anonymous requests get a filtered query
+            # with its own short cache instead.
+            is_nil(viewer_id) ->
+              cached_feed(
+                "feed:global:anon:#{include_replies}:#{Keyword.get(opts, :sort, "newest")}:#{Keyword.get(opts, :limit)}",
+                first_page?(params),
+                fn ->
+                  opts
+                  |> Feeds.global_timeline()
+                  |> PostSerializer.serialize_many(current_identity_id: nil)
+                end
+              )
+
+            default_order? and first_page?(params) ->
+              # Serve the prewarmed, viewer-independent snapshot (kept hot by
+              # Feeds.PrewarmWorker) and layer this viewer's interaction
+              # state on top.
+              Snapshot.global_key(include_replies)
+              |> Snapshot.fetch(fn ->
+                [viewer_id: nil, include_replies: include_replies, include_locked: true]
+                |> Feeds.global_timeline()
+                |> PostSerializer.serialize_many(current_identity_id: nil)
+              end)
+              |> PostSerializer.apply_viewer_state(viewer_id)
+
+            true ->
+              # Older pages (cursor present) are unbounded and personalised,
+              # so compute them fresh.
+              opts
               |> Feeds.global_timeline()
-              |> PostSerializer.serialize_many(current_identity_id: nil)
-            end)
-            |> PostSerializer.apply_viewer_state(viewer_id)
-          else
-            # Older pages (cursor present) are unbounded and personalised,
-            # so compute them fresh.
-            opts
-            |> Feeds.global_timeline()
-            |> PostSerializer.serialize_many(current_identity_id: viewer_id)
+              |> PostSerializer.serialize_many(current_identity_id: viewer_id)
           end
 
         conn

@@ -3,6 +3,7 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
 
   require Logger
 
+  alias Hybridsocial.Feeds.Visibility
   alias Hybridsocial.Search
   alias HybridsocialWeb.Serializers.PostSerializer
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
@@ -45,8 +46,10 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
         results.accounts
       end
 
+    {accounts, posts} = without_locked_if_anonymous(accounts, results.posts, viewer_id)
+
     serialized_posts =
-      PostSerializer.serialize_many(results.posts, current_identity_id: viewer_id)
+      PostSerializer.serialize_many(posts, current_identity_id: viewer_id)
 
     conn
     |> put_status(:ok)
@@ -61,6 +64,20 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
       :search
     )
   end
+
+  # Results can come from an external index, so this filters what came back rather
+  # than the query. A locked account is private to anonymous viewers.
+  defp without_locked_if_anonymous(accounts, posts, nil) do
+    locked =
+      (Enum.map(accounts, & &1.id) ++ Enum.map(posts, & &1.identity_id))
+      |> Enum.uniq()
+      |> Visibility.locked_among()
+
+    {Enum.reject(accounts, &MapSet.member?(locked, &1.id)),
+     Enum.reject(posts, &MapSet.member?(locked, &1.identity_id))}
+  end
+
+  defp without_locked_if_anonymous(accounts, posts, _viewer_id), do: {accounts, posts}
 
   # Check if query looks like @user@domain or user@domain
   defp looks_like_remote_handle?(query) do

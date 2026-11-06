@@ -51,7 +51,7 @@ defmodule Hybridsocial.Feeds.PrewarmWorker do
     for include_replies <- [false, true] do
       safe("global(include_replies=#{include_replies})", fn ->
         Snapshot.refresh(Snapshot.global_key(include_replies), fn ->
-          [viewer_id: nil, include_replies: include_replies]
+          [viewer_id: nil, include_replies: include_replies, include_locked: true]
           |> Feeds.global_timeline()
           |> PostSerializer.serialize_many(current_identity_id: nil)
         end)
@@ -64,7 +64,7 @@ defmodule Hybridsocial.Feeds.PrewarmWorker do
       safe("tag(#{tag})", fn ->
         Snapshot.refresh(Snapshot.hashtag_key(tag), fn ->
           tag
-          |> Feeds.hashtag_timeline(viewer_id: nil)
+          |> Feeds.hashtag_timeline(viewer_id: nil, include_locked: true)
           |> PostSerializer.serialize_many(current_identity_id: nil)
         end)
       end)
