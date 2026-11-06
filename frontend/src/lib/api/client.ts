@@ -101,18 +101,19 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      // Rate limit — show toast and throw
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        const waitSec = retryAfter ? parseInt(retryAfter, 10) : 10;
-        this.showRateLimitToast(waitSec);
-      }
-
       let body: ApiErrorBody;
       try {
         body = await response.json();
       } catch {
         body = { error: 'unknown_error', error_description: response.statusText };
+      }
+
+      // Rate limit — show toast and throw. A refused post gets its own, more
+      // specific message from the composer instead.
+      if (response.status === 429 && body.error !== 'limits.post_rate_limit') {
+        const retryAfter = response.headers.get('retry-after');
+        const waitSec = retryAfter ? parseInt(retryAfter, 10) : 10;
+        this.showRateLimitToast(waitSec);
       }
 
       // Admin step-up expired or never obtained — signal the admin layout

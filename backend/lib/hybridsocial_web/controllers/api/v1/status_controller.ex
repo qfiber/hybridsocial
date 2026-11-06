@@ -1,6 +1,9 @@
 defmodule HybridsocialWeb.Api.V1.StatusController do
   use HybridsocialWeb, :controller
 
+  alias Hybridsocial.Social.PostRateLimit
+  alias HybridsocialWeb.Helpers.PostRateLimitResponse
+
   alias Hybridsocial.Social.Posts
   alias Hybridsocial.Premium.TierLimits
   alias HybridsocialWeb.Compat
@@ -22,8 +25,8 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
     limits = TierLimits.limits_for(identity)
 
     with :ok <- validate_tier_limits(params, limits),
-         :ok <- check_bot_rate_limit(identity),
-         {:ok, author_id} <- Hybridsocial.Pages.resolve_post_author(params, identity.id) do
+         {:ok, author_id} <- Hybridsocial.Pages.resolve_post_author(params, identity.id),
+         :ok <- PostRateLimit.check(identity) do
       case Posts.create_post(author_id, params, identity) do
         {:ok, post} ->
           post = Hybridsocial.Repo.preload(post, [:identity, :quote])
@@ -75,6 +78,9 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "page.forbidden"})
+
+      {:error, %{window: _} = refused} ->
+        PostRateLimitResponse.refuse(conn, refused)
 
       {:error, error_key, max} ->
         conn
@@ -848,53 +854,6 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       edited_at: revision.edited_at,
       revision_number: revision.revision_number
     }
-  end
-
-  defp check_bot_rate_limit(identity) do
-    import Ecto.Query
-
-    # Priority: per-user override > bot-specific > global bot default > global user default
-    limit =
-      cond do
-        # Admin per-user override (stored in identity metadata)
-        is_map(identity.metadata) and is_integer(identity.metadata["posts_per_hour"]) ->
-          identity.metadata["posts_per_hour"]
-
-        # Bot-specific limit
-        identity.is_bot ->
-          bot = Hybridsocial.Repo.get(Hybridsocial.Accounts.Bot, identity.id)
-
-          if bot && bot.posts_per_hour do
-            bot.posts_per_hour
-          else
-            Hybridsocial.Config.get("bot_posts_per_hour", 30)
-          end
-
-        # Global user limit (0 = unlimited, default)
-        true ->
-          Hybridsocial.Config.get("user_posts_per_hour", 0)
-      end
-
-    # 0 or nil = unlimited
-    if is_nil(limit) or limit == 0 do
-      :ok
-    else
-      one_hour_ago = DateTime.add(DateTime.utc_now(), -3600, :second)
-
-      count =
-        Hybridsocial.Social.Post
-        |> where(
-          [p],
-          p.identity_id == ^identity.id and p.inserted_at > ^one_hour_ago and is_nil(p.deleted_at)
-        )
-        |> Hybridsocial.Repo.aggregate(:count)
-
-      if count >= limit do
-        {:error, "limits.post_rate_limit", limit}
-      else
-        :ok
-      end
-    end
   end
 
   defp validate_tier_limits(params, limits) do
