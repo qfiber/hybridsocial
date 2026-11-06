@@ -101,6 +101,8 @@
     <div class="quote-nested" onclick={(e) => e.stopPropagation()} role="presentation">
       <svelte:self post={post.quote} depth={depth + 1} />
     </div>
+  {:else if post.quote_unavailable && depth < MAX_QUOTE_DEPTH}
+    <div class="quote-unavailable">{$t('quote.unavailable')}</div>
   {/if}
 
   {#if poll}
@@ -122,6 +124,15 @@
 </div>
 
 <style>
+  .quote-unavailable {
+    margin-block-start: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-xs);
+  }
+
   .quote-card {
     margin-block-start: var(--space-3);
     padding: var(--space-3);
