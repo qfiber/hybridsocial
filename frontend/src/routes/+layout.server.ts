@@ -9,7 +9,11 @@ import { env } from '$env/dynamic/private';
 // Uses the internal backend URL (Docker network) rather than a relative
 // path, which would hairpin out through the public edge during SSR. Falls
 // back gracefully to no instance data if the backend is unreachable.
-export const load: LayoutServerLoad = async ({ fetch }) => {
+export const load: LayoutServerLoad = async ({ fetch, cookies }) => {
+  // Whether a session may exist, so the app can hold a logged-in visitor's page
+  // for auth rather than flashing the logged-out view. The cookie is httpOnly, so
+  // only the server can see it.
+  const hasSession = !!(cookies.get('hs_refresh') || cookies.get('hs_access'));
   const base = env.INTERNAL_API_URL || 'http://backend:4000';
 
   try {
@@ -22,12 +26,13 @@ export const load: LayoutServerLoad = async ({ fetch }) => {
     const res = await fetch(`${base}/api/v1/instance`, {
       headers: { 'x-forwarded-proto': 'https' },
     });
-    if (!res.ok) return { instance: null };
+    if (!res.ok) return { instance: null, hasSession };
 
     const info = (await res.json()) as Record<string, unknown>;
     const theme = (info.theme as Record<string, unknown> | null) ?? null;
 
     return {
+      hasSession,
       instance: {
         configuration: {
           feeds: (info.configuration as { feeds?: unknown } | undefined)?.feeds ?? null,
@@ -44,6 +49,6 @@ export const load: LayoutServerLoad = async ({ fetch }) => {
       }
     };
   } catch {
-    return { instance: null };
+    return { instance: null, hasSession };
   }
 };

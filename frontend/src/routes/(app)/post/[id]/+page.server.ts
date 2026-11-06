@@ -7,15 +7,23 @@ import { env } from '$env/dynamic/private';
 // posts return content; followers-only / direct / unlisted / deleted /
 // remote posts return a neutral "private post" placeholder. Rendered by
 // the root layout via page.data.og.
-export const load: PageServerLoad = async ({ params, fetch }) => {
+export const load: PageServerLoad = async ({ params, fetch, setHeaders }) => {
   const base = env.INTERNAL_API_URL || 'http://backend:4000';
 
   try {
-    const res = await fetch(`${base}/api/v1/og/post/${encodeURIComponent(params.id)}`);
-    if (!res.ok) return {};
+    const res = await fetch(`${base}/api/v1/og/post/${encodeURIComponent(params.id)}`, {
+      // The backend 301s plain http to the public https host unless told it came
+      // in over TLS, which fails from inside the network. See +layout.server.ts.
+      headers: { 'x-forwarded-proto': 'https' },
+    });
+    if (!res.ok) return { publicView: false };
 
-    const m = (await res.json()) as Record<string, string | number | null>;
+    const m = (await res.json()) as Record<string, any>;
+    if (!m.indexable) setHeaders({ 'x-robots-tag': 'noindex' });
+
     return {
+      publicView: m.public === true,
+      seo: m.seo ?? null,
       og: {
         title: m.title,
         description: m.description,
@@ -23,10 +31,11 @@ export const load: PageServerLoad = async ({ params, fetch }) => {
         image_width: (m.image_width as number) ?? null,
         image_height: (m.image_height as number) ?? null,
         type: m.type || 'article',
-        url: m.url
+        url: m.url,
+        robots: m.indexable ? undefined : 'noindex'
       }
     };
   } catch {
-    return {};
+    return { publicView: false };
   }
 };

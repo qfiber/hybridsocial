@@ -195,7 +195,7 @@
         </div>
       {/if}
 
-      <div class="profile-actions">
+      <div class="profile-actions" data-requires-login>
         {#if staffActions}
           {@render staffActions()}
         {/if}

@@ -74,6 +74,11 @@ defmodule Hybridsocial.Accounts.Identity do
     # settings.
     field :discoverable, :boolean, default: true
 
+    # Staff-set: keep search engines off this profile and its posts, even though
+    # the page stays viewable. Deliberately in no changeset's cast list, it is
+    # only written by the admin endpoint. See Accounts.PublicProfile.
+    field :search_indexing_blocked, :boolean, default: false
+
     # Whether social crawlers (FacebookExternalHit, TelegramBot, etc.)
     # see full profile info when unfurling a /@handle link on external
     # platforms. When false, crawlers get a placeholder OG shell only.

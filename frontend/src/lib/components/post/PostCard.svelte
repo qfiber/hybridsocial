@@ -1038,7 +1038,7 @@
           {/if}
 
           {#if post.poll && !compact}
-            <div class="post-poll">
+            <div class="post-poll" data-requires-login>
               {#each pollOptions as option, i (i)}
                 {@const optimisticCount = option.votes_count + (pendingVoteOptions?.includes(i) ? 1 : 0)}
                 {@const pct = displayVotesTotal > 0 ? Math.round(optimisticCount / displayVotesTotal * 100) : 0}

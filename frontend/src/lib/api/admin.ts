@@ -107,6 +107,11 @@ export function setUserPostLimits(id: string, limits: PostLimits): Promise<unkno
   return api.put(`/api/v1/admin/users/${id}/post_limits`, limits);
 }
 
+// Keeps search engines off a profile and its posts. The page stays viewable.
+export function setUserSearchIndexing(id: string, blocked: boolean): Promise<unknown> {
+  return api.put(`/api/v1/admin/users/${id}/search_indexing`, { blocked });
+}
+
 export function suspendUser(id: string): Promise<void> {
   return api.post(`/api/v1/admin/users/${id}/suspend`);
 }
