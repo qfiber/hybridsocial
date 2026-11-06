@@ -89,6 +89,7 @@ export const adminSections: AdminSection[] = [
       { href: '/admin/custom-emojis', label: 'Custom emojis', description: 'Instance emoji available in posts', icon: 'M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14.5a4 4 0 007 0M9 9.5h.01M15 9.5h.01', permission: 'settings.manage' },
       { href: '/admin/user-management/premium-reactions', label: 'Premium reactions', description: 'Reactions unlocked for paid tiers', icon: 'M12 21s-7-4.53-9.5-9A5.5 5.5 0 0112 6a5.5 5.5 0 019.5 6c-2.5 4.47-9.5 9-9.5 9z', permission: 'users.view' },
       { href: '/admin/user-management/badges', label: 'Profile badges', description: 'Badges you can grant to accounts', icon: 'M12 15a5 5 0 100-10 5 5 0 000 10zM8.2 13.5L7 22l5-3 5 3-1.2-8.5', permission: 'users.view' },
+      { href: '/admin/user-management/posting-limits', label: 'Posting limits', description: 'How fast accounts can post', icon: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM12 6v6l4 2', permission: 'settings.manage' },
       { href: '/admin/user-management/tiers', label: 'Verification tiers', description: 'Per-tier post and media limits', icon: 'M12 2l9 5-9 5-9-5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5', permission: 'users.view' },
     ],
   },

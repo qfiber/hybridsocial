@@ -12,7 +12,8 @@
   import EmojiPicker from './EmojiPicker.svelte';
   import ImageLightbox from '$lib/components/ui/ImageLightbox.svelte';
   import { markSeen } from '$lib/utils/seen-posts.js';
-  import { t } from '$lib/stores/i18n.js';
+  import { locale, t } from '$lib/stores/i18n.js';
+  import { ApiError } from '$lib/api/client.js';
   import { t as translate } from '$lib/utils/i18n.js';
 
   type ComposerVisibility = 'public' | 'followers' | 'direct';
@@ -80,6 +81,15 @@
   let showCW = $state(false);
   let loading = $state(false);
   let error = $state('');
+  // Set while a publish is in flight: puts what was written back if it's refused.
+  let restoreWritten: ((message: string) => void) | null = null;
+
+  type PostRateLimitBody = {
+    error: string;
+    window: 'minute' | 'hour' | 'day';
+    limit: number;
+    retry_after: number;
+  };
   let replyTo = $state<Post | null>(null);
   // Set true when the parent post is edited while the composer is
   // open. Surfaces a "Post edited" indicator next to the
@@ -454,9 +464,11 @@
     setTimeout(() => { isNudging = false; }, 400);
   }
 
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+
   function resetComposer() {
     isClosing = true;
-    setTimeout(() => {
+    closeTimer = setTimeout(() => {
       isClosing = false;
       isOpen = false;
       delete document.body.dataset.composerOpen;
@@ -1361,14 +1373,34 @@
 
       // Show optimistic post immediately
       window.dispatchEvent(new CustomEvent('new-post', { detail: optimisticPost }));
-      clearDraft();
 
-      // If this post was promoted from a server draft, delete the draft
-      // now that it's been published. Fire-and-forget; UI already advanced.
-      if (activeServerDraftId) {
-        const draftToDelete = activeServerDraftId;
-        deleteDraft(draftToDelete).catch(() => {});
-      }
+      // The composer clears right away, but a refused post must not lose what
+      // was written: keep it all, and the drafts, until the server has said yes.
+      const draftToDelete = activeServerDraftId;
+      const written = {
+        content, spoilerText, showCW, visibility, replyTo, parentEdited,
+        targetMediaId, targetMediaIndex, quotePost, groupId, pageId, contextLabel,
+        uploadedMedia, showPoll, pollOptions, pollDuration, pollMultiple,
+        showSchedule, scheduledAt,
+      };
+      restoreWritten = (message: string) => {
+        window.dispatchEvent(new CustomEvent('post-deleted', { detail: { id: optimisticId } }));
+        if (parentId) {
+          window.dispatchEvent(new CustomEvent('reply-count-update', { detail: { postId: parentId, delta: -1 } }));
+        }
+        clearTimeout(closeTimer);
+        isClosing = false;
+        isOpen = true;
+        document.body.dataset.composerOpen = 'true';
+        ({
+          content, spoilerText, showCW, visibility, replyTo, parentEdited,
+          targetMediaId, targetMediaIndex, quotePost, groupId, pageId, contextLabel,
+          uploadedMedia, showPoll, pollOptions, pollDuration, pollMultiple,
+          showSchedule, scheduledAt,
+        } = written);
+        activeServerDraftId = draftToDelete;
+        error = message;
+      };
 
       resetComposer();
 
@@ -1381,6 +1413,10 @@
       // Send to server, then replace optimistic with real
       const newPost = await api.post('/api/v1/statuses', body);
       window.dispatchEvent(new CustomEvent('post-replace', { detail: { oldId: optimisticId, post: newPost } }));
+
+      // Published, so the drafts have served their purpose. Fire-and-forget.
+      clearDraft();
+      if (draftToDelete) deleteDraft(draftToDelete).catch(() => {});
 
       // Confirm the publish. A scheduled post isn't live yet, so only offer a
       // "View post" link for a real, immediately-visible one.
@@ -1395,11 +1431,33 @@
       } else {
         addToast(translate('composer.post_published'), 'success');
       }
-    } catch {
-      error = translate('composer.publish_failed');
+    } catch (err) {
+      const message = publishErrorMessage(err);
+      if (restoreWritten) restoreWritten(message);
+      else error = message;
     } finally {
+      restoreWritten = null;
       loading = false;
     }
+  }
+
+  // Tells someone over a posting limit which limit it was and when they can post
+  // again, rather than a generic failure they would just retry.
+  function publishErrorMessage(err: unknown): string {
+    const body = err instanceof ApiError ? (err.body as unknown as PostRateLimitBody) : null;
+    if (body?.error !== 'limits.post_rate_limit') return translate('composer.publish_failed');
+    return translate('composer.rate_limited', {
+      limit: body.limit,
+      window: translate(`composer.rate_window_${body.window}`),
+      when: relativeRetry(body.retry_after),
+    });
+  }
+
+  function relativeRetry(seconds: number): string {
+    const format = new Intl.RelativeTimeFormat(get(locale), { numeric: 'always' });
+    if (seconds < 60) return format.format(seconds, 'second');
+    if (seconds < 3600) return format.format(Math.ceil(seconds / 60), 'minute');
+    return format.format(Math.ceil(seconds / 3600), 'hour');
   }
 
   function handleKeydown(e: KeyboardEvent) {
