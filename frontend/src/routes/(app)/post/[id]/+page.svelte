@@ -119,7 +119,7 @@
 </script>
 
 <svelte:head>
-  <title>{post ? `Post by ${post.account.display_name || post.account.handle}` : 'Post'} - {$instanceName}</title>
+  <title>{post ? `Post by ${post.account.display_name || post.account.handle}` : page.data.seo ? `Post by ${page.data.seo.name}` : 'Post'} - {$instanceName}</title>
 </svelte:head>
 
 <div class="post-detail-page">
