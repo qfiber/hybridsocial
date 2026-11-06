@@ -532,6 +532,12 @@
     gap: 2px;
   }
 
+  /* A profile shows the whole name, so a long one wraps rather than truncates. */
+  .profile-display-name-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .profile-display-name {
     display: flex;
     align-items: center;

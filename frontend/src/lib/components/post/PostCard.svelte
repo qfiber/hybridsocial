@@ -827,7 +827,7 @@
         <div class="post-author-info">
           <div class="post-author-name-row">
             <ProfileHoverCard handle={post.account.acct || post.account.handle}>
-              <a href="/@{post.account.handle}" class="post-display-name"><DisplayName name={displayName} emojis={post.account.emojis} /></a>
+              <a href="/@{post.account.handle}" class="post-display-name" dir="auto"><DisplayName name={displayName} emojis={post.account.emojis} /></a>
             </ProfileHoverCard>
             {#if accountBadgeView.showVerifiedMark}
               <VerifiedBadge size="sm" />
@@ -1678,7 +1678,23 @@
     min-width: 0;
   }
 
+  /* The wrapper is what the row sizes. Without this it grows to the name's full
+     width and pushes past the card. It can't clip, or the hover card inside it
+     would be cut off, so the clipping is on the link. */
+  .post-author-name-row > :global(.hover-card-trigger) {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* Badges and buttons beside a long name keep their size; the name gives way. */
+  .post-author-name-row > :global(:not(.hover-card-trigger)) {
+    flex-shrink: 0;
+  }
+
+  /* `dir="auto"` on the link gives the name its own direction, so a long Arabic
+     name in this left-to-right row keeps its start and truncates at its end. */
   .post-display-name {
+    display: block;
     font-weight: 700;
     font-size: 16px;
     color: var(--color-text);
