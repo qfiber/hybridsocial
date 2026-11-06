@@ -185,6 +185,8 @@ export interface Post {
   media_reaction_counts?: Record<string, number>;
   in_reply_to_account_id: string | null;
   quote: Post | null;
+  /** This post quotes something the viewer can't see. `quote` is null. */
+  quote_unavailable?: boolean;
   card: LinkCard | null;
   mentions: PostMention[];
   tags: PostTag[];

@@ -603,6 +603,7 @@
   "reaction.premium_title": "{label} — premium tier only",
   "quote.by_aria": "Quoted post by {name}",
   "quote.poll_aria": "Quoted poll",
+  "quote.unavailable": "This post is unavailable",
   "emoji.custom": "Custom",
   "emoji.picker": "Emoji picker",
   "emoji.search": "Search emojis",

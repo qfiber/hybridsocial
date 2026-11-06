@@ -542,6 +542,7 @@
   "reaction.premium_title": "{label} — للفئة المميّزة فقط",
   "quote.by_aria": "منشور مقتبس بواسطة {name}",
   "quote.poll_aria": "استطلاع مقتبس",
+  "quote.unavailable": "هذا المنشور غير متاح",
   "emoji.custom": "مخصّص",
   "emoji.picker": "منتقي الإيموجي",
   "emoji.search": "البحث عن إيموجي",

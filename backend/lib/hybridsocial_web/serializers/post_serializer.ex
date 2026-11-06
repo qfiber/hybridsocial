@@ -9,6 +9,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
 
   alias Hybridsocial.Repo
   alias Hybridsocial.Social.{Reaction, Boost, Bookmark, PostMute, Poll, PollOption, PollVote}
+  alias Hybridsocial.Social.QuoteVisibility
   alias Hybridsocial.Media.MediaFile
   alias Hybridsocial.Content.{LinkPreviews, CustomEmoji}
 
@@ -41,22 +42,8 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
 
     account = serialize_account(post.identity, badges)
 
-    # Recurse into the quote chain up to `:quote_depth` levels (default
-    # 2 — outer → quoted → quoted-of-quoted). Posts often quote a quote
-    # that owns the actual media; without this we render an empty card.
-    # Preload `quote: :identity` so the next recursion step finds the
-    # nested quote's identity loaded and can serialize it.
-    quote_depth = Keyword.get(opts, :quote_depth, 2)
-
-    quote_post =
-      case {post.quote, quote_depth} do
-        {%Hybridsocial.Social.Post{} = q, depth} when depth > 0 ->
-          q = Repo.preload(q, [:identity, quote: :identity])
-          serialize(q, Keyword.put(opts, :quote_depth, depth - 1))
-
-        _ ->
-          nil
-      end
+    {quote_post, quote_unavailable} =
+      serialize_quote(post, Keyword.put(opts, :is_staff, is_staff?))
 
     sensitive =
       case post.identity do
@@ -153,6 +140,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       media_reaction_counts: media_reaction_counts,
       in_reply_to_account_id: in_reply_to_account_id,
       quote: quote_post,
+      quote_unavailable: quote_unavailable,
       card: card,
       mentions: mentions,
       tags: tags,
@@ -181,6 +169,51 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
     })
   end
 
+  # `{serialized quote or nil, whether one exists that this viewer can't see}`.
+  # Recurses into the quote chain up to `:quote_depth` levels (default 2: outer,
+  # quoted, quoted-of-quoted). Posts often quote a quote that owns the actual
+  # media; without this we render an empty card. Each level clears the same check.
+  defp serialize_quote(post, opts) do
+    case {post.quote, Keyword.get(opts, :quote_depth, 2)} do
+      {%Hybridsocial.Social.Post{} = quoted, depth} when depth > 0 ->
+        readable =
+          Keyword.get_lazy(opts, :readable_quotes, fn -> readable_quotes([quoted], opts) end)
+
+        if MapSet.member?(readable, quoted.id) do
+          nested_opts =
+            opts
+            |> Keyword.put(:quote_depth, depth - 1)
+            |> Keyword.put(:readable_quotes, readable)
+
+          quoted = Repo.preload(quoted, [:identity, quote: :identity])
+          {serialize(quoted, nested_opts), false}
+        else
+          {nil, true}
+        end
+
+      _ ->
+        {nil, false}
+    end
+  end
+
+  # The check covers both levels up front, so a page takes one pass however many
+  # quotes it has. A loaded quote can be nil, or the association not loaded.
+  defp readable_quotes(quotes, opts) do
+    first_level = Enum.filter(quotes, &match?(%Hybridsocial.Social.Post{}, &1))
+
+    second_level =
+      first_level
+      |> Repo.preload(:quote)
+      |> Enum.map(& &1.quote)
+      |> Enum.filter(&match?(%Hybridsocial.Social.Post{}, &1))
+
+    QuoteVisibility.readable_ids(
+      first_level ++ second_level,
+      Keyword.get(opts, :current_identity_id),
+      Keyword.get(opts, :is_staff)
+    )
+  end
+
   @doc """
   Serializes a list of posts, batch-loading user state for efficiency.
   """
@@ -194,6 +227,9 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
     # post also picks up staff fields without doing a second RBAC
     # lookup per item.
     opts = Keyword.put(opts, :is_staff, is_staff?)
+    posts = Repo.preload(posts, quote: [:identity, quote: :identity])
+    quotes = Enum.map(posts, & &1.quote)
+    opts = Keyword.put(opts, :readable_quotes, readable_quotes(quotes, opts))
     post_ids = Enum.map(posts, & &1.id)
 
     # Batch load user state
@@ -226,17 +262,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
 
       account = serialize_account(post.identity, badges)
 
-      quote_depth = Keyword.get(opts, :quote_depth, 2)
-
-      quote_post =
-        case {post.quote, quote_depth} do
-          {%Hybridsocial.Social.Post{} = q, depth} when depth > 0 ->
-            q = Repo.preload(q, [:identity, quote: :identity])
-            serialize(q, Keyword.put(opts, :quote_depth, depth - 1))
-
-          _ ->
-            nil
-        end
+      {quote_post, quote_unavailable} = serialize_quote(post, opts)
 
       sensitive =
         case post.identity do
@@ -284,6 +310,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
         target_media_preview_url: get_in(target_media_summaries, [post.id, :preview_url]),
         in_reply_to_account_id: in_reply_to_account_id,
         quote: quote_post,
+        quote_unavailable: quote_unavailable,
         card: card,
         mentions: mentions,
         tags: tags,
@@ -332,11 +359,13 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       |> MapSet.new()
 
     editable_pages = batch_editable_pages(serialized, viewer_id)
+    hidden_authors = QuoteVisibility.hidden_by_viewer(quote_author_ids(serialized), viewer_id)
 
     Enum.map(serialized, fn post ->
       id = post["id"]
 
       post
+      |> hide_quotes_from(hidden_authors)
       |> Map.put("is_boosted", MapSet.member?(boosts, id))
       |> Map.put("is_bookmarked", MapSet.member?(bookmarks, id))
       |> Map.put("is_muted", MapSet.member?(mutes, id))
@@ -346,6 +375,29 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       |> patch_page_can_edit(editable_pages)
     end)
   end
+
+  # The anonymous snapshot only shows quotes fit for anyone, but it can't know who
+  # this viewer has blocked or muted, so those come out here. Both quote levels.
+  defp quote_author_ids(serialized) do
+    serialized
+    |> Enum.flat_map(fn post ->
+      first = post["quote"] || %{}
+      second = first["quote"] || %{}
+      [get_in(first, ["account", "id"]), get_in(second, ["account", "id"])]
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp hide_quotes_from(%{"quote" => %{} = quoted} = post, hidden_authors) do
+    if MapSet.member?(hidden_authors, get_in(quoted, ["account", "id"])) do
+      post |> Map.put("quote", nil) |> Map.put("quote_unavailable", true)
+    else
+      Map.put(post, "quote", hide_quotes_from(quoted, hidden_authors))
+    end
+  end
+
+  defp hide_quotes_from(post, _hidden_authors), do: post
 
   # `page.can_edit` is viewer-dependent — whether THIS viewer may edit/delete a
   # post authored as a page. The anonymous snapshot bakes it `false`; recompute

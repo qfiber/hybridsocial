@@ -1141,6 +1141,8 @@
 
           {#if post.quote && !compact}
             <QuoteCard post={post.quote} />
+          {:else if post.quote_unavailable && !compact}
+            <div class="quote-unavailable">{$t('quote.unavailable')}</div>
           {/if}
 
           {#if youtubeRef && !compact && mediaAttachments.length === 0}
@@ -1818,6 +1820,15 @@
     border-color: var(--color-border);
     color: var(--color-text-tertiary);
     cursor: default;
+  }
+
+  .quote-unavailable {
+    margin-block-start: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
   }
 
   .post-pinned-indicator {
