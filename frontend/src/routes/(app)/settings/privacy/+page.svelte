@@ -120,7 +120,10 @@
     <div class="setting-row">
       <div class="setting-info">
         <span class="setting-label">Lock account</span>
-        <span class="setting-description">Manually approve follow requests</span>
+        <span class="setting-description">
+          Manually approve follow requests. Your profile and posts can't be viewed by
+          people who aren't logged in, or found through search engines.
+        </span>
       </div>
       <Toggle bind:checked={isLocked} name="locked" />
     </div>

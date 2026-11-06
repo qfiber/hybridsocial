@@ -83,7 +83,7 @@ defmodule HybridsocialWeb.CrawlerController do
   def profile(conn, %{"handle" => handle}) do
     if UserAgent.crawler?(conn) do
       case Accounts.get_identity_by_handle(handle) do
-        %{allow_unfurl: true, deleted_at: nil, is_suspended: false} = identity ->
+        %{allow_unfurl: true, is_locked: false, deleted_at: nil, is_suspended: false} = identity ->
           render_og(conn, profile_og_full(identity))
 
         %{deleted_at: nil, is_suspended: false} = identity ->
@@ -102,7 +102,9 @@ defmodule HybridsocialWeb.CrawlerController do
   # private/locked profile never leaks content.
   def profile_meta(conn, %{"handle" => handle}) do
     case Accounts.get_identity_by_handle(handle) do
-      %{allow_unfurl: true, deleted_at: nil, is_suspended: false} = identity ->
+      # A link preview of a locked account shows nothing but the placeholder, or it
+      # would give away the name and bio that the page itself no longer shows.
+      %{allow_unfurl: true, is_locked: false, deleted_at: nil, is_suspended: false} = identity ->
         json(conn, profile_og_full(identity) |> Map.merge(profile_access(identity)))
 
       %{deleted_at: nil, is_suspended: false} = identity ->
@@ -653,7 +655,10 @@ defmodule HybridsocialWeb.CrawlerController do
         {:ok, :private, post}
 
       %Post{visibility: "public", ap_id: ap_id} = post ->
-        if local_or_unknown_ap_id?(ap_id), do: {:ok, :public, post}, else: {:ok, :private, post}
+        if local_or_unknown_ap_id?(ap_id) and
+             not Repo.preload(post, :identity).identity.is_locked,
+           do: {:ok, :public, post},
+           else: {:ok, :private, post}
 
       %Post{} = post ->
         {:ok, :private, post}
