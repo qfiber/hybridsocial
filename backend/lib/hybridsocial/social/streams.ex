@@ -134,6 +134,7 @@ defmodule Hybridsocial.Social.Streams do
       |> where([p], p.sensitive == false)
       |> where([p], is_nil(p.spoiler_text) or p.spoiler_text == "")
       |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
+      |> Hybridsocial.Feeds.Visibility.exclude_locked_for_anonymous(viewer_id)
       |> Hybridsocial.Feeds.Visibility.apply_silence_filter()
       |> Hybridsocial.Feeds.Visibility.apply_blocked_hashtag_filter()
       |> apply_viewer_blocks(viewer_id)

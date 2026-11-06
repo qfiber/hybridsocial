@@ -89,6 +89,7 @@ defmodule Hybridsocial.Trending do
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> Visibility.apply_blocked_hashtag_filter()
+      |> Visibility.exclude_locked_for_anonymous(Keyword.get(opts, :viewer_id))
       |> Repo.all()
       |> Repo.preload(:identity)
       |> Map.new(&{&1.id, &1})
@@ -251,6 +252,13 @@ defmodule Hybridsocial.Trending do
         [_h, _ph, p],
         p.identity_id not in subquery(Visibility.publicly_hidden_author_ids())
       )
+      # Trending tags are a public list, so locked accounts don't feed them.
+      |> where(
+        [_h, _ph, p],
+        p.identity_id not in subquery(
+          from(i in Hybridsocial.Accounts.Identity, where: i.is_locked == true, select: i.id)
+        )
+      )
       |> group_by([h, _ph, _p], [h.id, h.name])
       |> select([h, _ph, p], %{
         hashtag_id: h.id,
@@ -330,6 +338,7 @@ defmodule Hybridsocial.Trending do
       |> join(:inner, [p], ph in "post_hashtags", on: ph.post_id == p.id)
       |> where([p, ph], ph.hashtag_id in type(^hashtag_ids, {:array, Ecto.UUID}))
       |> where([p, _ph], p.inserted_at >= ^history_cutoff and is_nil(p.deleted_at))
+      |> Visibility.exclude_locked_for_anonymous(nil)
       |> group_by([p, ph], [ph.hashtag_id, fragment("date_trunc('day', ?)", p.inserted_at)])
       |> select([p, ph], %{
         # `post_hashtags` is queried as a raw table source, so without

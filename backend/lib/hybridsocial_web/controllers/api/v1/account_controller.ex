@@ -349,7 +349,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   def followers(conn, %{"id" => id}) do
     identities =
       if account_visible?(id, conn),
-        do: Social.followers(id, conn_pagination_opts(conn)),
+        do: Social.followers(id, conn_pagination_opts(conn)) |> without_locked_if_anonymous(conn),
         else: []
 
     conn
@@ -360,7 +360,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   def following(conn, %{"id" => id}) do
     identities =
       if account_visible?(id, conn),
-        do: Social.following(id, conn_pagination_opts(conn)),
+        do: Social.following(id, conn_pagination_opts(conn)) |> without_locked_if_anonymous(conn),
         else: []
 
     conn
@@ -553,6 +553,13 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   defp profile_hidden?(identity, viewer_id) do
     Accounts.hidden_from_viewer?(identity, viewer_id) or
       (not is_nil(viewer_id) and either_blocked?(viewer_id, identity.id))
+  end
+
+  # Someone else's follow list mustn't name a locked account to an anonymous viewer.
+  defp without_locked_if_anonymous(identities, conn) do
+    if is_nil(viewer_identity_id(conn)),
+      do: Enum.reject(identities, & &1.is_locked),
+      else: identities
   end
 
   # Missing accounts stay visible here so the follow lists keep returning an
@@ -1102,7 +1109,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   # (optional auth): the viewer's follow state is fetched separately via
   # /accounts/relationships, same as other account lists.
   def trending_accounts(conn, _params) do
-    accounts = Accounts.list_trending_accounts()
+    accounts = Accounts.list_trending_accounts(viewer_id: viewer_identity_id(conn))
     json(conn, Enum.map(accounts, &serialize_identity/1))
   end
 

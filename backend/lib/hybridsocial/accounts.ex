@@ -1445,10 +1445,13 @@ defmodule Hybridsocial.Accounts do
         select: %{identity_id: f.followee_id, n: count(f.id)}
       )
 
+    include_locked = not is_nil(Keyword.get(opts, :viewer_id))
+
     from(i in Identity,
       where:
         i.type == "user" and is_nil(i.parent_identity_id) and is_nil(i.deleted_at) and
-          i.is_suspended == false and i.is_silenced == false,
+          i.is_suspended == false and i.is_silenced == false and
+          (^include_locked or i.is_locked == false),
       left_join: e in subquery(engagement),
       on: e.identity_id == i.id,
       left_join: fo in subquery(followers),

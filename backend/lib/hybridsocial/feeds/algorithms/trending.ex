@@ -106,6 +106,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)
       |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.exclude_locked_for_anonymous(identity_id)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
       |> Visibility.apply_blocked_hashtag_filter()

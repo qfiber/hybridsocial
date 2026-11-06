@@ -179,6 +179,28 @@ defmodule Hybridsocial.Feeds.Visibility do
   end
 
   @doc """
+  Excludes posts by locked accounts when nobody is logged in, because a locked
+  account is private to anonymous viewers. See `Accounts.hidden_from_viewer?/2`.
+
+  Anything shared between viewers, like the prewarmed snapshots, is built for
+  logged-in members too and must not use this. Anonymous requests skip those.
+  """
+  def exclude_locked_for_anonymous(query, nil) do
+    where(query, [p], p.identity_id not in subquery(locked_account_ids()))
+  end
+
+  def exclude_locked_for_anonymous(query, _viewer_id), do: query
+
+  @doc "Of the given identity ids, the locked ones, as a MapSet."
+  def locked_among(identity_ids) do
+    locked_account_ids() |> where([i], i.id in ^identity_ids) |> Repo.all() |> MapSet.new()
+  end
+
+  defp locked_account_ids do
+    Identity |> where([i], i.is_locked == true) |> select([i], i.id)
+  end
+
+  @doc """
   Excludes posts from silenced accounts on public/global timelines.
   Silenced users' posts are hidden from public timelines but remain visible
   to their followers. Respects silenced_until expiry.

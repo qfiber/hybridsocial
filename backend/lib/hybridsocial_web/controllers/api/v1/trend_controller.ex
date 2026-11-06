@@ -22,7 +22,8 @@ defmodule HybridsocialWeb.Api.V1.TrendController do
     limit = clamp_limit(Map.get(params, "limit"))
     offset = parse_int(Map.get(params, "offset"), 0)
 
-    trending = Trending.get_trending_posts(limit: limit, offset: offset)
+    viewer_id = conn.assigns[:current_identity] && conn.assigns.current_identity.id
+    trending = Trending.get_trending_posts(limit: limit, offset: offset, viewer_id: viewer_id)
 
     conn
     |> put_status(:ok)
