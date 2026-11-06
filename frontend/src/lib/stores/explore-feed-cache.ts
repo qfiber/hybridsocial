@@ -1,36 +1,28 @@
-// In-memory snapshot of the explore feed (Local / Global / Trending) for
-// the current session. Mirrors home-feed-cache.ts.
+// In-memory snapshots of the Explore feeds (Local / Global / Trending) for the
+// current session, one per tab. Mirrors home-feed-cache.ts.
 //
-// The explore page re-mounts whenever the user navigates away and back
-// (e.g. opens a post detail from the Global tab). Without this cache the
-// page clears `posts`, re-fetches, and resets `activeId` to the first
-// tab — so a back-nav from a Global post dropped the user on Local with
-// the scroll position lost (issue #53).
-//
-// Hydrating from the cache on mount restores the active tab and the same
-// DOM heights, which lets SvelteKit restore scroll cleanly. Session-
-// scoped only — dropped on a full reload.
+// The Explore page re-mounts whenever the user navigates away and back (e.g.
+// opens a post). Without this, the feed re-fetches and the scroll position is
+// lost, and Trending may even have re-ranked underneath them. Hydrating from
+// the snapshot keeps the same posts at the same DOM heights, so scroll restores
+// cleanly (#53). Session-scoped only: dropped on a full reload.
 
-import type { Post } from '$lib/api/types.js';
+import type { TimelineCache, TimelineSnapshot } from '$lib/components/feed/TimelineFeed.svelte';
 
-export interface ExploreFeedSnapshot {
-  posts: Post[];
-  cursor: string | null;
-  hasMore: boolean;
-  tabId: string;
-  scrollY?: number;
-}
+// Past this a feed is worth reloading: a back-nav restores the place, but someone
+// returning to a tab much later should see what's current.
+const MAX_AGE_MS = 10 * 60 * 1000;
 
-let snapshot: ExploreFeedSnapshot | null = null;
+const snapshots = new Map<string, { snap: TimelineSnapshot; savedAt: number }>();
 
-export function readExploreFeed(): ExploreFeedSnapshot | null {
-  return snapshot;
-}
-
-export function writeExploreFeed(snap: ExploreFeedSnapshot): void {
-  snapshot = snap;
-}
-
-export function clearExploreFeed(): void {
-  snapshot = null;
+export function exploreFeedCache(tabId: string): TimelineCache {
+  return {
+    read: () => {
+      const entry = snapshots.get(tabId);
+      return entry && Date.now() - entry.savedAt < MAX_AGE_MS ? entry.snap : null;
+    },
+    write: (snap) => {
+      snapshots.set(tabId, { snap, savedAt: Date.now() });
+    },
+  };
 }

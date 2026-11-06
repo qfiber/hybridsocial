@@ -98,6 +98,9 @@ defmodule Hybridsocial.Instance do
           video_matrix_limit: Config.get("video_matrix_limit", 8_294_400),
           image_matrix_limit: Config.get("image_matrix_limit", 33_177_600)
         },
+        feeds: %{
+          collapse_author_runs_after: Config.get("feed_collapse_author_runs_after", 2)
+        },
         polls: %{
           max_options: Config.get("max_poll_options", 4),
           max_characters_per_option: Config.get("max_poll_option_chars", 200),

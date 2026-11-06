@@ -398,7 +398,10 @@ defmodule Hybridsocial.Feeds do
       |> where([p], is_nil(p.hidden_at))
       |> exclude_unpublished()
       |> maybe_exclude_replies(include_replies)
-      |> apply_cursor_filters(opts)
+      # A remote `published` is whatever the sender claims; a future date would
+      # otherwise pin the post to the top of this feed.
+      |> where([p], coalesce(p.published_at, p.inserted_at) <= ^DateTime.utc_now())
+      |> apply_global_cursor_filters(opts)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
       |> Visibility.apply_blocked_hashtag_filter()
@@ -421,6 +424,69 @@ defmodule Hybridsocial.Feeds do
   defp apply_global_order(query, _newest) do
     order_by(query, [p], desc: coalesce(p.published_at, p.inserted_at), desc: p.id)
   end
+
+  # The cursor has to compare the same tuple the order uses. `apply_cursor_filters`
+  # compares last_activity_at, so on this feed a boundary post with a recent reply
+  # restarted the page, and an unseen post with one was skipped.
+  defp apply_global_cursor_filters(query, opts) do
+    query
+    |> global_cursor(Keyword.get(opts, :max_id), :older)
+    |> global_cursor(Keyword.get(opts, :min_id), :newer)
+    |> global_cursor(Keyword.get(opts, :since_id), :newer)
+  end
+
+  defp global_cursor(query, nil, _direction), do: query
+
+  defp global_cursor(query, id, direction) do
+    case lookup_post_time_cursor(id) do
+      nil -> query
+      boundary -> where_past_global_boundary(query, boundary, direction)
+    end
+  end
+
+  defp where_past_global_boundary(query, {at, id}, :older) do
+    where(
+      query,
+      [p],
+      fragment(
+        "(COALESCE(?, ?), ?) < (?, ?)",
+        p.published_at,
+        p.inserted_at,
+        p.id,
+        ^at,
+        type(^id, Ecto.UUID)
+      )
+    )
+  end
+
+  defp where_past_global_boundary(query, {at, id}, :newer) do
+    where(
+      query,
+      [p],
+      fragment(
+        "(COALESCE(?, ?), ?) > (?, ?)",
+        p.published_at,
+        p.inserted_at,
+        p.id,
+        ^at,
+        type(^id, Ecto.UUID)
+      )
+    )
+  end
+
+  defp lookup_post_time_cursor(id) when is_binary(id) do
+    with {:ok, uuid} <- Ecto.UUID.cast(id) do
+      Repo.one(
+        from p in Post,
+          where: p.id == ^uuid,
+          select: {coalesce(p.published_at, p.inserted_at), p.id}
+      )
+    else
+      _ -> nil
+    end
+  end
+
+  defp lookup_post_time_cursor(_), do: nil
 
   # ---------------------------------------------------------------------------
   # Group Timeline

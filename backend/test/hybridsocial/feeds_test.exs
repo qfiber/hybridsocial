@@ -284,6 +284,59 @@ defmodule Hybridsocial.FeedsTest do
       assert remote_hot.id in global_ids
     end
 
+    test "global_timeline pages by post time, even when a boundary post has later activity" do
+      author = create_user("global_cursor", "global_cursor@example.com")
+      now = DateTime.utc_now()
+
+      [newest, middle, oldest] =
+        for hours <- [1, 2, 3] do
+          create_post(author, %{content: "#{hours}h"})
+          |> Ecto.Changeset.change(published_at: DateTime.add(now, -hours, :hour))
+          |> Repo.update!()
+        end
+
+      # A reply bumps these posts' last_activity_at. That must not restart the
+      # page when one is the cursor, or skip one that hasn't been shown yet.
+      for post <- [newest, oldest] do
+        post |> Ecto.Changeset.change(last_activity_at: now) |> Repo.update!()
+      end
+
+      assert Feeds.global_timeline(max_id: newest.id) |> Enum.map(& &1.id) ==
+               [middle.id, oldest.id]
+    end
+
+    test "global_timeline leaves out a post dated in the future" do
+      author = create_user("global_future", "global_future@example.com")
+
+      future =
+        create_post(author, %{content: "from the future"})
+        |> Ecto.Changeset.change(published_at: DateTime.add(DateTime.utc_now(), 7, :day))
+        |> Repo.update!()
+
+      refute future.id in (Feeds.global_timeline() |> Enum.map(& &1.id))
+    end
+
+    test "sort: \"trending\" leaves out admin-hidden posts and orphan federated replies" do
+      author = create_user("trend_hidden", "trend_hidden@example.com")
+
+      hidden =
+        create_post(author, %{content: "hidden"})
+        |> Ecto.Changeset.change(reaction_count: 5, hidden_at: DateTime.utc_now())
+        |> Repo.update!()
+
+      orphan =
+        create_post(author, %{content: "orphan"})
+        |> Ecto.Changeset.change(reaction_count: 5, parent_ap_id: "https://elsewhere.example/1")
+        |> Repo.update!()
+
+      ranked =
+        Feeds.public_timeline(sort: "trending", local_only: false, viewer_id: nil)
+        |> Enum.map(& &1.id)
+
+      refute hidden.id in ranked
+      refute orphan.id in ranked
+    end
+
     test "sort: \"oldest\" returns public posts in ascending time order" do
       alice = create_user("oldest_a", "oldest_a@example.com")
       t0 = ~U[2026-01-01 00:00:00.000000Z]

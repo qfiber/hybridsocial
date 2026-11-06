@@ -402,6 +402,7 @@ defmodule HybridsocialWeb.Router do
 
     get "/public", TimelineController, :public
     get "/global", TimelineController, :global
+    get "/trending", TimelineController, :trending
     get "/streams", TimelineController, :streams
     get "/tag/:hashtag", TimelineController, :hashtag
   end
