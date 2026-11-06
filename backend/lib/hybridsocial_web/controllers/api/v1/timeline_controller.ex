@@ -4,11 +4,11 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   alias Hybridsocial.Feeds
   alias Hybridsocial.Feeds.Snapshot
   alias Hybridsocial.Trending.ExploreFeed
-  alias Hybridsocial.Config
   alias Hybridsocial.Cache
   alias HybridsocialWeb.Serializers.PostSerializer
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
   alias HybridsocialWeb.Compat
+  alias HybridsocialWeb.Helpers.TimelineAccess
 
   # Short cache window for the *serialized* first page of the public /
   # global feeds. The heavy cost is the query plus per-post serialization
@@ -20,35 +20,9 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   # load; a 30s TTL keeps it fresh enough without an invalidation hook.
   @feed_cache_ttl 30
 
-  # Timeline access levels:
-  # "none"      — disallow all, require login
-  # "local"     — allow local + trending, block global
-  # "all"       — allow everything
-  defp timeline_access do
-    Config.get("public_timeline_access", "all")
-  end
-
-  defp check_timeline_access(conn, level) do
-    has_user = conn.assigns[:current_identity] != nil
-    access = timeline_access()
-
-    cond do
-      has_user -> :ok
-      access == "none" -> :denied
-      access == "local" and level == :global -> :denied
-      true -> :ok
-    end
-  end
-
-  defp deny_access(conn) do
-    conn
-    |> put_status(:unauthorized)
-    |> json(%{
-      error: "timeline.login_required",
-      message: "You need to create an account to view this timeline."
-    })
-    |> halt()
-  end
+  defp timeline_access, do: TimelineAccess.level()
+  defp check_timeline_access(conn, level), do: TimelineAccess.check(conn, level)
+  defp deny_access(conn), do: TimelineAccess.deny(conn)
 
   @doc "GET /api/v1/timelines/home - Authenticated home timeline"
   def home(conn, params) do

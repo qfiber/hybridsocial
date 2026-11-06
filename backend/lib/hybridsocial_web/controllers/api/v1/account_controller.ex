@@ -5,6 +5,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   alias Hybridsocial.Accounts.Identity
   alias Hybridsocial.Social
   alias HybridsocialWeb.Compat
+  alias HybridsocialWeb.Helpers.TimelineAccess
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   @doc """
@@ -1109,8 +1110,19 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
   # (optional auth): the viewer's follow state is fetched separately via
   # /accounts/relationships, same as other account lists.
   def trending_accounts(conn, _params) do
-    accounts = Accounts.list_trending_accounts(viewer_id: viewer_identity_id(conn))
-    json(conn, Enum.map(accounts, &serialize_identity/1))
+    case TimelineAccess.check(conn, :local) do
+      :denied ->
+        TimelineAccess.deny(conn)
+
+      :ok ->
+        accounts =
+          Accounts.list_trending_accounts(
+            viewer_id: viewer_identity_id(conn),
+            local_only: TimelineAccess.local_only?(conn)
+          )
+
+        json(conn, Enum.map(accounts, &serialize_identity/1))
+    end
   end
 
   # --- Content Filters ---

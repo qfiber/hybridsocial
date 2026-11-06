@@ -67,6 +67,7 @@ defmodule Hybridsocial.Trending do
   def get_trending_posts(opts \\ []) do
     limit = parse_limit(opts)
     offset = parse_offset(opts)
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     trending =
       TrendingData
@@ -89,7 +90,10 @@ defmodule Hybridsocial.Trending do
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> Visibility.apply_blocked_hashtag_filter()
-      |> Visibility.exclude_locked_for_anonymous(Keyword.get(opts, :viewer_id))
+      |> Visibility.exclude_locked_for_anonymous(viewer_id)
+      |> Visibility.apply_block_filter(viewer_id)
+      |> Visibility.apply_mute_filter(viewer_id)
+      |> maybe_local_only(Keyword.get(opts, :local_only, false))
       |> Repo.all()
       |> Repo.preload(:identity)
       |> Map.new(&{&1.id, &1})
@@ -99,6 +103,13 @@ defmodule Hybridsocial.Trending do
     end)
     |> Enum.filter(fn %{post: post} -> post != nil end)
   end
+
+  defp maybe_local_only(query, true) do
+    local = from(i in Hybridsocial.Accounts.Identity, where: i.is_local == true, select: i.id)
+    where(query, [p], p.identity_id in subquery(local))
+  end
+
+  defp maybe_local_only(query, _), do: query
 
   @doc """
   Returns precomputed trending hashtags with limit/offset.

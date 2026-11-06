@@ -107,6 +107,8 @@ defmodule HybridsocialWeb.Api.V1.AnonymousLockedRoutesTest do
   end
 
   test "trending accounts", %{conn: conn} = ctx do
+    {:ok, _} = Posts.react(ctx.locked_post.id, user("fan").id, "like")
+
     anonymous = conn |> get("/api/v1/trends/accounts") |> json_response(200) |> ids()
     refute ctx.locked.id in anonymous
 
