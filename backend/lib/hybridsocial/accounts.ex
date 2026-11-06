@@ -650,8 +650,17 @@ defmodule Hybridsocial.Accounts do
 
   # --- Profile updates ---
 
-  def update_identity(identity, attrs) do
-    case identity |> Identity.update_changeset(attrs) |> Repo.update() do
+  def update_identity(identity, attrs, opts \\ []) do
+    changeset =
+      case Keyword.get(opts, :profile_fields) do
+        nil ->
+          Identity.update_changeset(identity, attrs)
+
+        fields ->
+          identity |> Identity.update_changeset(attrs) |> Identity.put_profile_fields(fields)
+      end
+
+    case Repo.update(changeset) do
       {:ok, updated} ->
         Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_updated, updated})
         {:ok, updated}
