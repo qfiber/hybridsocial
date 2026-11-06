@@ -1,4 +1,8 @@
 {
+  "settings.sounds_title": "الأصوات",
+  "settings.sounds_hint": "تُحفظ على هذا الجهاز وتُطبَّق فورًا.",
+  "settings.sound_notifications": "تشغيل صوت عند الإشعارات",
+  "settings.sound_messages": "تشغيل صوت عند الرسائل المباشرة",
   "notifications.title": "الإشعارات",
   "notifications.mark_all_read": "تعليم الكل كمقروء",
   "notifications.view_all": "كل الإشعارات",

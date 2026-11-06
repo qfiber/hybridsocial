@@ -7,6 +7,45 @@ defmodule Hybridsocial.NotificationsTest do
   # create_notification/1
   # ---------------------------------------------------------------------------
 
+  describe "the in-app preference" do
+    setup do
+      recipient = create_user("inapp_recipient", "inapp_recipient@example.com")
+      actor = create_user("inapp_actor", "inapp_actor@example.com")
+      Phoenix.PubSub.subscribe(Hybridsocial.PubSub, "user:#{recipient.id}")
+      %{recipient: recipient, actor: actor}
+    end
+
+    defp notify(recipient, actor) do
+      Notifications.create_notification(%{
+        recipient_id: recipient.id,
+        actor_id: actor.id,
+        type: "follow"
+      })
+    end
+
+    test "by default a notification goes out live", %{recipient: recipient, actor: actor} do
+      assert {:ok, _} = notify(recipient, actor)
+      assert_receive %{event: "notification"}
+    end
+
+    test "turned off, nothing goes out live, so nothing rings", %{
+      recipient: recipient,
+      actor: actor
+    } do
+      {:ok, _} = Notifications.update_preference(recipient.id, "follow", %{in_app: false})
+
+      assert {:ok, %{id: _}} = notify(recipient, actor)
+      refute_receive %{event: "notification"}, 100
+    end
+
+    test "turning off one type leaves the others live", %{recipient: recipient, actor: actor} do
+      {:ok, _} = Notifications.update_preference(recipient.id, "reaction", %{in_app: false})
+
+      assert {:ok, _} = notify(recipient, actor)
+      assert_receive %{event: "notification"}
+    end
+  end
+
   describe "create_notification/1" do
     test "creates a notification with valid attrs" do
       alice = create_user("notif_alice1", "notif_alice1@example.com")
