@@ -176,7 +176,6 @@ defmodule Hybridsocial.Accounts.Identity do
     :bio,
     :avatar_url,
     :header_url,
-    :metadata,
     :is_locked,
     :allow_group_invites,
     :allow_page_invites,
@@ -207,6 +206,54 @@ defmodule Hybridsocial.Accounts.Identity do
     |> reject_bot_change_if_forced(identity)
     |> reject_type_change_on_main_account(identity)
   end
+
+  @profile_field_name_max 60
+  @profile_field_value_max 280
+
+  @doc """
+  The profile fields a user wrote, under `metadata["profile_fields"]`. This is the
+  only part of `metadata` a user can change, and only through this function. The
+  caller applies the tier's cap on how many.
+  """
+  def put_profile_fields(changeset, fields) when is_list(fields) do
+    metadata = get_field(changeset, :metadata) || %{}
+
+    put_change(
+      changeset,
+      :metadata,
+      Map.put(metadata, "profile_fields", clean_profile_fields(fields))
+    )
+  end
+
+  @doc """
+  An identity's profile fields as `[%{"name" => _, "value" => _}]`, safe to show or
+  federate. Rows written before writes were restricted can hold anything here, so
+  this cleans on the way out too.
+  """
+  def profile_fields(%{metadata: %{"profile_fields" => fields}}) when is_list(fields) do
+    clean_profile_fields(fields)
+  end
+
+  def profile_fields(_identity), do: []
+
+  defp clean_profile_fields(fields) do
+    fields
+    |> Enum.flat_map(fn
+      %{"name" => name, "value" => value} when is_binary(name) and is_binary(value) ->
+        [
+          %{
+            "name" => clamp(name, @profile_field_name_max),
+            "value" => clamp(value, @profile_field_value_max)
+          }
+        ]
+
+      _ ->
+        []
+    end)
+    |> Enum.reject(&(&1["name"] == "" and &1["value"] == ""))
+  end
+
+  defp clamp(value, max), do: value |> String.trim() |> String.slice(0, max)
 
   def admin_update_changeset(identity, attrs) do
     identity
