@@ -386,7 +386,7 @@
 </script>
 
 <svelte:head>
-  <title>{account ? (account.display_name || account.handle) : 'Profile'} - {$instanceName}</title>
+  <title>{account ? (account.display_name || account.handle) : (pageState.data.seo?.name ?? 'Profile')} - {$instanceName}</title>
 </svelte:head>
 
 <div class="profile-page">

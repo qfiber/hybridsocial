@@ -80,7 +80,7 @@
 	handle {
 		import /etc/caddy/waf.caddy
 
-		@api path /api/* /.well-known/* /nodeinfo/* /inbox /users/* /actors/* /activities/* /oauth/* /media/* /proxy/*
+		@api path /api/* /.well-known/* /nodeinfo/* /inbox /users/* /actors/* /activities/* /oauth/* /media/* /proxy/* /robots.txt /sitemap.xml /sitemap/*
 		handle @api {
 			reverse_proxy backend:4000
 		}
