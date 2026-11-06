@@ -19,6 +19,7 @@
     compact = false,
     emptyMessage = '',
     emptyAction,
+    collapseAuthorRunsAfter = 0,
     filterContext = 'home',
     viewerContext = null,
     removeOnEvents = [],
@@ -30,6 +31,12 @@
     compact?: boolean;
     emptyMessage?: string;
     emptyAction?: { label: string; onclick: () => void };
+    /**
+     * After this many consecutive posts by one author, fold the rest of the
+     * run behind a "show more" button, so one prolific account can't push
+     * everyone else off the feed. 0 keeps every post.
+     */
+    collapseAuthorRunsAfter?: number;
     filterContext?: string;
     // Threaded through to PostCard so the pin badge / Unpin entry are
     // scope-correct. See PostCard.viewerContext.
@@ -137,7 +144,11 @@
     return measuredHeights.get(id) ?? 0;
   }
 
-  let visiblePosts: FeedEntry[] = $derived(
+  // Posts someone has chosen to unfold. Tracked per post rather than per run,
+  // so a new post arriving at the top doesn't fold a run back up.
+  let expandedIds = $state(new Set<string>());
+
+  let filteredPosts: FeedEntry[] = $derived(
     (() => {
       // Dedupe by id at the render layer. Multiple call sites push
       // into `posts` (pagination append, optimistic insert, SSE
@@ -159,6 +170,60 @@
       return result;
     })(),
   );
+
+  type FoldedRun = { ids: string[]; name: string };
+
+  // `folded` is keyed by the last post shown before the run's hidden part, which
+  // is where its "show more" button goes.
+  let folding = $derived(
+    (() => {
+      const shown: FeedEntry[] = [];
+      const folded = new Map<string, FoldedRun>();
+      if (collapseAuthorRunsAfter <= 0) return { shown: filteredPosts, folded };
+
+      let author: string | undefined;
+      let runLength = 0;
+      let lastShownId = '';
+      for (const entry of filteredPosts) {
+        const account = (isBoostEntry(entry) ? entry.post : entry).account;
+        const authorId = account?.id ?? entry.id;
+        runLength = authorId === author ? runLength + 1 : 1;
+        author = authorId;
+
+        if (runLength <= collapseAuthorRunsAfter || expandedIds.has(entry.id)) {
+          shown.push(entry);
+          lastShownId = entry.id;
+        } else {
+          const run = folded.get(lastShownId) ?? {
+            ids: [],
+            name: account?.display_name || account?.handle || '',
+          };
+          run.ids.push(entry.id);
+          folded.set(lastShownId, run);
+        }
+      }
+      return { shown, folded };
+    })(),
+  );
+
+  let visiblePosts: FeedEntry[] = $derived(folding.shown);
+
+  function unfold(run: FoldedRun) {
+    expandedIds = new Set([...expandedIds, ...run.ids]);
+  }
+
+  // Folding can leave a loaded page adding little or no height. The scroll
+  // observer only fires when the sentinel crosses into view, so if it never left
+  // the feed would stop here. Keep loading while it's still in range.
+  $effect(() => {
+    if (collapseAuthorRunsAfter <= 0 || loading || !hasMore || !sentinelEl || !onloadmore) return;
+    void visiblePosts.length;
+    const load = onloadmore;
+    const frame = requestAnimationFrame(() => {
+      if (sentinelEl && sentinelEl.getBoundingClientRect().top < window.innerHeight + 200) load();
+    });
+    return () => cancelAnimationFrame(frame);
+  });
 
   // Non-reactive tracker — avoids $effect infinite loop
   let _knownIds = new Set<string>();
@@ -332,6 +397,12 @@
           </div>
         {/if}
       </div>
+      {#if folding.folded.has(entry.id)}
+        {@const run = folding.folded.get(entry.id)!}
+        <button type="button" class="feed-unfold" onclick={() => unfold(run)}>
+          {$t('feed.show_more_from', { count: run.ids.length, name: run.name })}
+        </button>
+      {/if}
     {/if}
   {/each}
 
@@ -514,6 +585,36 @@
     font-weight: 700;
     color: var(--color-text);
     margin-block-end: var(--space-2);
+  }
+
+  .feed-unfold {
+    align-self: center;
+    margin-block-start: -12px;
+    padding: 6px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .feed-unfold:hover {
+    background: var(--color-surface-hover, rgba(0, 0, 0, 0.06));
+  }
+
+  /* A taller tap target on touch, without changing how the button looks. */
+  @media (pointer: coarse) {
+    .feed-unfold {
+      position: relative;
+    }
+
+    .feed-unfold::after {
+      content: '';
+      position: absolute;
+      inset: -8px 0;
+    }
   }
 
   .feed-empty-action {

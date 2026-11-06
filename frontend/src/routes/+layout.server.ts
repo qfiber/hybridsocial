@@ -29,6 +29,9 @@ export const load: LayoutServerLoad = async ({ fetch }) => {
 
     return {
       instance: {
+        configuration: {
+          feeds: (info.configuration as { feeds?: unknown } | undefined)?.feeds ?? null,
+        },
         title: (info.title as string) || 'HybridSocial',
         description:
           (info.short_description as string) || (info.description as string) || '',

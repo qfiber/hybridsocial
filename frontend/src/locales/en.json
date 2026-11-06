@@ -260,6 +260,8 @@
   "feed.new_posts_aria.other": "{display} new posts. Scroll to top to view.",
   "feed.show_new_posts.one": "{count} new post",
   "feed.show_new_posts.other": "{count} new posts",
+  "feed.show_more_from.one": "Show {count} more post from {name}",
+  "feed.show_more_from.other": "Show {count} more posts from {name}",
   "announcement.dismiss": "Dismiss announcement",
   "footer.about": "About",
   "footer.privacy": "Privacy",

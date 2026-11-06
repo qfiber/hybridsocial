@@ -80,6 +80,14 @@
     if (isTopTab(linked)) changeTopTab(linked);
   });
 
+  // Admin-tunable (`feed_collapse_author_runs_after`), 0 turns it off.
+  let collapseAfter = $derived(
+    Number(
+      (page.data as { instance?: { configuration?: { feeds?: { collapse_author_runs_after?: number } } } })
+        .instance?.configuration?.feeds?.collapse_author_runs_after ?? 0,
+    ),
+  );
+
   let exploreTabs = $derived<TimelineTab[]>([
     {
       id: 'local',
@@ -92,6 +100,7 @@
       },
       accepts: isLocalPost,
       emptyMessage: $t('explore.empty_local'),
+      collapseAuthorRunsAfter: collapseAfter,
     },
     {
       id: 'global',

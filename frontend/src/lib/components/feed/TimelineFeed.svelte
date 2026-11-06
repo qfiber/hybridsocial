@@ -24,6 +24,8 @@
     emptyMessage: string;
     /** Optional way out of an empty feed, e.g. a link to another tab. */
     emptyAction?: { label: string; onclick: () => void };
+    /** See FeedList. Fold a run by one author after this many posts. */
+    collapseAuthorRunsAfter?: number;
   }
 
   export interface TimelineSnapshot {
@@ -286,6 +288,7 @@
     onloadmore={feed.loadMore}
     emptyMessage={activeTab?.emptyMessage ?? ''}
     emptyAction={activeTab?.emptyAction}
+    collapseAuthorRunsAfter={activeTab?.collapseAuthorRunsAfter ?? 0}
     {filterContext}
   />
 </div>
