@@ -31,7 +31,12 @@ defmodule Hybridsocial.Notifications do
 
         case result do
           {:ok, notification} ->
-            broadcast_to_user(notification)
+            # The in-app switch governs the live event, which is what rings the
+            # bell and bumps the badge. The row still backs push and email.
+            if should_notify?(recipient_id, notification.type, :in_app) do
+              broadcast_to_user(notification)
+            end
+
             maybe_deliver(notification, attrs, actor_id)
             # Bot owners can subscribe to events over an outbound
             # webhook; this is a no-op for human recipients and for

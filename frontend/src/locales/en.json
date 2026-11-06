@@ -1,4 +1,8 @@
 {
+  "settings.sounds_title": "Sounds",
+  "settings.sounds_hint": "Saved on this device and applied right away.",
+  "settings.sound_notifications": "Play a sound for notifications",
+  "settings.sound_messages": "Play a sound for direct messages",
   "app.name": "HybridSocial",
   "app.tagline": "Decentralized social networking",
   "nav.home": "Home",

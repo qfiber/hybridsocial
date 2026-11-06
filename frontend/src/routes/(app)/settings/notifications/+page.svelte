@@ -4,6 +4,13 @@
   import { addToast } from '$lib/stores/toast.js';
   import AsyncState from '$lib/components/ui/AsyncState.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import { t } from '$lib/stores/i18n.js';
+  import {
+    getMessageSoundEnabled,
+    getNotificationSoundEnabled,
+    setMessageSoundEnabled,
+    setNotificationSoundEnabled,
+  } from '$lib/stores/sound.js';
 
   interface ChannelPrefs { email: boolean; push: boolean; in_app: boolean }
 
@@ -28,6 +35,10 @@
   let loading = $state(true);
   let loadError = $state(false);
   let saving = $state(false);
+
+  // Kept on this device, so these apply at once rather than on Save.
+  let notificationSound = $state(getNotificationSoundEnabled());
+  let messageSound = $state(getMessageSoundEnabled());
 
   function pref(type: string): ChannelPrefs {
     return prefs[type] ?? { email: true, push: true, in_app: true };
@@ -116,6 +127,29 @@
         {/each}
       </div>
 
+      <div class="notif-sounds" role="group" aria-labelledby="notif-sounds-title">
+        <h2 id="notif-sounds-title" class="notif-sounds-title">{$t('settings.sounds_title')}</h2>
+        <p class="notif-desc">{$t('settings.sounds_hint')}</p>
+        <label class="notif-sound-row">
+          <span>{$t('settings.sound_notifications')}</span>
+          <input
+            type="checkbox"
+            class="notif-check"
+            bind:checked={notificationSound}
+            onchange={() => setNotificationSoundEnabled(notificationSound)}
+          />
+        </label>
+        <label class="notif-sound-row">
+          <span>{$t('settings.sound_messages')}</span>
+          <input
+            type="checkbox"
+            class="notif-check"
+            bind:checked={messageSound}
+            onchange={() => setMessageSoundEnabled(messageSound)}
+          />
+        </label>
+      </div>
+
       <div class="notif-actions">
         <button class="stitch-btn-primary" type="submit" disabled={saving}>
           {#if saving}<Spinner size={16} color="#fff" />{/if}
@@ -201,6 +235,30 @@
   .notif-desc {
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
+  }
+
+  .notif-sounds {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-block-start: var(--space-5);
+  }
+
+  .notif-sounds-title {
+    margin: 0;
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .notif-sound-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    min-height: 44px;
+    color: var(--color-text);
+    cursor: pointer;
   }
 
   .notif-channels {

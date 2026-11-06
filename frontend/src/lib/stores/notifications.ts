@@ -339,7 +339,7 @@ export function connectNotificationStream(apiBase: string): void {
         // Fire the bell sound. The sound module self-gates on user
         // preference + audio unlock state, so nothing plays until the
         // user has interacted with the page and opted in.
-        import('./sound.js').then((m) => m.playNotificationSound());
+        import('./sound.js').then((m) => m.playNotificationSound(`notification:${notification.id}`));
       } catch {
         // Ignore malformed events
       }
