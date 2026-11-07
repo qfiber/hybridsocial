@@ -10,6 +10,7 @@ defmodule Hybridsocial.Feeds do
   alias Hybridsocial.Social.{Post, Follow, Block, Boost, List, ListMember}
   alias Hybridsocial.Feeds.Visibility
   alias Hybridsocial.Feeds.AlgorithmResolver
+  alias Hybridsocial.Feeds.Algorithms.Chronological
   alias Hybridsocial.Cache.FeedCache
 
   @default_limit 20
@@ -35,7 +36,11 @@ defmodule Hybridsocial.Feeds do
   def home_timeline(identity_id, opts \\ []) do
     algorithm = AlgorithmResolver.impl(opts)
 
-    if cacheable?(opts) do
+    # The cache is one slot per identity, so it can hold only one algorithm's
+    # page. Sharing it served Latest's posts on Top's first page, and Top's
+    # cursor then didn't resolve. The controller caches each algorithm's
+    # serialized page under its own key.
+    if algorithm == Chronological and cacheable?(opts) do
       case safe_cache_get(fn -> FeedCache.get_home_timeline(identity_id) end) do
         nil ->
           result = algorithm.home_feed(identity_id, opts)
@@ -72,12 +77,10 @@ defmodule Hybridsocial.Feeds do
     # Explore's sort control (and the standalone Trending tab) picks the order
     # via `:sort` — "trending" | "newest" (default) | "oldest".
     #
-    # "trending" routes through the shared Trending algorithm (engagement ×
-    # velocity × decay, already viewer block/mute-filtered), the same ranking
-    # Home's "Top" uses — scoped to LOCAL authors when opts carries
-    # `local_only: true` (Explore's Local tab). Otherwise `?sort=trending` was
-    # silently ignored and Explore returned newest-first, never the most-reacted
-    # posts. Bypasses the chronological FeedCache; the controller caches the
+    # "trending" routes through the shared Trending algorithm (Explore's
+    # precomputed Trending feed, viewer-filtered on read), the same feed Home's
+    # "Top" uses, scoped to local authors when opts carries `local_only: true`.
+    # Bypasses the chronological FeedCache; the controller caches the
     # serialized page under a sort-specific key.
     case Keyword.get(opts, :sort) do
       "trending" ->
@@ -396,9 +399,9 @@ defmodule Hybridsocial.Feeds do
     * `:include_replies` - include replies (default false)
   """
   def global_timeline(opts \\ []) do
-    # Explore's sort control also drives Global: "trending" ranks the whole
-    # fediverse by engagement (the Trending algorithm, unscoped — no
-    # local_only), while "newest"/"oldest" order chronologically.
+    # Explore's sort control also drives Global: "trending" is the whole
+    # Trending feed (no local_only), while "newest"/"oldest" order
+    # chronologically.
     case Keyword.get(opts, :sort) do
       "trending" ->
         Hybridsocial.Feeds.Algorithms.Trending.home_feed(Keyword.get(opts, :viewer_id), opts)

@@ -22,8 +22,8 @@
     return Array.isArray(result) ? result : ((result as any).data ?? []);
   }
 
-  // All three home tabs share the personal 'home' stream — a new post
-  // from someone you follow prepends regardless of the active ranking.
+  // Latest and For You share the personal 'home' stream: a new post from
+  // someone you follow prepends to either.
   const tabs: TimelineTab[] = [
     {
       id: 'latest',
@@ -43,7 +43,10 @@
       id: 'top',
       label: 'Top',
       load: (c) => loadHome(c, 'trending'),
-      stream: { kind: 'home' },
+      // The precomputed Trending feed, like Explore's tab: neither live posts
+      // nor the composer's optimistic post belong at the top of a ranking.
+      stream: null,
+      accepts: () => false,
       emptyMessage: EMPTY,
     },
   ];

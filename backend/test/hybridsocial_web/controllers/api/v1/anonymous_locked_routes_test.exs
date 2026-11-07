@@ -59,6 +59,9 @@ defmodule HybridsocialWeb.Api.V1.AnonymousLockedRoutesTest do
       {:ok, _} = Posts.react(post.id, user("fan").id, "like")
     end
 
+    # The trending order reads the precomputed Trending feed.
+    :ok = Trending.ExploreFeed.refresh()
+
     assert_only_members_see_locked(conn, "/api/v1/timelines/public?sort=trending", ctx)
     assert_only_members_see_locked(conn, "/api/v1/timelines/global?sort=trending", ctx)
   end
