@@ -5,7 +5,10 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			// The mobile More sheet is open (shallow routing, BottomTabs.svelte).
+			moreSheet?: boolean;
+		}
 		// interface Platform {}
 	}
 }

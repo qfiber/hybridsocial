@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { goto } from '$app/navigation';
+  import { goto, pushState } from '$app/navigation';
   import Badge from '$lib/components/ui/Badge.svelte';
   import { currentUser, clearAuth } from '$lib/stores/auth.js';
   import { unreadCount } from '$lib/stores/notifications.js';
@@ -69,7 +69,11 @@
     { href: '/settings', labelKey: 'nav.settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
   ]);
 
-  let showMoreSheet = $state(false);
+  // The sheet is a shallow-routing entry (`page.state.moreSheet`), so the
+  // phone's Back button and swipe-back close it through the router instead of
+  // leaving the page. A raw `history.pushState` entry has no router index, so
+  // Back from a page opened in the sheet only changed the address bar.
+  let showMoreSheet = $derived(page.state.moreSheet === true);
 
   function isActive(href: string): boolean {
     return page.url.pathname === href || page.url.pathname.startsWith(href + '/');
@@ -87,13 +91,29 @@
     }
     if (tab.isMore) {
       e.preventDefault();
-      showMoreSheet = !showMoreSheet;
+      if (showMoreSheet) closeMoreSheet();
+      else openMoreSheet();
       return;
     }
+    if (showMoreSheet) navigateFromSheet(e, tab.href);
   }
 
+  function openMoreSheet() {
+    pushState('', { moreSheet: true });
+  }
+
+  // Tap-outside, Escape and More again: step back off the sheet's entry.
   function closeMoreSheet() {
-    showMoreSheet = false;
+    if (showMoreSheet) history.back();
+  }
+
+  // Replace the sheet's entry with the destination rather than pushing on top
+  // of it, or Back from the destination would land on the sheet again.
+  // Modified clicks (new tab or window) keep the browser's default.
+  function navigateFromSheet(e: MouseEvent, href: string) {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    goto(href, { replaceState: true });
   }
 
   function handleSheetKey(e: KeyboardEvent) {
@@ -103,14 +123,13 @@
   // The header avatar dropdown (the old logout home) is hidden on mobile,
   // so the More sheet carries logout now — separated from nav links.
   async function handleLogout() {
-    closeMoreSheet();
     try {
       await api.post('/api/v1/auth/logout');
     } catch {
       // Log out locally even if the API call fails.
     }
     clearAuth();
-    goto('/login');
+    goto('/login', { replaceState: true });
   }
 </script>
 
@@ -172,7 +191,7 @@
             href={item.href}
             class="more-sheet-item"
             class:active={isActive(item.href)}
-            onclick={closeMoreSheet}
+            onclick={(e) => navigateFromSheet(e, item.href)}
           >
             <span class="more-sheet-icon-wrap">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
