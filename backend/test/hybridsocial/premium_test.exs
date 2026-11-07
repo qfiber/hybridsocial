@@ -1,7 +1,9 @@
 defmodule Hybridsocial.PremiumTest do
   use Hybridsocial.DataCase, async: true
 
+  alias Hybridsocial.Accounts.Identity
   alias Hybridsocial.Premium
+  alias Hybridsocial.Repo
 
   describe "apply_for_verification/3" do
     test "creates a verification request" do
@@ -26,18 +28,91 @@ defmodule Hybridsocial.PremiumTest do
   end
 
   describe "approve_verification/2" do
-    test "approves a pending verification" do
+    test "approves the request and verifies the account, without a paid tier" do
+      admin = create_user("approveadmin", "approveadmin@test.com")
       identity = create_user("approveuser", "approve@test.com")
       {:ok, verification} = Premium.apply_for_verification(identity.id, "manual")
 
-      assert {:ok, updated} = Premium.approve_verification(verification.id, "admin")
+      assert {:ok, updated} = Premium.approve_verification(verification.id, admin.id)
       assert updated.status == "approved"
       assert updated.verified_at != nil
+
+      account = Repo.get!(Identity, identity.id)
+      assert account.verified_at
+      assert account.verified_by_id == admin.id
+      assert account.verification_tier == "free"
+      assert Identity.verified?(account)
+    end
+
+    test "a decided request can't be approved again" do
+      admin = create_user("approveadmin2", "approveadmin2@test.com")
+      identity = create_user("approveuser2", "approve2@test.com")
+      {:ok, verification} = Premium.apply_for_verification(identity.id, "manual")
+      {:ok, _} = Premium.reject_verification(verification.id, admin.id)
+
+      assert {:error, :not_pending} = Premium.approve_verification(verification.id, admin.id)
+      refute Repo.get!(Identity, identity.id).verified_at
     end
 
     test "returns error for non-existent verification" do
       assert {:error, :not_found} =
-               Premium.approve_verification(Ecto.UUID.generate(), "admin")
+               Premium.approve_verification(Ecto.UUID.generate(), Ecto.UUID.generate())
+    end
+  end
+
+  describe "applying while verified or waiting" do
+    test "a second request while one is pending is refused" do
+      identity = create_user("dupapply", "dupapply@test.com")
+      {:ok, _} = Premium.apply_for_verification(identity.id, "manual")
+
+      assert {:error, :already_pending} = Premium.apply_for_verification(identity.id, "manual")
+    end
+
+    test "a verified account can't apply" do
+      admin = create_user("applyadmin", "applyadmin@test.com")
+      identity = create_user("verifiedapply", "verifiedapply@test.com")
+      {:ok, _} = Premium.verify_identity(identity.id, admin.id)
+
+      assert {:error, :already_verified} = Premium.apply_for_verification(identity.id, "manual")
+    end
+  end
+
+  describe "peer vouches" do
+    test "don't verify the account on their own, however many there are" do
+      identity = create_user("vouched", "vouched@test.com")
+      {:ok, verification} = Premium.apply_for_verification(identity.id, "peer_vouch")
+
+      for n <- 1..4 do
+        voucher = create_user("voucher#{n}", "voucher#{n}@test.com")
+        assert {:ok, _} = Premium.vouch_for(verification.id, voucher.id)
+      end
+
+      assert Repo.get!(Premium.Verification, verification.id).status == "pending"
+      refute Repo.get!(Identity, identity.id).verified_at
+    end
+  end
+
+  describe "revoke_verification/1" do
+    test "removes staff verification and leaves a paid tier alone" do
+      admin = create_user("revokeadmin", "revokeadmin@test.com")
+      identity = create_user("revokeuser", "revoke@test.com")
+
+      identity
+      |> Ecto.Changeset.change(verification_tier: "verified_creator")
+      |> Repo.update!()
+
+      {:ok, _} = Premium.verify_identity(identity.id, admin.id)
+      assert {:ok, revoked} = Premium.revoke_verification(identity.id)
+
+      assert revoked.verified_at == nil
+      assert revoked.verified_by_id == nil
+      assert revoked.verification_tier == "verified_creator"
+      refute Premium.verified?(identity.id)
+    end
+
+    test "an unverified account is an error" do
+      identity = create_user("neververified", "neververified@test.com")
+      assert {:error, :not_verified} = Premium.revoke_verification(identity.id)
     end
   end
 
@@ -90,7 +165,7 @@ defmodule Hybridsocial.PremiumTest do
     test "returns true when approved" do
       identity = create_user("verified1", "verified1@test.com")
       {:ok, verification} = Premium.apply_for_verification(identity.id, "manual")
-      {:ok, _} = Premium.approve_verification(verification.id, "admin")
+      {:ok, _} = Premium.approve_verification(verification.id, identity.id)
 
       assert Premium.verified?(identity.id) == true
     end

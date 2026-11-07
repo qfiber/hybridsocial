@@ -522,7 +522,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       following_count: following_count,
       badges: Hybridsocial.Badges.instance_badges(identity),
       verification_tier: tier,
-      is_verified: tier in ["verified_starter", "verified_creator", "verified_pro"],
+      is_verified: Identity.verified?(identity),
       birthday: identity.birthday,
       location: identity.location,
       profile_fields:

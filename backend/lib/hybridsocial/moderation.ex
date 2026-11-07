@@ -847,6 +847,22 @@ defmodule Hybridsocial.Moderation do
     end
   end
 
+  # The `category` of a takedown that removed staff verification rather than a
+  # paid tier, so a restore re-verifies instead of re-granting a tier.
+  @staff_verified "staff_verified"
+
+  # Staff verification, removed through `open_verification_takedown/3`.
+  defp restore_badge(%Takedown{
+         target_id: identity_id,
+         category: @staff_verified,
+         moderator_id: by
+       }) do
+    case Hybridsocial.Premium.verify_identity(identity_id, by) do
+      {:error, :not_found} -> {:ok, :no_op}
+      result -> result
+    end
+  end
+
   # Re-grant the verification tier a badge takedown revoked (stored in
   # `category`). Nothing to restore if the tier wasn't recorded.
   defp restore_badge(%Takedown{target_id: identity_id, category: tier})
@@ -863,6 +879,24 @@ defmodule Hybridsocial.Moderation do
   defp restore_badge(_), do: {:ok, :no_op}
 
   @verified_badge_tiers ~w(verified_starter verified_creator verified_pro)
+
+  @doc """
+  Opens a takedown notice when staff remove an account's verification, so the
+  owner learns why and can appeal. A no-op without a reason.
+  """
+  def open_verification_takedown(identity_id, admin_id, reason)
+      when is_binary(reason) and reason != "" do
+    create_takedown(%{
+      target_type: "account_badge",
+      target_id: identity_id,
+      owner_id: identity_id,
+      moderator_id: admin_id,
+      reason: reason,
+      category: @staff_verified
+    })
+  end
+
+  def open_verification_takedown(_identity_id, _admin_id, _reason), do: {:ok, :noop}
 
   @doc """
   Opens a takedown notice when staff revoke a verified badge — i.e. a downgrade

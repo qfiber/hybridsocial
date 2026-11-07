@@ -411,18 +411,24 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     end
   end
 
+  # Verifying an account is a change to it, so it needs `users.manage`, like a
+  # tier change, rather than the `users.view` that lists requests.
   def approve_verification(conn, %{"id" => id}) do
-    with :ok <- require_permission(conn, "users.view") do
+    with :ok <- require_permission(conn, "users.manage") do
       admin_id = conn.assigns.current_identity.id
 
       case Hybridsocial.Premium.approve_verification(id, admin_id) do
         {:ok, verification} ->
+          Moderation.log(admin_id, "account.verified", "identity", verification.identity_id, %{
+            verification_id: verification.id
+          })
+
           json(conn, %{
             data: serialize_verification(Hybridsocial.Repo.preload(verification, :identity))
           })
 
-        {:error, :not_found} ->
-          conn |> put_status(:not_found) |> json(%{error: "verification.not_found"})
+        {:error, reason} ->
+          verification_error(conn, reason)
       end
     else
       {:error, perm} -> deny(conn, perm)
@@ -430,23 +436,83 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   def reject_verification(conn, %{"id" => id} = params) do
-    with :ok <- require_permission(conn, "users.view") do
+    with :ok <- require_permission(conn, "users.manage") do
       admin_id = conn.assigns.current_identity.id
       reason = params["reason"]
 
       case Hybridsocial.Premium.reject_verification(id, admin_id, reason) do
         {:ok, verification} ->
+          Moderation.log(
+            admin_id,
+            "verification.rejected",
+            "identity",
+            verification.identity_id,
+            %{verification_id: verification.id}
+          )
+
           json(conn, %{
             data: serialize_verification(Hybridsocial.Repo.preload(verification, :identity))
           })
 
-        {:error, :not_found} ->
-          conn |> put_status(:not_found) |> json(%{error: "verification.not_found"})
+        {:error, reason} ->
+          verification_error(conn, reason)
       end
     else
       {:error, perm} -> deny(conn, perm)
     end
   end
+
+  @doc "POST /api/v1/admin/users/:id/verification - verify an account directly"
+  def verify_user(conn, %{"id" => id}) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Hybridsocial.Premium.verify_identity(id, admin_id) do
+        {:ok, identity} ->
+          Moderation.log(admin_id, "account.verified", "identity", id, %{})
+          json(conn, %{data: serialize_account(identity)})
+
+        {:error, reason} ->
+          verification_error(conn, reason)
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  @doc """
+  DELETE /api/v1/admin/users/:id/verification - remove staff verification. With
+  a reason, the owner gets a takedown notice they can appeal.
+  """
+  def unverify_user(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.manage") do
+      admin_id = conn.assigns.current_identity.id
+
+      case Hybridsocial.Premium.revoke_verification(id) do
+        {:ok, identity} ->
+          Moderation.log(admin_id, "account.unverified", "identity", id, %{})
+          Moderation.open_verification_takedown(id, admin_id, params["reason"])
+          json(conn, %{data: serialize_account(identity)})
+
+        {:error, reason} ->
+          verification_error(conn, reason)
+      end
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  defp verification_error(conn, :not_found),
+    do: conn |> put_status(:not_found) |> json(%{error: "verification.not_found"})
+
+  defp verification_error(conn, :not_pending),
+    do: conn |> put_status(:conflict) |> json(%{error: "verification.not_pending"})
+
+  defp verification_error(conn, :not_verified),
+    do: conn |> put_status(:conflict) |> json(%{error: "verification.not_verified"})
+
+  defp verification_error(conn, _reason),
+    do: conn |> put_status(:unprocessable_entity) |> json(%{error: "verification.failed"})
 
   defp serialize_verification(verification) do
     # A NotLoaded association is truthy, so guard against it explicitly —
@@ -464,6 +530,11 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       metadata: verification.metadata,
       rejection_reason: verification.rejection_reason,
       verified_at: verification.verified_at,
+      vouch_count:
+        if(verification.type == "peer_vouch",
+          do: Hybridsocial.Premium.vouch_count(verification.id),
+          else: 0
+        ),
       created_at: verification.inserted_at,
       account:
         if(identity,
@@ -3523,6 +3594,8 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       email_confirmed: user != nil and not is_nil(user.confirmed_at),
       confirmed_at: user && user.confirmed_at,
       verification_tier: identity.verification_tier || "free",
+      verified_at: identity.verified_at,
+      is_verified: Hybridsocial.Accounts.Identity.verified?(identity),
       two_factor_enabled: (user && user.otp_enabled) || false,
       parent_identity_id: Map.get(identity, :parent_identity_id),
       created_at: identity.inserted_at

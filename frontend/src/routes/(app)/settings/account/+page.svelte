@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api/client.js';
+  import { api, ApiError } from '$lib/api/client.js';
   import { clearAuth } from '$lib/stores/auth.js';
   import { switchLocale, availableLocales, locale, t } from '$lib/stores/i18n.js';
   import { translationTarget, setTranslationTarget } from '$lib/stores/translation.js';
@@ -85,7 +85,13 @@
       verificationSuccess = 'Your verification application has been submitted.';
       setTimeout(() => { verificationSuccess = ''; }, 5000);
     } catch (e) {
-      verificationError = e instanceof Error ? e.message : 'Failed to submit verification application.';
+      const code = e instanceof ApiError ? (e.body as { error?: string } | undefined)?.error : undefined;
+      verificationError =
+        code === 'verification.already_pending'
+          ? $t('verification.already_pending')
+          : code === 'verification.already_verified'
+            ? $t('verification.already_verified')
+            : $t('verification.apply_failed');
     } finally {
       verificationSubmitting = false;
     }
@@ -171,8 +177,8 @@
           </svg>
           <div class="verification-info">
             {#if verification.type === 'peer_vouch'}
-              <span class="verification-label">Waiting for peer vouches</span>
-              <span class="verification-date">{verification.vouch_count || 0} of 3 vouches received. Share your profile and ask people who know you to vouch for your identity.</span>
+              <span class="verification-label">{$t('verification.vouch_pending_label')}</span>
+              <span class="verification-date">{$t('verification.vouch_pending_detail', { count: verification.vouch_count || 0 })}</span>
             {:else}
               <span class="verification-label">Your verification is under review</span>
               <span class="verification-date">We'll notify you when a decision has been made.</span>
@@ -206,11 +212,11 @@
 
             {#if verificationType === 'peer_vouch'}
               <div class="verification-instructions">
-                <p class="instruction-text">Get verified by having 3 other users vouch for your identity:</p>
+                <p class="instruction-text">{$t('verification.vouch_intro')}</p>
                 <ol class="instruction-steps">
                   <li>Submit your application to create a vouch request</li>
                   <li>Share your profile with people who can confirm your identity</li>
-                  <li>Once 3 users vouch for you, you're automatically verified</li>
+                  <li>{$t('verification.vouch_step_review')}</li>
                 </ol>
               </div>
             {:else}

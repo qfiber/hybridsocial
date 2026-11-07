@@ -1008,6 +1008,8 @@ defmodule HybridsocialWeb.Router do
     get "/verifications", AdminController, :list_verifications
     post "/verifications/:id/approve", AdminController, :approve_verification
     post "/verifications/:id/reject", AdminController, :reject_verification
+    post "/users/:id/verification", AdminController, :verify_user
+    delete "/users/:id/verification", AdminController, :unverify_user
 
     # Instance Policies
     get "/known_instances", AdminController, :list_known_instances
