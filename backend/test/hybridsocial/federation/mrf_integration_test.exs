@@ -96,6 +96,47 @@ defmodule Hybridsocial.Federation.MRFIntegrationTest do
   end
 
   # --------------------------------------------------------------------------
+  # Content filters via Inbox
+  # --------------------------------------------------------------------------
+
+  describe "content filters on remote posts" do
+    alias Hybridsocial.Moderation
+    alias Hybridsocial.Moderation.QueuedItem
+
+    defp with_content(content), do: create_activity(%{"object" => %{"content" => content}})
+
+    test "reject refuses the post" do
+      {:ok, _} =
+        Moderation.create_filter(%{
+          "type" => "word",
+          "pattern" => "spamword",
+          "action" => "reject"
+        })
+
+      assert {:error, :content_rejected} = Inbox.process(with_content("buy spamword today"))
+    end
+
+    test "flag publishes the post and adds it to the review queue" do
+      {:ok, _} =
+        Moderation.create_filter(%{
+          "type" => "phrase",
+          "pattern" => "look at",
+          "action" => "flag"
+        })
+
+      assert {:ok, post} = Inbox.process(with_content("please look at this"))
+      assert Repo.get_by(QueuedItem, item_id: post.id, source: "content_filter")
+    end
+
+    test "a whole-word filter doesn't match inside a longer word" do
+      {:ok, _} =
+        Moderation.create_filter(%{"type" => "word", "pattern" => "ass", "action" => "reject"})
+
+      assert {:ok, _} = Inbox.process(with_content("a classic example"))
+    end
+  end
+
+  # --------------------------------------------------------------------------
   # HellthreadPolicy via Inbox
   # --------------------------------------------------------------------------
 

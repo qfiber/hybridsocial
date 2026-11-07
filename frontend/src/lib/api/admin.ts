@@ -5,7 +5,6 @@ import type {
   AdminReport,
   AdminReportDetail,
   ContentFilter,
-  BannedDomain,
   IpBlock,
   KnownInstance,
   FederationPolicy,
@@ -208,28 +207,17 @@ export function assignReport(id: string, moderatorId?: string): Promise<AdminRep
 
 // Content Filters
 export function getContentFilters(): Promise<ContentFilter[]> {
-  return api.get('/api/v1/admin/content_filters');
+  return api.get<{ data: ContentFilter[] }>('/api/v1/admin/content_filters').then((r) => r.data || []);
 }
 
-export function createContentFilter(filter: Omit<ContentFilter, 'id' | 'created_at'>): Promise<ContentFilter> {
-  return api.post('/api/v1/admin/content_filters', filter);
+export function createContentFilter(
+  filter: Pick<ContentFilter, 'type' | 'pattern' | 'action'>
+): Promise<ContentFilter> {
+  return api.post<{ data: ContentFilter }>('/api/v1/admin/content_filters', filter).then((r) => r.data);
 }
 
 export function deleteContentFilter(id: string): Promise<void> {
   return api.delete(`/api/v1/admin/content_filters/${id}`);
-}
-
-// Banned Domains
-export function getBannedDomains(): Promise<BannedDomain[]> {
-  return api.get('/api/v1/admin/banned_domains');
-}
-
-export function banDomain(domain: string, reason?: string): Promise<BannedDomain> {
-  return api.post('/api/v1/admin/banned_domains', { domain, reason });
-}
-
-export function unbanDomain(id: string): Promise<void> {
-  return api.delete(`/api/v1/admin/banned_domains/${id}`);
 }
 
 // IP Blocks
@@ -555,11 +543,13 @@ export function deleteInvite(id: string): Promise<void> {
 
 // Email Domain Bans
 export function getEmailDomainBans(): Promise<EmailDomainBan[]> {
-  return api.get('/api/v1/admin/email_domain_bans');
+  return api.get<{ data: EmailDomainBan[] }>('/api/v1/admin/email_domain_bans').then((r) => r.data || []);
 }
 
 export function createEmailDomainBan(domain: string, reason?: string): Promise<EmailDomainBan> {
-  return api.post('/api/v1/admin/email_domain_bans', { domain, reason });
+  return api
+    .post<{ data: EmailDomainBan }>('/api/v1/admin/email_domain_bans', { domain, reason })
+    .then((r) => r.data);
 }
 
 export function deleteEmailDomainBan(id: string): Promise<void> {

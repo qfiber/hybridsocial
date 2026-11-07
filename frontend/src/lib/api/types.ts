@@ -651,18 +651,11 @@ export interface AdminReportDetail extends Omit<AdminReport, 'target_post'> {
 
 export interface ContentFilter {
   id: string;
-  type: 'keyword' | 'regex' | 'domain';
+  type: 'word' | 'phrase' | 'regex';
   pattern: string;
-  action: 'warn' | 'hide' | 'reject';
+  action: 'flag' | 'reject' | 'replace';
   replacement: string | null;
   scope: 'all' | 'local' | 'remote';
-  created_at: string;
-}
-
-export interface BannedDomain {
-  id: string;
-  domain: string;
-  reason: string | null;
   created_at: string;
 }
 
