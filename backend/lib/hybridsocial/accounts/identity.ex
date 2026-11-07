@@ -56,6 +56,10 @@ defmodule Hybridsocial.Accounts.Identity do
     field :force_sensitive, :boolean, default: false
     field :show_badge, :boolean, default: true
     field :verification_tier, :string, default: "free"
+    # Set when staff verify the account (#168), separately from the paid
+    # `verification_tier`. Never cast from params: `Premium` sets it.
+    field :verified_at, :utc_datetime_usec
+    field :verified_by_id, :binary_id
     field :suspended_at, :utc_datetime_usec
     field :also_known_as, {:array, :string}, default: []
     field :moved_to, :string
@@ -287,7 +291,7 @@ defmodule Hybridsocial.Accounts.Identity do
   end
 
   defp reject_display_name_change_if_verified(changeset) do
-    if get_change(changeset, :display_name) && verified_tier?(changeset.data) do
+    if get_change(changeset, :display_name) && verified?(changeset.data) do
       add_error(
         changeset,
         :display_name,
@@ -298,11 +302,15 @@ defmodule Hybridsocial.Accounts.Identity do
     end
   end
 
-  defp verified_tier?(%{verification_tier: tier})
-       when tier in ~w(verified_starter verified_creator verified_pro),
-       do: true
+  @verified_tiers ~w(verified_starter verified_creator verified_pro)
 
-  defp verified_tier?(_), do: false
+  @doc """
+  Whether the account shows as verified: staff verified it, or it holds a paid
+  verified tier.
+  """
+  def verified?(%{verified_at: %DateTime{}}), do: true
+  def verified?(%{verification_tier: tier}) when tier in @verified_tiers, do: true
+  def verified?(_), do: false
 
   defp reject_bot_change_if_forced(changeset, identity) do
     if identity.force_bot && get_change(changeset, :is_bot) == false do

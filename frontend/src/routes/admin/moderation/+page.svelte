@@ -221,8 +221,13 @@
       );
       if (rejectingId === id) rejectingId = null;
       addToast('Verification approved', 'success');
-    } catch {
-      addToast('Failed to approve verification', 'error');
+    } catch (err) {
+      addToast(
+        err instanceof ApiError && err.status === 409
+          ? $t('admin.verification_not_pending')
+          : 'Failed to approve verification',
+        'error',
+      );
     }
   }
 
@@ -246,8 +251,13 @@
       rejectingId = null;
       rejectReason = '';
       addToast('Verification rejected', 'success');
-    } catch {
-      addToast('Failed to reject verification', 'error');
+    } catch (err) {
+      addToast(
+        err instanceof ApiError && err.status === 409
+          ? $t('admin.verification_not_pending')
+          : 'Failed to reject verification',
+        'error',
+      );
     }
   }
 
@@ -732,6 +742,9 @@
                   </div>
                   {#if req.metadata?.reason}
                     <p class="verify-reason"><span class="report-meta-label">Reason given:</span> {req.metadata.reason}</p>
+                  {/if}
+                  {#if req.type === 'peer_vouch'}
+                    <p class="verify-reason">{$t('admin.verification_vouches', { count: req.vouch_count ?? 0 })}</p>
                   {/if}
                   {#if req.metadata?.domain}
                     <p class="verify-reason"><span class="report-meta-label">Domain:</span> {req.metadata.domain}</p>

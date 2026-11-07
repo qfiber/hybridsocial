@@ -36,6 +36,8 @@
     changeUserEmail,
     confirmUserEmail,
     changeUserTier,
+    verifyUser,
+    unverifyUser,
     editUserProfile,
     getRoles,
     getUserRoles,
@@ -72,7 +74,9 @@
   let userRoles = $state<UserRoleAssignment[]>([]);
 
   const tierOptions = [
-    { value: 'free', label: 'Free (L0)', description: 'Default, unverified account' },
+    // Not a tier: the default limits of an account that hasn't paid for one.
+    // Verification is separate (the Verified control beside this).
+    { value: 'free', label: 'No tier', description: 'Default limits' },
     { value: 'verified_starter', label: 'Starter (L1)', description: 'Small creators & casual users' },
     { value: 'verified_creator', label: 'Creator (L2)', description: 'Active creators & community builders' },
     { value: 'verified_pro', label: 'Pro (L3)', description: 'Professional accounts, highest limits' },
@@ -324,7 +328,24 @@
 
   async function handleTier() {
     if (!user) return;
-    await run('tier', () => changeUserTier(user!.id, tierInput), 'Verification tier updated');
+    await run('tier', () => changeUserTier(user!.id, tierInput), 'Tier updated');
+  }
+
+  // Staff verification (#168): the badge and display-name lock, no tier limits.
+  let unverifyReason = $state('');
+  let showUnverify = $state(false);
+
+  async function handleVerify() {
+    if (!user) return;
+    await run('verify', () => verifyUser(user!.id), 'Account verified');
+  }
+
+  async function handleUnverify() {
+    if (!user) return;
+    const reason = unverifyReason.trim();
+    await run('verify', () => unverifyUser(user!.id, reason || undefined), 'Verification removed');
+    showUnverify = false;
+    unverifyReason = '';
   }
 
   const LIMIT_WINDOWS = [
@@ -826,13 +847,41 @@
             </div>
           </div>
           <div class="inline-form">
-            <label class="field-label" for="tier">Verification tier</label>
+            <label class="field-label" for="tier">Tier</label>
             <div class="inline-row">
               <select id="tier" class="input access-select" bind:value={tierInput}>
                 {#each tierOptions as t (t.value)}<option value={t.value}>{t.label}</option>{/each}
               </select>
               <button class="btn btn-secondary" disabled={busy === 'tier'} onclick={handleTier}>Set</button>
             </div>
+          </div>
+          <div class="inline-form">
+            <span class="field-label">Verified</span>
+            {#if user.verified_at}
+              {#if showUnverify}
+                <form class="inline-row" onsubmit={(e) => { e.preventDefault(); handleUnverify(); }}>
+                  <input
+                    class="input"
+                    type="text"
+                    bind:value={unverifyReason}
+                    placeholder="Reason, sent to the owner (optional)"
+                    aria-label="Reason for removing verification"
+                  />
+                  <button class="btn btn-danger" type="submit" disabled={busy === 'verify'}>Remove</button>
+                  <button class="btn btn-ghost" type="button" onclick={() => { showUnverify = false; unverifyReason = ''; }}>Cancel</button>
+                </form>
+              {:else}
+                <div class="inline-row">
+                  <span>Since {new Date(user.verified_at).toLocaleDateString()}</span>
+                  <button class="btn btn-secondary" type="button" onclick={() => (showUnverify = true)}>Remove</button>
+                </div>
+              {/if}
+            {:else}
+              <div class="inline-row">
+                <span>{user.is_verified ? 'Through a paid tier' : 'No'}</span>
+                <button class="btn btn-secondary" type="button" disabled={busy === 'verify'} onclick={handleVerify}>Verify</button>
+              </div>
+            {/if}
           </div>
         </div>
 

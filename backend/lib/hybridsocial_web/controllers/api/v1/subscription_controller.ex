@@ -110,6 +110,9 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
       {:ok, verification} ->
         conn |> put_status(:created) |> json(serialize_verification(verification))
 
+      {:error, reason} when reason in [:already_verified, :already_pending] ->
+        conn |> put_status(:conflict) |> json(%{error: "verification.#{reason}"})
+
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
@@ -121,11 +124,19 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
   def verification_status(conn, _params) do
     identity = conn.assigns.current_identity
 
-    case Premium.get_verification(identity.id) do
-      nil ->
+    # The account's own state decides "approved": staff may verify without a
+    # request, and an approved request stops counting once staff revoke it.
+    case {identity.verified_at, Premium.get_verification(identity.id)} do
+      {%DateTime{} = verified_at, _} ->
+        conn |> put_status(:ok) |> json(%{status: "approved", verified_at: verified_at})
+
+      {nil, nil} ->
         conn |> put_status(:ok) |> json(%{status: "none"})
 
-      verification ->
+      {nil, %{status: "approved"}} ->
+        conn |> put_status(:ok) |> json(%{status: "none"})
+
+      {nil, verification} ->
         vouch_count =
           if verification.type == "peer_vouch", do: Premium.vouch_count(verification.id), else: 0
 

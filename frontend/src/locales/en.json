@@ -761,5 +761,14 @@
   "admin.reports.activity_forwarded": "Sent by the server {server}",
   "admin.reports.remote_server": "The server {server}",
   "admin.reports.remote_reporter_hint": "This report was forwarded by another server. Remote servers usually don't share which of their users filed it.",
-  "admin.reports.view_federation": "Federation settings"
+  "admin.reports.view_federation": "Federation settings",
+  "verification.already_pending": "You already have a verification request waiting for review.",
+  "verification.already_verified": "Your account is already verified.",
+  "verification.apply_failed": "Failed to submit verification application.",
+  "verification.vouch_pending_label": "Your request is waiting for review",
+  "verification.vouch_pending_detail": "Vouches so far: {count}. Our team reviews your request, and vouches from people who know you help it.",
+  "verification.vouch_intro": "Ask people who know you to vouch for your identity:",
+  "verification.vouch_step_review": "Our team reviews your request, along with the vouches you've received",
+  "admin.verification_vouches": "Vouches: {count}",
+  "admin.verification_not_pending": "This request was already decided. Reload to see it."
 }

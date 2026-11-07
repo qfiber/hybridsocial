@@ -571,6 +571,9 @@ export interface AdminUser {
   email_confirmed?: boolean;
   confirmed_at?: string | null;
   verification_tier?: string | null;
+  /** Set when staff verified the account, separately from its tier. */
+  verified_at?: string | null;
+  is_verified?: boolean;
 }
 
 export type AdminReportStatus = 'pending' | 'investigating' | 'resolved' | 'dismissed';

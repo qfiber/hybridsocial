@@ -393,6 +393,8 @@ export interface VerificationRequest {
   metadata: Record<string, unknown>;
   rejection_reason: string | null;
   verified_at: string | null;
+  /** Peer-vouch requests only. Vouches inform staff; they don't approve. */
+  vouch_count?: number;
   created_at: string;
   account: {
     id: string;
@@ -414,6 +416,16 @@ export function rejectVerification(id: string, reason?: string): Promise<Verific
   return api
     .post<{ data: VerificationRequest }>(`/api/v1/admin/verifications/${id}/reject`, reason ? { reason } : {})
     .then((r) => r.data);
+}
+
+// Staff verification of an account, separate from its paid tier (#168).
+export function verifyUser(id: string): Promise<{ data: AdminUser }> {
+  return api.post(`/api/v1/admin/users/${id}/verification`);
+}
+
+// With a reason, the owner gets a takedown notice they can appeal.
+export function unverifyUser(id: string, reason?: string): Promise<{ data: AdminUser }> {
+  return api.delete(`/api/v1/admin/users/${id}/verification`, reason ? { reason } : undefined);
 }
 
 // Site Pages (legal / about)

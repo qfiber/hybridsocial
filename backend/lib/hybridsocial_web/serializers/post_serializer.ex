@@ -490,7 +490,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       is_locked: Map.get(identity, :is_locked, false),
       badges: badges,
       verification_tier: verification_tier,
-      is_verified: verified_tier?(verification_tier),
+      is_verified: Hybridsocial.Accounts.Identity.verified?(identity),
       domain: domain,
       # Was Map.get(identity, :url) — but Identity has no :url field, so this
       # was always nil. Use the profile_url helper (profile_url || ap_actor_url).
@@ -500,11 +500,6 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
   end
 
   def serialize_account(_, _), do: nil
-
-  defp verified_tier?(tier) when tier in ["verified_starter", "verified_creator", "verified_pro"],
-    do: true
-
-  defp verified_tier?(_), do: false
 
   # --- Private helpers ---
 
