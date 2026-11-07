@@ -5,6 +5,10 @@
   import { addToast } from '$lib/stores/toast.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import {
+    setUserSearchIndexing,
+    getPostLimitDefaults,
+    setUserPostLimits,
+    type PostLimitDefaults,
     getAdminUser,
     getAdminUserStatuses,
     getAdminUserFollowers,
@@ -56,6 +60,9 @@
   let bioInput = $state('');
   let trustInput = $state(0);
   let tierInput = $state('free');
+  // Blank means "use the instance default", so these stay strings until saved.
+  let limitInputs = $state({ per_minute: '', per_hour: '', per_day: '' });
+  let limitDefaults = $state<PostLimitDefaults | null>(null);
   let generatedPassword = $state('');
 
   let notes = $state<ModerationNote[]>([]);
@@ -199,7 +206,10 @@
     user ? (user.is_local ? `/@${user.handle}` : `/@${user.handle}@${user.domain ?? ''}`) : '',
   );
 
-  onMount(load);
+  onMount(() => {
+    load();
+    getPostLimitDefaults().then((d) => (limitDefaults = d)).catch(() => {});
+  });
 
   async function load() {
     loading = true;
@@ -212,6 +222,11 @@
       bioInput = u.bio || '';
       trustInput = u.trust_level ?? 0;
       tierInput = u.verification_tier || 'free';
+      limitInputs = {
+        per_minute: String(u.post_limits?.per_minute ?? ''),
+        per_hour: String(u.post_limits?.per_hour ?? ''),
+        per_day: String(u.post_limits?.per_day ?? ''),
+      };
 
       notes = await getModerationNotes(u.id).catch(() => []);
       if (u.is_local) {
@@ -310,6 +325,44 @@
   async function handleTier() {
     if (!user) return;
     await run('tier', () => changeUserTier(user!.id, tierInput), 'Verification tier updated');
+  }
+
+  const LIMIT_WINDOWS = [
+    { key: 'per_minute', window: 'minute', label: 'Per minute' },
+    { key: 'per_hour', window: 'hour', label: 'Per hour' },
+    { key: 'per_day', window: 'day', label: 'Per day' },
+  ] as const;
+
+  function limitDefault(window: 'minute' | 'hour' | 'day'): string {
+    if (!limitDefaults || !user) return 'Default';
+    const value = limitDefaults[user.is_bot ? 'bot' : 'user'][window];
+    return value === 0 ? 'Default: unlimited' : `Default: ${value}`;
+  }
+
+  async function handleSearchIndexing(e: Event) {
+    if (!user) return;
+    const blocked = (e.target as HTMLInputElement).checked;
+    await run(
+      'indexing',
+      () => setUserSearchIndexing(user!.id, blocked),
+      blocked ? 'Search engines blocked for this profile' : 'Search engines allowed for this profile',
+    );
+  }
+
+  async function handlePostLimits() {
+    if (!user) return;
+    const limits: Record<string, number> = {};
+    for (const { key } of LIMIT_WINDOWS) {
+      const raw = String(limitInputs[key]).trim();
+      if (raw === '') continue;
+      const value = Number(raw);
+      if (!Number.isInteger(value) || value < 0) {
+        addToast('Limits must be whole numbers, 0 or more', 'error');
+        return;
+      }
+      limits[key] = value;
+    }
+    await run('limits', () => setUserPostLimits(user!.id, limits), 'Posting limits updated');
   }
 
   async function handleAddNote() {
@@ -597,6 +650,55 @@
     </section>
 
     <!-- Moderation -->
+    {#if user.is_local}
+      <section class="card sect">
+        <h2 class="sect-title">Search engines</h2>
+        <p class="muted">
+          Blocking asks search engines not to index this profile and its posts, and removes
+          them from the sitemap. The page can still be viewed without logging in.
+        </p>
+        <label class="inline-row">
+          <input
+            type="checkbox"
+            checked={user.search_indexing_blocked ?? false}
+            disabled={busy === 'indexing'}
+            onchange={handleSearchIndexing}
+          />
+          <span>Block search engines from this profile</span>
+        </label>
+      </section>
+
+      <section class="card sect">
+        <h2 class="sect-title">Posting limits</h2>
+        <p class="muted">
+          Leave blank to use the instance default. 0 means unlimited. Posts over the limit are
+          refused, and the person is told when they can post again.
+        </p>
+        <div class="access-grid">
+          {#each LIMIT_WINDOWS as limit (limit.key)}
+            <div class="inline-form">
+              <label class="field-label" for="limit-{limit.key}">{limit.label}</label>
+              <input
+                id="limit-{limit.key}"
+                class="input limit-input"
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                placeholder={limitDefault(limit.window)}
+                bind:value={limitInputs[limit.key]}
+              />
+            </div>
+          {/each}
+        </div>
+        <div>
+          <button class="btn btn-secondary" disabled={busy === 'limits'} onclick={handlePostLimits}>
+            Save limits
+          </button>
+        </div>
+      </section>
+    {/if}
+
     <section class="card sect">
       <h2 class="sect-title">Moderation</h2>
       <div class="btn-row">
@@ -940,6 +1042,7 @@
   }
   .pw-code { font-family: ui-monospace, Menlo, monospace; font-size: var(--text-sm); word-break: break-all; }
 
+  .limit-input { width: 170px; max-width: 100%; }
   .access-grid { display: flex; flex-wrap: wrap; gap: var(--space-5); }
   .access-select { min-width: 160px; }
 

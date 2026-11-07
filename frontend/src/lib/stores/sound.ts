@@ -7,13 +7,14 @@
  *   - `sound_notification_enabled`  — bell sound for non-DM notifs (default on)
  *
  * The audio files live at `/sounds/message.mp3` and
- * `/sounds/notification.mp3` (served from `static/`). Missing files
- * are treated as "silent" — the playback call swallows the 404 so
- * shipping the UI before the sound assets land doesn't throw.
+ * `/sounds/notification.mp3` (served from `static/`). A missing file just
+ * means that sound stays silent.
  *
- * Browsers block autoplay until the user has interacted with the
- * page. We attempt a silent priming play() on first user gesture to
- * unlock audio; after that, notification sounds play instantly.
+ * Browsers block audio until the user has interacted with the page, so the
+ * first click or key press creates and resumes an AudioContext. Nothing is
+ * played to do that. An earlier version unlocked by "silently" playing
+ * <audio> elements at volume 0, which could be heard: iOS ignores `volume`, and
+ * elsewhere it could let a blip out, so a first click seemed to ring the bell.
  */
 
 import { browser } from '$app/environment';
@@ -21,96 +22,98 @@ import { browser } from '$app/environment';
 const MESSAGE_KEY = 'sound_message_enabled';
 const NOTIFICATION_KEY = 'sound_notification_enabled';
 
-const MESSAGE_SOUND_URL = '/sounds/message.mp3';
-const NOTIFICATION_SOUND_URL = '/sounds/notification.mp3';
+const SOUND_URLS = {
+  message: '/sounds/message.mp3',
+  notification: '/sounds/notification.mp3',
+} as const;
 
-// Cache `Audio` instances so repeated plays don't re-fetch the file.
-// Cloning before play lets overlapping events (two DMs within 200ms)
-// both make a sound instead of cutting each other off.
-let messageAudio: HTMLAudioElement | null = null;
-let notificationAudio: HTMLAudioElement | null = null;
+type SoundName = keyof typeof SOUND_URLS;
 
-// Flipped to `true` by the audio elements' `error` handlers when the
-// preload 404s. Used to short-circuit subsequent play attempts so the
-// console isn't flooded with the same missing-file error on every
-// chat event.
-let messageAssetMissing = false;
-let notificationAssetMissing = false;
+// How long a tab keeps the claim on one event. Long enough to cover sibling tabs
+// receiving the same event a moment later over their own streams.
+const TAB_CLAIM_MS = 3000;
 
-let audioUnlocked = false;
+let context: AudioContext | null = null;
+const buffers: Partial<Record<SoundName, AudioBuffer>> = {};
+let initialized = false;
 
 export function initSound(): void {
-  if (!browser) return;
+  if (!browser || initialized) return;
+  initialized = true;
 
-  messageAudio = new Audio(MESSAGE_SOUND_URL);
-  notificationAudio = new Audio(NOTIFICATION_SOUND_URL);
-  messageAudio.preload = 'auto';
-  notificationAudio.preload = 'auto';
-
-  messageAudio.addEventListener('error', () => {
-    messageAssetMissing = true;
-  });
-  notificationAudio.addEventListener('error', () => {
-    notificationAssetMissing = true;
-  });
-
-  // Gesture-gated audio unlock. Any click/keypress primes the audio
-  // elements with a silent play so subsequent programmatic plays
-  // aren't blocked by the browser's autoplay policy.
-  const unlock = () => {
-    if (audioUnlocked) return;
-    audioUnlocked = true;
-
-    [messageAudio, notificationAudio].forEach((a) => {
-      if (!a) return;
-      const prev = a.volume;
-      a.volume = 0;
-      a.play()
-        .then(() => {
-          a.pause();
-          a.currentTime = 0;
-          a.volume = prev;
-        })
-        .catch(() => {
-          // Still locked, or missing file — either way we'll retry
-          // on the next gesture.
-        });
-    });
-
-    window.removeEventListener('click', unlock);
-    window.removeEventListener('keydown', unlock);
-  };
-
-  window.addEventListener('click', unlock, { once: false });
-  window.addEventListener('keydown', unlock, { once: false });
+  // These stay on: a browser can suspend the context later (iOS does on an
+  // interruption), and the next gesture has to be able to resume it.
+  window.addEventListener('click', unlock, { passive: true });
+  window.addEventListener('keydown', unlock, { passive: true });
 }
 
-export function playMessageSound(): void {
-  if (!browser) return;
-  if (messageAssetMissing) return;
-  if (localStorage.getItem(MESSAGE_KEY) === 'false') return;
-  play(messageAudio);
-}
-
-export function playNotificationSound(): void {
-  if (!browser) return;
-  if (notificationAssetMissing) return;
-  if (localStorage.getItem(NOTIFICATION_KEY) === 'false') return;
-  play(notificationAudio);
-}
-
-function play(source: HTMLAudioElement | null): void {
-  if (!source) return;
+function unlock(): void {
+  if (context?.state === 'running') return;
 
   try {
-    // Cloning the node lets stacked events each produce a sound —
-    // `source.play()` on a currently-playing element is a no-op in
-    // most browsers, which would cut off rapid-fire notifications.
-    const clone = source.cloneNode(true) as HTMLAudioElement;
-    const promise = clone.play();
-    if (promise) promise.catch(() => {});
+    if (!context) {
+      context = new AudioContext();
+      for (const name of Object.keys(SOUND_URLS) as SoundName[]) void load(name, context);
+    }
+    void context.resume().catch(() => {
+      // Still blocked. The next gesture tries again.
+    });
   } catch {
-    // Missing file / autoplay blocked / decoder issue — silently skip.
+    // No Web Audio here, so sounds stay off.
+  }
+}
+
+async function load(name: SoundName, ctx: AudioContext): Promise<void> {
+  try {
+    const response = await fetch(SOUND_URLS[name]);
+    if (!response.ok) return;
+    buffers[name] = await ctx.decodeAudioData(await response.arrayBuffer());
+  } catch {
+    // Missing or undecodable file: this sound stays silent.
+  }
+}
+
+export function playMessageSound(eventKey?: string): void {
+  if (!browser || localStorage.getItem(MESSAGE_KEY) === 'false') return;
+  play('message', eventKey);
+}
+
+export function playNotificationSound(eventKey?: string): void {
+  if (!browser || localStorage.getItem(NOTIFICATION_KEY) === 'false') return;
+  play('notification', eventKey);
+}
+
+function play(name: SoundName, eventKey?: string): void {
+  // A tab that can't make a sound mustn't win the claim below, or it would
+  // silence a sibling tab that can.
+  if (!context || context.state !== 'running' || !buffers[name]) return;
+
+  if (eventKey && navigator.locks) {
+    // Each tab has its own stream, so each gets every event. Only the first to
+    // claim this one plays it.
+    void navigator.locks
+      .request(`hybridsocial:sound:${eventKey}`, { ifAvailable: true }, async (lock) => {
+        if (!lock) return;
+        start(name);
+        await new Promise((resolve) => setTimeout(resolve, TAB_CLAIM_MS));
+      })
+      .catch(() => start(name));
+  } else {
+    start(name);
+  }
+}
+
+function start(name: SoundName): void {
+  const buffer = buffers[name];
+  if (!context || !buffer) return;
+
+  try {
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    source.start();
+  } catch {
+    // Decoder or device trouble: skip this one.
   }
 }
 

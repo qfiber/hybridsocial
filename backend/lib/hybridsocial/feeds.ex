@@ -94,8 +94,11 @@ defmodule Hybridsocial.Feeds do
 
     # Only the default (newest + local_only) path is cached — the cache key is a
     # single "feed:public" slot, so mixing in oldest-first or non-local results
-    # would poison the local tab for everyone.
-    if newest? and local_only and cacheable?(opts) do
+    # would poison the local tab for everyone. Anonymous requests see a different
+    # feed, without locked accounts, so they stay out of the slot in both directions.
+    anonymous? = is_nil(Keyword.get(opts, :viewer_id))
+
+    if newest? and local_only and cacheable?(opts) and not anonymous? do
       case safe_cache_get(fn -> FeedCache.get_public_timeline() end) do
         nil ->
           result = fetch_public_timeline(opts)
@@ -131,6 +134,7 @@ defmodule Hybridsocial.Feeds do
       |> Visibility.apply_silence_filter()
       |> Visibility.apply_blocked_hashtag_filter()
       |> Visibility.apply_shadow_ban_filter(viewer_id)
+      |> Visibility.exclude_locked_for_anonymous(viewer_id)
       |> maybe_filter_local(local_only)
       |> apply_public_order(Keyword.get(opts, :sort))
       |> limit(^limit)
@@ -245,6 +249,7 @@ defmodule Hybridsocial.Feeds do
           |> where([b], is_nil(b.deleted_at))
           |> join(:inner, [b], p in Post, on: b.post_id == p.id and is_nil(p.deleted_at))
           |> Visibility.apply_boost_suspension_filter()
+          |> exclude_boosts_of_locked(viewer_id)
           |> apply_boost_cursor_filters(opts)
           |> order_by([b], desc: b.inserted_at)
           |> limit(^limit)
@@ -257,6 +262,13 @@ defmodule Hybridsocial.Feeds do
       end
     end
   end
+
+  defp exclude_boosts_of_locked(query, nil) do
+    locked = from(i in Identity, where: i.is_locked == true, select: i.id)
+    where(query, [_b, p], p.identity_id not in subquery(locked))
+  end
+
+  defp exclude_boosts_of_locked(query, _viewer_id), do: query
 
   # ---------------------------------------------------------------------------
   # Hashtag Timeline
@@ -298,11 +310,21 @@ defmodule Hybridsocial.Feeds do
       |> Visibility.apply_silence_filter()
       |> Visibility.apply_blocked_hashtag_filter()
       |> Visibility.apply_shadow_ban_filter(viewer_id)
+      |> maybe_exclude_locked(viewer_id, opts)
       |> order_by([p], desc: p.inserted_at)
       |> limit(^limit)
       |> preload([:identity, :quote])
 
     Repo.all(query)
+  end
+
+  # `include_locked: true` is for the snapshots shared with logged-in members.
+  defp maybe_exclude_locked(query, viewer_id, opts) do
+    if Keyword.get(opts, :include_locked, false) do
+      query
+    else
+      Visibility.exclude_locked_for_anonymous(query, viewer_id)
+    end
   end
 
   # ---------------------------------------------------------------------------
@@ -398,11 +420,15 @@ defmodule Hybridsocial.Feeds do
       |> where([p], is_nil(p.hidden_at))
       |> exclude_unpublished()
       |> maybe_exclude_replies(include_replies)
-      |> apply_cursor_filters(opts)
+      # A remote `published` is whatever the sender claims; a future date would
+      # otherwise pin the post to the top of this feed.
+      |> where([p], coalesce(p.published_at, p.inserted_at) <= ^DateTime.utc_now())
+      |> apply_global_cursor_filters(opts)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
       |> Visibility.apply_blocked_hashtag_filter()
       |> Visibility.apply_shadow_ban_filter(viewer_id)
+      |> maybe_exclude_locked(viewer_id, opts)
       |> apply_global_order(Keyword.get(opts, :sort))
       |> limit(^limit)
       |> preload([:identity, :quote])
@@ -421,6 +447,69 @@ defmodule Hybridsocial.Feeds do
   defp apply_global_order(query, _newest) do
     order_by(query, [p], desc: coalesce(p.published_at, p.inserted_at), desc: p.id)
   end
+
+  # The cursor has to compare the same tuple the order uses. `apply_cursor_filters`
+  # compares last_activity_at, so on this feed a boundary post with a recent reply
+  # restarted the page, and an unseen post with one was skipped.
+  defp apply_global_cursor_filters(query, opts) do
+    query
+    |> global_cursor(Keyword.get(opts, :max_id), :older)
+    |> global_cursor(Keyword.get(opts, :min_id), :newer)
+    |> global_cursor(Keyword.get(opts, :since_id), :newer)
+  end
+
+  defp global_cursor(query, nil, _direction), do: query
+
+  defp global_cursor(query, id, direction) do
+    case lookup_post_time_cursor(id) do
+      nil -> query
+      boundary -> where_past_global_boundary(query, boundary, direction)
+    end
+  end
+
+  defp where_past_global_boundary(query, {at, id}, :older) do
+    where(
+      query,
+      [p],
+      fragment(
+        "(COALESCE(?, ?), ?) < (?, ?)",
+        p.published_at,
+        p.inserted_at,
+        p.id,
+        ^at,
+        type(^id, Ecto.UUID)
+      )
+    )
+  end
+
+  defp where_past_global_boundary(query, {at, id}, :newer) do
+    where(
+      query,
+      [p],
+      fragment(
+        "(COALESCE(?, ?), ?) > (?, ?)",
+        p.published_at,
+        p.inserted_at,
+        p.id,
+        ^at,
+        type(^id, Ecto.UUID)
+      )
+    )
+  end
+
+  defp lookup_post_time_cursor(id) when is_binary(id) do
+    with {:ok, uuid} <- Ecto.UUID.cast(id) do
+      Repo.one(
+        from p in Post,
+          where: p.id == ^uuid,
+          select: {coalesce(p.published_at, p.inserted_at), p.id}
+      )
+    else
+      _ -> nil
+    end
+  end
+
+  defp lookup_post_time_cursor(_), do: nil
 
   # ---------------------------------------------------------------------------
   # Group Timeline

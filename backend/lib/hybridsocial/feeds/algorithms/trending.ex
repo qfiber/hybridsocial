@@ -96,8 +96,9 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
       Post
       |> where([p], p.visibility == "public")
       |> where([p], is_nil(p.deleted_at))
+      |> where([p], is_nil(p.hidden_at))
       |> where([p], not is_nil(p.published_at))
-      |> where([p], is_nil(p.parent_id))
+      |> where([p], is_nil(p.parent_id) and is_nil(p.parent_ap_id))
       |> where([p], p.inserted_at >= ^cutoff)
       |> where([p], p.reaction_count + p.boost_count + p.reply_count >= 1)
       |> maybe_local(Keyword.get(opts, :local_only, false))
@@ -105,6 +106,7 @@ defmodule Hybridsocial.Feeds.Algorithms.Trending do
       |> Visibility.apply_block_filter(identity_id)
       |> Visibility.apply_mute_filter(identity_id)
       |> Visibility.apply_shadow_ban_filter(identity_id)
+      |> Visibility.exclude_locked_for_anonymous(identity_id)
       |> Visibility.apply_suspension_filter()
       |> Visibility.apply_silence_filter()
       |> Visibility.apply_blocked_hashtag_filter()

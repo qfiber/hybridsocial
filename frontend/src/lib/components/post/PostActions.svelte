@@ -1429,7 +1429,7 @@
   {/if}
 {/snippet}
 
-<div class="post-actions" role="group" aria-label={$t('post.actions_label')}>
+<div class="post-actions" role="group" aria-label={$t('post.actions_label')} data-requires-login>
   <div class="post-actions-left">
     <!-- Like / React -->
     <div

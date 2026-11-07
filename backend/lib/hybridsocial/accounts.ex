@@ -138,11 +138,16 @@ defmodule Hybridsocial.Accounts do
   def suspension_source(%Identity{}), do: nil
 
   @doc """
-  Whether a suspended identity's profile and posts are off limits to this viewer.
-  Only staff, who need to review them, and the account itself can still see them.
+  Whether an identity's profile and posts are off limits to this viewer.
+
+  A locked account is hidden from anyone not logged in, whatever its posts'
+  visibility, because someone who locked their account expects it to be private.
+  A suspended one is hidden from everyone but staff, who need to review it, and
+  the account itself.
   """
   def hidden_from_viewer?(%Identity{} = identity, viewer_id) do
     cond do
+      is_nil(viewer_id) and identity.is_locked -> true
       is_nil(suspension_source(identity)) -> false
       is_nil(viewer_id) -> true
       viewer_id == identity.id -> false
@@ -650,8 +655,17 @@ defmodule Hybridsocial.Accounts do
 
   # --- Profile updates ---
 
-  def update_identity(identity, attrs) do
-    case identity |> Identity.update_changeset(attrs) |> Repo.update() do
+  def update_identity(identity, attrs, opts \\ []) do
+    changeset =
+      case Keyword.get(opts, :profile_fields) do
+        nil ->
+          Identity.update_changeset(identity, attrs)
+
+        fields ->
+          identity |> Identity.update_changeset(attrs) |> Identity.put_profile_fields(fields)
+      end
+
+    case Repo.update(changeset) do
       {:ok, updated} ->
         Phoenix.PubSub.broadcast(Hybridsocial.PubSub, "identities", {:identity_updated, updated})
         {:ok, updated}
@@ -1408,6 +1422,7 @@ defmodule Hybridsocial.Accounts do
     limit = Keyword.get(opts, :limit, 20)
     window_hours = Keyword.get(opts, :window_hours, 24 * 7)
     cutoff = DateTime.add(DateTime.utc_now(), -window_hours * 3600, :second)
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     engagement =
       from(p in Hybridsocial.Social.Post,
@@ -1415,8 +1430,10 @@ defmodule Hybridsocial.Accounts do
         # group, list, or direct post feeds a ranking shown to everyone —
         # activity inside a private group could put its author at the top of
         # Explore. Mirrors `Feeds.Algorithms.Trending`, which scores only
-        # `visibility == "public"` posts.
-        where: is_nil(p.deleted_at) and p.inserted_at >= ^cutoff and p.visibility == "public",
+        # `visibility == "public"` posts. Admin-hidden posts don't count either.
+        where:
+          is_nil(p.deleted_at) and is_nil(p.hidden_at) and p.inserted_at >= ^cutoff and
+            p.visibility == "public",
         group_by: p.identity_id,
         select: %{
           identity_id: p.identity_id,
@@ -1431,21 +1448,33 @@ defmodule Hybridsocial.Accounts do
         select: %{identity_id: f.followee_id, n: count(f.id)}
       )
 
-    from(i in Identity,
-      where:
-        i.type == "user" and is_nil(i.parent_identity_id) and is_nil(i.deleted_at) and
-          i.is_suspended == false and i.is_silenced == false,
-      left_join: e in subquery(engagement),
-      on: e.identity_id == i.id,
-      left_join: fo in subquery(followers),
-      on: fo.identity_id == i.id,
-      order_by: [
-        desc: coalesce(e.score, 0) + coalesce(fo.n, 0),
-        desc: i.inserted_at
-      ],
-      limit: ^limit
-    )
-    |> Repo.all()
+    include_locked = not is_nil(viewer_id)
+    any_instance = not Keyword.get(opts, :local_only, false)
+
+    accounts =
+      from(i in Identity,
+        where:
+          i.type == "user" and is_nil(i.parent_identity_id) and is_nil(i.deleted_at) and
+            i.discoverable == true and
+            i.id not in subquery(Hybridsocial.Feeds.Visibility.publicly_hidden_author_ids()) and
+            (^include_locked or i.is_locked == false) and
+            (^any_instance or i.is_local == true),
+        left_join: e in subquery(engagement),
+        on: e.identity_id == i.id,
+        left_join: fo in subquery(followers),
+        on: fo.identity_id == i.id,
+        order_by: [
+          desc: coalesce(e.score, 0) + coalesce(fo.n, 0),
+          desc: i.inserted_at
+        ],
+        limit: ^limit
+      )
+      |> Repo.all()
+
+    hidden =
+      Hybridsocial.Social.QuoteVisibility.hidden_by_viewer(Enum.map(accounts, & &1.id), viewer_id)
+
+    Enum.reject(accounts, &MapSet.member?(hidden, &1.id))
   end
 
   # --- Account Approval ---

@@ -16,6 +16,7 @@ defmodule HybridsocialWeb.Api.V1.DirectoryController do
   """
   def new_users(conn, params) do
     limit = min(parse_int(params["limit"], 5), 50)
+    include_locked = not is_nil(conn.assigns[:current_identity])
 
     users =
       Identity
@@ -24,6 +25,7 @@ defmodule HybridsocialWeb.Api.V1.DirectoryController do
       |> where([i], i.is_suspended == false)
       |> where([i], i.is_shadow_banned == false)
       |> where([i], i.discoverable == true)
+      |> where([i], ^include_locked or i.is_locked == false)
       |> where([i], is_nil(i.parent_identity_id))
       |> join(:inner, [i], u in User, on: u.identity_id == i.id)
       |> where([i, u], not is_nil(u.confirmed_at))

@@ -119,7 +119,7 @@
 </script>
 
 <svelte:head>
-  <title>{post ? `Post by ${post.account.display_name || post.account.handle}` : 'Post'} - {$instanceName}</title>
+  <title>{post ? `Post by ${post.account.display_name || post.account.handle}` : page.data.seo ? `Post by ${page.data.seo.name}` : 'Post'} - {$instanceName}</title>
 </svelte:head>
 
 <div class="post-detail-page">
@@ -129,7 +129,14 @@
     </button>
   </div>
 
-  {#if loading}
+  {#if loading && page.data.seo}
+    <!-- Readable in the initial HTML, for search engines and before scripts load.
+         The live post replaces it. -->
+    <article class="seo-content">
+      <p><a href="/@{page.data.seo.handle}">{page.data.seo.name}</a></p>
+      <p>{page.data.seo.text}</p>
+    </article>
+  {:else if loading}
     <div class="page-loading">
       <Spinner />
     </div>
@@ -165,6 +172,11 @@
 </div>
 
 <style>
+  .seo-content {
+    padding: var(--space-4);
+    overflow-wrap: anywhere;
+  }
+
   .post-detail-page {
     max-width: var(--feed-max-width);
     margin: 0 auto;

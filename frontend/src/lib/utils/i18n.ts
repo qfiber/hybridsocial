@@ -10,12 +10,18 @@
  * Keys use dot notation: "nav.home", "auth.login", etc.
  */
 
+import en from '../../locales/en.json';
+
 type Translations = Record<string, string>;
 
+// English is bundled rather than loaded on demand. It's always needed as the
+// fallback, and a page rendered on the server, or before a load finishes, would
+// otherwise show raw keys. `$t` wouldn't correct those either: the locale store
+// doesn't notify when it's set to the same value.
 let currentLocale = 'en';
-let englishTranslations: Translations = {};
-let translations: Translations = {};
-let loadedLocales: Record<string, Translations> = {};
+let englishTranslations: Translations = en;
+let translations: Translations = en;
+let loadedLocales: Record<string, Translations> = { en };
 let availableLocales: { code: string; name: string; nativeName: string; rtl?: boolean }[] = [];
 
 /**

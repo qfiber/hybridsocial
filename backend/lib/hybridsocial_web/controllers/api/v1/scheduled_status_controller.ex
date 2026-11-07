@@ -2,6 +2,8 @@ defmodule HybridsocialWeb.Api.V1.ScheduledStatusController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Content.ScheduledPosts
+  alias Hybridsocial.Social.PostRateLimit
+  alias HybridsocialWeb.Helpers.PostRateLimitResponse
 
   # POST /api/v1/statuses/schedule
   def create(conn, params) do
@@ -12,6 +14,9 @@ defmodule HybridsocialWeb.Api.V1.ScheduledStatusController do
     # can edit it, otherwise refused — closing the impersonation hole that
     # would otherwise let anyone schedule a post in any page's name.
     with {:ok, author_id} <- Hybridsocial.Pages.resolve_post_author(params, identity.id),
+         # Counted when scheduled, not when published: otherwise a queue could
+         # release any number of posts at once, past every limit.
+         :ok <- PostRateLimit.check(identity),
          {:ok, post} <- ScheduledPosts.schedule_post(author_id, params) do
       conn
       |> put_status(:created)
@@ -21,6 +26,9 @@ defmodule HybridsocialWeb.Api.V1.ScheduledStatusController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "page.forbidden"})
+
+      {:error, %{window: _} = refused} ->
+        PostRateLimitResponse.refuse(conn, refused)
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn

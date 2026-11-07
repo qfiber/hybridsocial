@@ -3,6 +3,8 @@ defmodule Hybridsocial.Federation.ActorSerializer do
   Serializes local identities to ActivityPub Actor objects.
   """
 
+  alias Hybridsocial.Accounts.Identity
+
   @ap_context [
     "https://www.w3.org/ns/activitystreams",
     "https://w3id.org/security/v1"
@@ -42,7 +44,7 @@ defmodule Hybridsocial.Federation.ActorSerializer do
         "owner" => actor_url,
         "publicKeyPem" => identity.public_key
       },
-      "attachment" => build_profile_fields(identity.metadata),
+      "attachment" => build_profile_fields(identity),
       "tag" => build_actor_emoji_tags(identity),
       "endpoints" => %{
         "sharedInbox" => identity.shared_inbox_url || "#{base_url}/inbox"
@@ -94,21 +96,20 @@ defmodule Hybridsocial.Federation.ActorSerializer do
 
   defp maybe_add_also_known_as(actor, _), do: actor
 
-  defp build_profile_fields(nil), do: []
-
-  defp build_profile_fields(metadata) when is_map(metadata) do
-    metadata
-    |> Enum.map(fn {name, value} ->
+  # Only the profile fields a user wrote, never the rest of `metadata`. Receiving
+  # servers treat `value` as HTML, so escape it: this is plain text.
+  defp build_profile_fields(identity) do
+    identity
+    |> Identity.profile_fields()
+    |> Enum.map(fn %{"name" => name, "value" => value} ->
       %{
         "type" => "PropertyValue",
-        "name" => to_string(name),
-        "value" => to_string(value)
+        "name" => name,
+        "value" => value |> Plug.HTML.html_escape() |> to_string()
       }
     end)
     |> Enum.take(5)
   end
-
-  defp build_profile_fields(_), do: []
 
   defp build_actor_emoji_tags(identity) do
     text = "#{identity.display_name || ""} #{identity.bio || ""}"

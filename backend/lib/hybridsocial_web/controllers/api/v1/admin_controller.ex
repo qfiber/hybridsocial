@@ -1,6 +1,8 @@
 defmodule HybridsocialWeb.Api.V1.AdminController do
   use HybridsocialWeb, :controller
 
+  alias Hybridsocial.Social.PostRateLimit
+
   alias Hybridsocial.Moderation
   alias Hybridsocial.Federation
   alias Hybridsocial.Accounts
@@ -3511,6 +3513,8 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       silence_reason: identity.silence_reason,
       is_shadow_banned: identity.is_shadow_banned,
       force_sensitive: identity.force_sensitive,
+      post_limits: identity.post_limits || %{},
+      search_indexing_blocked: Map.get(identity, :search_indexing_blocked, false),
       is_admin: identity.is_admin,
       is_bot: identity.is_bot,
       force_bot: Map.get(identity, :force_bot, false),
@@ -4229,20 +4233,112 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           end
 
         true ->
-          # Set on identity metadata for regular users
-          metadata = (identity.metadata || %{}) |> Map.put("posts_per_hour", limit)
-          {:ok, _} = Accounts.admin_update_identity(identity, %{"metadata" => metadata})
+          limits = Map.put(identity.post_limits || %{}, "per_hour", limit)
+          {:ok, _} = save_post_limits(identity, limits)
 
           json(conn, %{
             identity_id: id,
             posts_per_hour: limit,
             type: "user",
-            global_default: Hybridsocial.Config.get("user_posts_per_hour", 0)
+            global_default: PostRateLimit.instance_defaults().user.hour
           })
       end
     else
       {:error, perm} -> deny(conn, perm)
     end
+  end
+
+  # PUT /api/v1/admin/users/:id/search_indexing
+  # Body: {blocked: true | false}. Keeps search engines off the profile and its
+  # posts. The page itself stays viewable.
+  def set_search_indexing(conn, %{"id" => id, "blocked" => blocked}) when is_boolean(blocked) do
+    with :ok <- require_permission(conn, "users.moderate"),
+         %{} = identity <- Accounts.get_identity(id),
+         {:ok, updated} <-
+           identity
+           |> Ecto.Changeset.change(search_indexing_blocked: blocked)
+           |> Hybridsocial.Repo.update() do
+      ip = conn.remote_ip |> :inet.ntoa() |> to_string()
+
+      Moderation.log(
+        conn.assigns.current_identity.id,
+        "user.search_indexing_set",
+        "identity",
+        id,
+        %{blocked: blocked},
+        ip
+      )
+
+      json(conn, %{identity_id: id, search_indexing_blocked: updated.search_indexing_blocked})
+    else
+      {:error, perm} when is_binary(perm) -> deny(conn, perm)
+      nil -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+    end
+  end
+
+  def set_search_indexing(conn, _params) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "search_indexing.invalid"})
+  end
+
+  # GET /api/v1/admin/post_limits/defaults
+  def post_limit_defaults(conn, _params) do
+    with :ok <- require_permission(conn, "users.moderate") do
+      json(conn, PostRateLimit.instance_defaults())
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  # PUT /api/v1/admin/users/:id/post_limits
+  # Body: {per_minute, per_hour, per_day}. Each is a whole number, where 0 means
+  # unlimited, or null to go back to the instance default.
+  def set_post_limits(conn, %{"id" => id} = params) do
+    with :ok <- require_permission(conn, "users.moderate"),
+         {:ok, limits} <- parse_post_limits(params),
+         %{} = identity <- Accounts.get_identity(id),
+         {:ok, updated} <- save_post_limits(identity, limits) do
+      ip = conn.remote_ip |> :inet.ntoa() |> to_string()
+
+      Moderation.log(
+        conn.assigns.current_identity.id,
+        "user.post_limits_set",
+        "identity",
+        id,
+        limits,
+        ip
+      )
+
+      json(conn, %{identity_id: id, post_limits: updated.post_limits})
+    else
+      {:error, :invalid_post_limits} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "post_limits.invalid"})
+
+      {:error, perm} when is_binary(perm) ->
+        deny(conn, perm)
+
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+    end
+  end
+
+  @post_limit_keys ~w(per_minute per_hour per_day)
+  defp parse_post_limits(params) do
+    limits = Map.take(params, @post_limit_keys)
+
+    valid? =
+      Enum.all?(limits, fn {_key, value} ->
+        is_nil(value) or (is_integer(value) and value >= 0)
+      end)
+
+    if valid? do
+      {:ok, limits |> Enum.reject(fn {_key, value} -> is_nil(value) end) |> Map.new()}
+    else
+      {:error, :invalid_post_limits}
+    end
+  end
+
+  defp save_post_limits(identity, limits) do
+    identity |> Ecto.Changeset.change(post_limits: limits) |> Hybridsocial.Repo.update()
   end
 
   def admin_create_promotion(conn, %{"identity_id" => identity_id} = params) do

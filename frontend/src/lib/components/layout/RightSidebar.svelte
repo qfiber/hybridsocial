@@ -379,7 +379,7 @@
           </li>
         {/each}
       </ul>
-      <a href="/explore" class="section-link">{$t('discover.view_all_trends')}</a>
+      <a href="/explore?tab=trending" class="section-link">{$t('discover.view_all_trends')}</a>
     {:else}
       <p class="empty-text">{$t('discover.no_trending')}</p>
     {/if}
@@ -422,7 +422,7 @@
           </li>
         {/each}
       </ul>
-      <a href="/explore" class="section-link">{$t('discover.find_hashtags')}</a>
+      <a href="/explore?tab=trending" class="section-link">{$t('discover.find_hashtags')}</a>
     {:else}
       <p class="empty-text">{$t('discover.no_hashtags')}</p>
     {/if}

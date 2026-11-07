@@ -1,6 +1,8 @@
 defmodule HybridsocialWeb.Api.V1.StatusControllerTest do
   use HybridsocialWeb.ConnCase, async: true
 
+  import Ecto.Query, only: [from: 2]
+
   alias Hybridsocial.Social.Posts
 
   defp login(conn, email) do
@@ -305,6 +307,92 @@ defmodule HybridsocialWeb.Api.V1.StatusControllerTest do
       conn = delete(conn, "/api/v1/statuses/#{post_record.id}/pin")
       response = json_response(conn, 200)
       assert response["is_pinned"] == false
+    end
+  end
+
+  describe "posting rate limits" do
+    alias Hybridsocial.Accounts.Identity
+
+    setup do
+      Application.put_env(:hybridsocial, :rate_limiting_enabled, true)
+      on_exit(fn -> Application.put_env(:hybridsocial, :rate_limiting_enabled, false) end)
+      :ok
+    end
+
+    defp limited_user(limits) do
+      "lim#{System.unique_integer([:positive])}"
+      |> create_user()
+      |> Ecto.Changeset.change(post_limits: limits)
+      |> Hybridsocial.Repo.update!()
+    end
+
+    test "past the limit a post is refused with a 429 that says when to retry", %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 1})
+      conn = auth_conn(conn, identity)
+
+      assert conn |> post("/api/v1/statuses", %{"content" => "one"}) |> json_response(201)
+
+      refused = post(conn, "/api/v1/statuses", %{"content" => "two"})
+      body = json_response(refused, 429)
+
+      assert body["error"] == "limits.post_rate_limit"
+      assert body["window"] == "minute"
+      assert body["limit"] == 1
+      assert [retry_after] = get_resp_header(refused, "retry-after")
+      assert String.to_integer(retry_after) == body["retry_after"]
+    end
+
+    test "a refused post is not created", %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 0, "per_hour" => 1})
+      conn = auth_conn(conn, identity)
+
+      post(conn, "/api/v1/statuses", %{"content" => "kept"})
+      assert conn |> post("/api/v1/statuses", %{"content" => "refused"}) |> json_response(429)
+
+      count =
+        Hybridsocial.Repo.aggregate(
+          from(p in Hybridsocial.Social.Post, where: p.identity_id == ^identity.id),
+          :count
+        )
+
+      assert count == 1
+    end
+
+    test "deleting a post does not free up the allowance", %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 1})
+      conn = auth_conn(conn, identity)
+
+      %{"id" => id} =
+        conn |> post("/api/v1/statuses", %{"content" => "one"}) |> json_response(201)
+
+      delete(conn, "/api/v1/statuses/#{id}")
+
+      assert conn |> post("/api/v1/statuses", %{"content" => "two"}) |> json_response(429)
+    end
+
+    test "scheduling a post uses the allowance too", %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 1})
+      conn = auth_conn(conn, identity)
+      at = DateTime.utc_now() |> DateTime.add(1, :day) |> DateTime.to_iso8601()
+      params = %{"content" => "later", "scheduled_at" => at}
+
+      assert conn |> post("/api/v1/statuses/schedule", params) |> json_response(201)
+      assert conn |> post("/api/v1/statuses/schedule", params) |> json_response(429)
+    end
+
+    test "a user can't lift their own limit through their profile", %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 1})
+      conn = auth_conn(conn, identity)
+
+      patch(conn, "/api/v1/accounts/update_credentials", %{
+        "post_limits" => %{"per_minute" => 0},
+        "metadata" => %{"posts_per_hour" => 0, "post_limits" => %{"per_minute" => 0}}
+      })
+
+      assert Hybridsocial.Repo.get!(Identity, identity.id).post_limits == %{"per_minute" => 1}
+
+      assert conn |> post("/api/v1/statuses", %{"content" => "one"}) |> json_response(201)
+      assert conn |> post("/api/v1/statuses", %{"content" => "two"}) |> json_response(429)
     end
   end
 end

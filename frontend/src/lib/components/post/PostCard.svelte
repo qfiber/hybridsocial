@@ -23,6 +23,7 @@
   import { t as translate } from '$lib/utils/i18n.js';
   import { effectiveTranslationTarget, translationEnabled } from '$lib/stores/translation.js';
   import { addToast } from '$lib/stores/toast.js';
+  import { follow } from '$lib/api/accounts.js';
 
   // Seeded PRNG from post ID for deterministic wave patterns
   function seededRng(seed: string) {
@@ -729,6 +730,23 @@
     goto(`/post/${post.id}`);
   }
 
+  // Inline Follow, offered only where the server says the viewer doesn't follow
+  // this author (the Trending feed). A follow is a settled action here: undoing
+  // it stays on the profile, so a stray tap can't flip it back and forth.
+  let followState = $state<'none' | 'following' | 'requested'>('none');
+
+  async function handleInlineFollow() {
+    if (followState !== 'none') return;
+    followState = 'following'; // optimistic
+    try {
+      const relationship = await follow(post.account.id);
+      followState = relationship.requested && !relationship.following ? 'requested' : 'following';
+    } catch {
+      followState = 'none';
+      addToast(translate('explore.follow_failed'), 'error');
+    }
+  }
+
   function handleCardClick(e: MouseEvent) {
     if (detail) return;
     const selection = window.getSelection();
@@ -789,16 +807,47 @@
           <span>{$t('post.pinned_badge')}</span>
         </div>
       {/if}
+      {#if post.trending_reason}
+        {#if post.trending_reason.type === 'tag' && post.trending_reason.tag}
+          <a
+            class="post-trending-reason"
+            href="/tags/{encodeURIComponent(post.trending_reason.tag)}"
+          >
+            <span class="material-symbols-outlined trending-reason-icon" aria-hidden="true">trending_up</span>
+            <span>{$t('explore.reason_tag', { tag: post.trending_reason.tag })}</span>
+          </a>
+        {:else if post.trending_reason.type === 'account'}
+          <div class="post-trending-reason">
+            <span class="material-symbols-outlined trending-reason-icon" aria-hidden="true">trending_up</span>
+            <span>{$t('explore.reason_account')}</span>
+          </div>
+        {/if}
+      {/if}
       <div class="post-author-line">
         <div class="post-author-info">
           <div class="post-author-name-row">
             <ProfileHoverCard handle={post.account.acct || post.account.handle}>
-              <a href="/@{post.account.handle}" class="post-display-name"><DisplayName name={displayName} emojis={post.account.emojis} /></a>
+              <a href="/@{post.account.handle}" class="post-display-name" dir="auto"><DisplayName name={displayName} emojis={post.account.emojis} /></a>
             </ProfileHoverCard>
             {#if accountBadgeView.showVerifiedMark}
               <VerifiedBadge size="sm" />
             {/if}
             <AccountTypeIndicator account={post.account} />
+            {#if post.viewer_follows_author === false}
+              <button
+                type="button"
+                class="post-inline-follow"
+                class:done={followState !== 'none'}
+                disabled={followState !== 'none'}
+                onclick={handleInlineFollow}
+              >
+                {followState === 'following'
+                  ? $t('explore.following')
+                  : followState === 'requested'
+                    ? $t('explore.requested')
+                    : $t('explore.follow')}
+              </button>
+            {/if}
             {#each accountBadgeView.nonTier as badge (badge.type)}
               <RoleBadge type={badge.type} label={badge.label} size="sm" />
             {/each}
@@ -989,7 +1038,7 @@
           {/if}
 
           {#if post.poll && !compact}
-            <div class="post-poll">
+            <div class="post-poll" data-requires-login>
               {#each pollOptions as option, i (i)}
                 {@const optimisticCount = option.votes_count + (pendingVoteOptions?.includes(i) ? 1 : 0)}
                 {@const pct = displayVotesTotal > 0 ? Math.round(optimisticCount / displayVotesTotal * 100) : 0}
@@ -1092,6 +1141,8 @@
 
           {#if post.quote && !compact}
             <QuoteCard post={post.quote} />
+          {:else if post.quote_unavailable && !compact}
+            <div class="quote-unavailable">{$t('quote.unavailable')}</div>
           {/if}
 
           {#if youtubeRef && !compact && mediaAttachments.length === 0}
@@ -1627,7 +1678,23 @@
     min-width: 0;
   }
 
+  /* The wrapper is what the row sizes. Without this it grows to the name's full
+     width and pushes past the card. It can't clip, or the hover card inside it
+     would be cut off, so the clipping is on the link. */
+  .post-author-name-row > :global(.hover-card-trigger) {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  /* Badges and buttons beside a long name keep their size; the name gives way. */
+  .post-author-name-row > :global(:not(.hover-card-trigger)) {
+    flex-shrink: 0;
+  }
+
+  /* `dir="auto"` on the link gives the name its own direction, so a long Arabic
+     name in this left-to-right row keeps its start and truncates at its end. */
   .post-display-name {
+    display: block;
     font-weight: 700;
     font-size: 16px;
     color: var(--color-text);
@@ -1713,6 +1780,71 @@
     font-size: var(--text-xs);
     color: var(--color-text-secondary);
     margin-block-end: 4px;
+  }
+
+  .post-trending-reason {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: fit-content;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-decoration: none;
+    margin-block-end: 4px;
+    padding-inline-start: 2px;
+  }
+
+  a.post-trending-reason:hover {
+    color: var(--color-primary);
+  }
+
+  .trending-reason-icon {
+    font-size: 14px;
+  }
+
+  .post-inline-follow {
+    flex: 0 0 auto;
+    position: relative;
+    margin-inline-start: var(--space-1);
+    padding: 1px 10px;
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--color-primary);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.5;
+    cursor: pointer;
+  }
+
+  /* Extends the tap target on touch without changing how the button looks. */
+  @media (pointer: coarse) {
+    .post-inline-follow::after {
+      content: '';
+      position: absolute;
+      inset: -10px -4px;
+    }
+  }
+
+  .post-inline-follow:hover:not(:disabled) {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #fff);
+  }
+
+  .post-inline-follow.done {
+    border-color: var(--color-border);
+    color: var(--color-text-tertiary);
+    cursor: default;
+  }
+
+  .quote-unavailable {
+    margin-block-start: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    color: var(--color-text-tertiary);
+    font-size: var(--text-sm);
   }
 
   .post-pinned-indicator {

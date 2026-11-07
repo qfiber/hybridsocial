@@ -3,11 +3,12 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   alias Hybridsocial.Feeds
   alias Hybridsocial.Feeds.Snapshot
-  alias Hybridsocial.Config
+  alias Hybridsocial.Trending.ExploreFeed
   alias Hybridsocial.Cache
   alias HybridsocialWeb.Serializers.PostSerializer
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
   alias HybridsocialWeb.Compat
+  alias HybridsocialWeb.Helpers.TimelineAccess
 
   # Short cache window for the *serialized* first page of the public /
   # global feeds. The heavy cost is the query plus per-post serialization
@@ -19,35 +20,9 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   # load; a 30s TTL keeps it fresh enough without an invalidation hook.
   @feed_cache_ttl 30
 
-  # Timeline access levels:
-  # "none"      — disallow all, require login
-  # "local"     — allow local + trending, block global
-  # "all"       — allow everything
-  defp timeline_access do
-    Config.get("public_timeline_access", "all")
-  end
-
-  defp check_timeline_access(conn, level) do
-    has_user = conn.assigns[:current_identity] != nil
-    access = timeline_access()
-
-    cond do
-      has_user -> :ok
-      access == "none" -> :denied
-      access == "local" and level == :global -> :denied
-      true -> :ok
-    end
-  end
-
-  defp deny_access(conn) do
-    conn
-    |> put_status(:unauthorized)
-    |> json(%{
-      error: "timeline.login_required",
-      message: "You need to create an account to view this timeline."
-    })
-    |> halt()
-  end
+  defp timeline_access, do: TimelineAccess.level()
+  defp check_timeline_access(conn, level), do: TimelineAccess.check(conn, level)
+  defp deny_access(conn), do: TimelineAccess.deny(conn)
 
   @doc "GET /api/v1/timelines/home - Authenticated home timeline"
   def home(conn, params) do
@@ -84,7 +59,10 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
 
   @doc "GET /api/v1/timelines/public - Public timeline (optional auth)"
   def public(conn, params) do
-    case check_timeline_access(conn, :local) do
+    # `local=false` serves remote posts, so it needs the same access as Global.
+    level = if Map.get(params, "local", "true") == "true", do: :local, else: :global
+
+    case check_timeline_access(conn, level) do
       :denied ->
         deny_access(conn)
 
@@ -139,22 +117,38 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
           |> Keyword.put(:viewer_id, viewer_id)
 
         serialized =
-          if first_page?(params) do
-            # Hashtag feeds are as expensive as the global feed and had no
-            # cache at all. Popular tags are prewarmed by
-            # Feeds.PrewarmWorker; long-tail tags fall back to a lazy
-            # snapshot on first view. Either way, layer viewer state on top.
-            Snapshot.hashtag_key(hashtag)
-            |> Snapshot.fetch(fn ->
+          cond do
+            # Snapshots are shared with logged-in members, so they hold locked
+            # accounts' public posts. Anonymous requests get a filtered query
+            # with its own short cache instead.
+            is_nil(viewer_id) ->
+              cached_feed(
+                "feed:tag:anon:#{hashtag}:#{Keyword.get(opts, :limit)}",
+                first_page?(params),
+                fn ->
+                  hashtag
+                  |> Feeds.hashtag_timeline(opts)
+                  |> PostSerializer.serialize_many(current_identity_id: nil)
+                end
+              )
+
+            first_page?(params) ->
+              # Hashtag feeds are as expensive as the global feed and had no
+              # cache at all. Popular tags are prewarmed by
+              # Feeds.PrewarmWorker; long-tail tags fall back to a lazy
+              # snapshot on first view. Either way, layer viewer state on top.
+              Snapshot.hashtag_key(hashtag)
+              |> Snapshot.fetch(fn ->
+                hashtag
+                |> Feeds.hashtag_timeline(viewer_id: nil, include_locked: true)
+                |> PostSerializer.serialize_many(current_identity_id: nil)
+              end)
+              |> PostSerializer.apply_viewer_state(viewer_id)
+
+            true ->
               hashtag
-              |> Feeds.hashtag_timeline(viewer_id: nil)
-              |> PostSerializer.serialize_many(current_identity_id: nil)
-            end)
-            |> PostSerializer.apply_viewer_state(viewer_id)
-          else
-            hashtag
-            |> Feeds.hashtag_timeline(opts)
-            |> PostSerializer.serialize_many(current_identity_id: viewer_id)
+              |> Feeds.hashtag_timeline(opts)
+              |> PostSerializer.serialize_many(current_identity_id: viewer_id)
           end
 
         conn
@@ -222,6 +216,60 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
   end
 
   @doc "GET /api/v1/timelines/global - Global timeline (optional auth)"
+  # Explore's Trending tab. Under "local" access an anonymous visitor may read
+  # trending but not remote posts, so they get the local half of the feed.
+  def trending(conn, params) do
+    case check_timeline_access(conn, :local) do
+      :denied ->
+        deny_access(conn)
+
+      :ok ->
+        identity = conn.assigns[:current_identity]
+        viewer_id = identity && identity.id
+        local_only = is_nil(identity) and timeline_access() == "local"
+
+        opts =
+          parse_pagination_params(params)
+          |> Keyword.merge(viewer_id: viewer_id, local_only: local_only)
+
+        cache_key =
+          "feed:trending:ser:#{viewer_id || "anon"}:#{local_only}:#{Keyword.get(opts, :limit)}"
+
+        serialized =
+          cached_feed(cache_key, first_page?(params), fn ->
+            opts |> ExploreFeed.list() |> serialize_trending(viewer_id)
+          end)
+
+        conn
+        |> put_link_headers(serialized, "/api/v1/timelines/trending")
+        |> put_status(:ok)
+        |> Compat.json(serialized, :statuses)
+    end
+  end
+
+  # Adds what only this feed shows: why a post is here, and whether to offer a
+  # follow button for its author.
+  defp serialize_trending(rows, viewer_id) do
+    posts = Enum.map(rows, &elem(&1, 0))
+    authors = Map.new(posts, &{&1.id, &1.identity_id})
+    reasons = Map.new(rows, fn {post, reason} -> {post.id, reason} end)
+
+    followed =
+      if viewer_id,
+        do: ExploreFeed.followed_author_ids(viewer_id, Enum.uniq(Map.values(authors)))
+
+    posts
+    |> PostSerializer.serialize_many(current_identity_id: viewer_id)
+    |> Enum.map(fn entry ->
+      entry
+      |> Map.put(:trending_reason, reasons[entry.id])
+      |> Map.put(
+        :viewer_follows_author,
+        if(followed, do: MapSet.member?(followed, authors[entry.id]))
+      )
+    end)
+  end
+
   def global(conn, params) do
     case check_timeline_access(conn, :global) do
       :denied ->
@@ -246,23 +294,39 @@ defmodule HybridsocialWeb.Api.V1.TimelineController do
         default_order? = Keyword.get(opts, :sort) in [nil, "newest"]
 
         serialized =
-          if default_order? and first_page?(params) do
-            # Serve the prewarmed, viewer-independent snapshot (kept hot by
-            # Feeds.PrewarmWorker) and layer this viewer's interaction
-            # state on top. Anonymous viewers get the base unchanged.
-            Snapshot.global_key(include_replies)
-            |> Snapshot.fetch(fn ->
-              [viewer_id: nil, include_replies: include_replies]
+          cond do
+            # The snapshot is shared with logged-in members, so it holds locked
+            # accounts' public posts. Anonymous requests get a filtered query
+            # with its own short cache instead.
+            is_nil(viewer_id) ->
+              cached_feed(
+                "feed:global:anon:#{include_replies}:#{Keyword.get(opts, :sort, "newest")}:#{Keyword.get(opts, :limit)}",
+                first_page?(params),
+                fn ->
+                  opts
+                  |> Feeds.global_timeline()
+                  |> PostSerializer.serialize_many(current_identity_id: nil)
+                end
+              )
+
+            default_order? and first_page?(params) ->
+              # Serve the prewarmed, viewer-independent snapshot (kept hot by
+              # Feeds.PrewarmWorker) and layer this viewer's interaction
+              # state on top.
+              Snapshot.global_key(include_replies)
+              |> Snapshot.fetch(fn ->
+                [viewer_id: nil, include_replies: include_replies, include_locked: true]
+                |> Feeds.global_timeline()
+                |> PostSerializer.serialize_many(current_identity_id: nil)
+              end)
+              |> PostSerializer.apply_viewer_state(viewer_id)
+
+            true ->
+              # Older pages (cursor present) are unbounded and personalised,
+              # so compute them fresh.
+              opts
               |> Feeds.global_timeline()
-              |> PostSerializer.serialize_many(current_identity_id: nil)
-            end)
-            |> PostSerializer.apply_viewer_state(viewer_id)
-          else
-            # Older pages (cursor present) are unbounded and personalised,
-            # so compute them fresh.
-            opts
-            |> Feeds.global_timeline()
-            |> PostSerializer.serialize_many(current_identity_id: viewer_id)
+              |> PostSerializer.serialize_many(current_identity_id: viewer_id)
           end
 
         conn

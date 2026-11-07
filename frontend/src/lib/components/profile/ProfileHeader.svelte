@@ -195,7 +195,7 @@
         </div>
       {/if}
 
-      <div class="profile-actions">
+      <div class="profile-actions" data-requires-login>
         {#if staffActions}
           {@render staffActions()}
         {/if}
@@ -530,6 +530,12 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+
+  /* A profile shows the whole name, so a long one wraps rather than truncates. */
+  .profile-display-name-text {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .profile-display-name {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PublicLayout from '$lib/components/layout/PublicLayout.svelte';
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
   import AppLayout from '$lib/components/layout/AppLayout.svelte';
@@ -29,6 +30,7 @@
   const showComposer = false;
 
   let { children } = $props();
+
   let authState = $state({ user: null as any, initialized: false });
   let consented = $state(hasConsented());
   let showOnboarding = $state(false);
@@ -37,6 +39,14 @@
 
   cookieConsent.subscribe((v) => (consented = v));
   const unsubAuth = authStore.subscribe((s) => (authState = s));
+
+  // A route's server load sets `publicView` when this page may be shown without
+  // logging in. If a session cookie exists, hold for auth as usual so a logged-in
+  // visitor doesn't get a flash of the logged-out layout.
+  let publicView = $derived(page.data.publicView === true);
+  let showPublic = $derived(
+    publicView && !authState.user && (authState.initialized || !page.data.hasSession),
+  );
 
   // Gate rendering + side-effects on auth being resolved. Until the
   // root layout's initAuth() finishes we don't know whether the user
@@ -47,6 +57,7 @@
     if (!browser || !authState.initialized) return;
 
     if (!authState.user) {
+      if (publicView) return;
       if (!redirecting) {
         redirecting = true;
         goto('/login');
@@ -82,7 +93,13 @@
   });
 </script>
 
-{#if !consented}
+{#if showPublic}
+  <!-- No session means no cookies yet, so the consent wall isn't needed here, and
+       it would hide the page from visitors and search engines. -->
+  <PublicLayout>
+    {@render children()}
+  </PublicLayout>
+{:else if !consented}
   <CookieBanner onaccept={() => consented = true} />
 {:else if !authState.initialized || !authState.user}
   <!-- Hold the shell blank until auth is resolved. Rendering authed

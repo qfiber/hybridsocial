@@ -21,6 +21,7 @@
 	const pageOg = $derived(($page.data as Record<string, any>)?.og as
 		| {
 				title?: string;
+				robots?: string;
 				description?: string;
 				image?: string;
 				image_width?: number | null;
@@ -69,6 +70,9 @@
 
 <svelte:head>
 	<title>{ogTitle}</title>
+	{#if pageOg?.robots}
+		<meta name="robots" content={pageOg.robots} />
+	{/if}
 	<meta property="og:title" content={ogTitle} />
 	<meta property="og:site_name" content={instTitle} />
 	<meta property="og:type" content={ogType} />

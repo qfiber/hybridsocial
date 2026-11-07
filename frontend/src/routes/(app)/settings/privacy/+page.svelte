@@ -120,7 +120,10 @@
     <div class="setting-row">
       <div class="setting-info">
         <span class="setting-label">Lock account</span>
-        <span class="setting-description">Manually approve follow requests</span>
+        <span class="setting-description">
+          Manually approve follow requests. Your profile and posts can't be viewed by
+          people who aren't logged in, or found through search engines.
+        </span>
       </div>
       <Toggle bind:checked={isLocked} name="locked" />
     </div>
@@ -159,11 +162,12 @@
 
     <div class="setting-row">
       <div class="setting-info">
-        <span class="setting-label">Show me in the directory</span>
+        <span class="setting-label">Show me in the directory and search engines</span>
         <span class="setting-description">
           Appear in the New Members widget and the <a href="/directory">directory</a>
-          when you're a recent signup. When off, your account is still public
-          but not promoted as a new member.
+          when you're a recent signup, and let search engines index your profile and
+          public posts. When off, your profile page and public posts can still be
+          viewed without logging in, but aren't promoted or indexed.
         </span>
       </div>
       <Toggle bind:checked={discoverable} name="discoverable" />

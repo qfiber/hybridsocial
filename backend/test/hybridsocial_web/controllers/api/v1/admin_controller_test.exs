@@ -1164,6 +1164,81 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
     end
   end
 
+  describe "posting limits" do
+    alias Hybridsocial.Accounts.Identity
+    alias Hybridsocial.Repo
+
+    setup %{conn: conn} do
+      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+      start_supervised!(Hybridsocial.Config.Store)
+
+      admin = create_admin("limits_admin")
+      target = create_user("limits_target")
+      %{conn: admin_conn(conn, admin), plain: conn, target: target}
+    end
+
+    test "staff can set, read back and clear an account's limits", %{conn: conn, target: target} do
+      path = "/api/v1/admin/users/#{target.id}/post_limits"
+
+      body = conn |> put(path, %{"per_hour" => 2, "per_day" => 10}) |> json_response(200)
+      assert body["post_limits"] == %{"per_hour" => 2, "per_day" => 10}
+      assert Repo.get!(Identity, target.id).post_limits == %{"per_hour" => 2, "per_day" => 10}
+
+      user = conn |> get("/api/v1/admin/users/#{target.id}") |> json_response(200)
+      assert user["post_limits"] == %{"per_hour" => 2, "per_day" => 10}
+
+      body = conn |> put(path, %{"per_hour" => nil}) |> json_response(200)
+      assert body["post_limits"] == %{}
+    end
+
+    test "0 is accepted, and means exempt", %{conn: conn, target: target} do
+      path = "/api/v1/admin/users/#{target.id}/post_limits"
+
+      assert conn |> put(path, %{"per_day" => 0}) |> json_response(200)
+
+      assert %{day: 0} =
+               Hybridsocial.Social.PostRateLimit.limits_for(Repo.get!(Identity, target.id))
+    end
+
+    test "invalid values are refused and change nothing", %{conn: conn, target: target} do
+      path = "/api/v1/admin/users/#{target.id}/post_limits"
+
+      for bad <- [-1, "5", 1.5, %{}] do
+        assert conn |> put(path, %{"per_day" => bad}) |> json_response(422)
+      end
+
+      assert Repo.get!(Identity, target.id).post_limits == %{}
+    end
+
+    test "an unknown account is a 404", %{conn: conn} do
+      path = "/api/v1/admin/users/#{Ecto.UUID.generate()}/post_limits"
+      assert conn |> put(path, %{"per_day" => 1}) |> json_response(404)
+    end
+
+    test "a regular user can't set limits", %{plain: conn, target: target} do
+      conn = auth_conn(conn, create_user("limits_plain"))
+
+      response = put(conn, "/api/v1/admin/users/#{target.id}/post_limits", %{"per_day" => 0})
+
+      assert response.status in [401, 403]
+      assert Repo.get!(Identity, target.id).post_limits == %{}
+    end
+
+    test "defaults reflect the settings, which the settings API can write", %{conn: conn} do
+      assert %{"user" => %{"minute" => 6, "hour" => 20, "day" => 100}} =
+               conn |> get("/api/v1/admin/post_limits/defaults") |> json_response(200)
+
+      conn
+      |> put("/api/v1/admin/settings", %{
+        "settings" => [%{"key" => "user_posts_per_hour", "value" => 12}]
+      })
+      |> json_response(200)
+
+      assert %{"user" => %{"hour" => 12}} =
+               conn |> get("/api/v1/admin/post_limits/defaults") |> json_response(200)
+    end
+  end
+
   describe "email domain bans" do
     setup %{conn: conn} do
       %{conn: admin_conn(conn, create_admin("email_ban_admin"))}

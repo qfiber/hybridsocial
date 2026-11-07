@@ -94,6 +94,23 @@ export function createAdminUser(
   return api.post('/api/v1/admin/users', payload);
 }
 
+export type PostLimits = { per_minute?: number; per_hour?: number; per_day?: number };
+export type PostLimitDefaults = Record<'user' | 'bot', { minute: number; hour: number; day: number }>;
+
+export function getPostLimitDefaults(): Promise<PostLimitDefaults> {
+  return api.get('/api/v1/admin/post_limits/defaults');
+}
+
+// Leave a window out to use the instance default. 0 means unlimited.
+export function setUserPostLimits(id: string, limits: PostLimits): Promise<unknown> {
+  return api.put(`/api/v1/admin/users/${id}/post_limits`, limits);
+}
+
+// Keeps search engines off a profile and its posts. The page stays viewable.
+export function setUserSearchIndexing(id: string, blocked: boolean): Promise<unknown> {
+  return api.put(`/api/v1/admin/users/${id}/search_indexing`, { blocked });
+}
+
 export function suspendUser(id: string): Promise<void> {
   return api.post(`/api/v1/admin/users/${id}/suspend`);
 }

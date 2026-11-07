@@ -2,38 +2,64 @@ defmodule HybridsocialWeb.Api.V1.TrendController do
   use HybridsocialWeb, :controller
 
   alias Hybridsocial.Trending
+  alias HybridsocialWeb.Helpers.TimelineAccess
   import Ecto.Query, only: [from: 2]
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # GET /api/v1/trends/tags
   def tags(conn, params) do
-    limit = clamp_limit(Map.get(params, "limit"))
-    offset = parse_int(Map.get(params, "offset"), 0)
+    with_access(conn, fn ->
+      # Trending tags are one list built across the fediverse, so a visitor limited
+      # to local content gets none, rather than a list that names remote activity.
+      trending =
+        if TimelineAccess.local_only?(conn) do
+          []
+        else
+          Trending.get_trending_hashtags(
+            limit: clamp_limit(Map.get(params, "limit")),
+            offset: parse_int(Map.get(params, "offset"), 0)
+          )
+        end
 
-    trending = Trending.get_trending_hashtags(limit: limit, offset: offset)
-
-    conn
-    |> put_status(:ok)
-    |> json(Enum.map(trending, &serialize_trending_hashtag/1))
+      conn
+      |> put_status(:ok)
+      |> json(Enum.map(trending, &serialize_trending_hashtag/1))
+    end)
   end
 
   # GET /api/v1/trends/statuses
   def statuses(conn, params) do
-    limit = clamp_limit(Map.get(params, "limit"))
-    offset = parse_int(Map.get(params, "offset"), 0)
+    with_access(conn, fn ->
+      viewer_id = conn.assigns[:current_identity] && conn.assigns.current_identity.id
 
-    trending = Trending.get_trending_posts(limit: limit, offset: offset)
+      trending =
+        Trending.get_trending_posts(
+          limit: clamp_limit(Map.get(params, "limit")),
+          offset: parse_int(Map.get(params, "offset"), 0),
+          viewer_id: viewer_id,
+          local_only: TimelineAccess.local_only?(conn)
+        )
 
-    conn
-    |> put_status(:ok)
-    |> json(Enum.map(trending, &serialize_trending_post/1))
+      conn
+      |> put_status(:ok)
+      |> json(Enum.map(trending, &serialize_trending_post/1))
+    end)
   end
 
   # GET /api/v1/trends/links
   def links(conn, _params) do
-    conn
-    |> put_status(:ok)
-    |> json([])
+    with_access(conn, fn ->
+      conn
+      |> put_status(:ok)
+      |> json([])
+    end)
+  end
+
+  defp with_access(conn, fun) do
+    case TimelineAccess.check(conn, :local) do
+      :ok -> fun.()
+      :denied -> TimelineAccess.deny(conn)
+    end
   end
 
   defp parse_int(nil, default), do: default

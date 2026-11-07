@@ -33,6 +33,7 @@ defmodule HybridsocialWeb.CrawlerController do
   import Ecto.Query
 
   alias Hybridsocial.Accounts
+  alias Hybridsocial.Accounts.PublicProfile
   alias Hybridsocial.Config
   alias Hybridsocial.Content.LinkPreviews
   alias Hybridsocial.Media.MediaFile
@@ -44,6 +45,9 @@ defmodule HybridsocialWeb.CrawlerController do
   # Fallback OG image. The operator can override with the `instance_og_image`
   # config key; otherwise we use the site's default brand icon.
   @placeholder_image_path "/icons/icon.svg"
+
+  # How many recent posts a profile's initial HTML carries for search engines.
+  @seo_recent_posts 20
 
   # ---------------------------------------------------------------------------
   # GET /post/:id
@@ -66,8 +70,8 @@ defmodule HybridsocialWeb.CrawlerController do
   # returns the neutral private placeholder.
   def post_meta(conn, %{"id" => id}) do
     case fetch_post(id) do
-      {:ok, :public, post} -> json(conn, post_og_public(post))
-      {:ok, :private, post} -> json(conn, post_og_private(post))
+      {:ok, :public, post} -> json(conn, post_og_public(post) |> Map.merge(post_access(post)))
+      {:ok, :private, post} -> json(conn, post_og_private(post) |> Map.merge(post_access(post)))
       {:error, :not_found} -> conn |> put_status(:not_found) |> json(%{error: "not_found"})
     end
   end
@@ -79,7 +83,7 @@ defmodule HybridsocialWeb.CrawlerController do
   def profile(conn, %{"handle" => handle}) do
     if UserAgent.crawler?(conn) do
       case Accounts.get_identity_by_handle(handle) do
-        %{allow_unfurl: true, deleted_at: nil, is_suspended: false} = identity ->
+        %{allow_unfurl: true, is_locked: false, deleted_at: nil, is_suspended: false} = identity ->
           render_og(conn, profile_og_full(identity))
 
         %{deleted_at: nil, is_suspended: false} = identity ->
@@ -98,11 +102,13 @@ defmodule HybridsocialWeb.CrawlerController do
   # private/locked profile never leaks content.
   def profile_meta(conn, %{"handle" => handle}) do
     case Accounts.get_identity_by_handle(handle) do
-      %{allow_unfurl: true, deleted_at: nil, is_suspended: false} = identity ->
-        json(conn, profile_og_full(identity))
+      # A link preview of a locked account shows nothing but the placeholder, or it
+      # would give away the name and bio that the page itself no longer shows.
+      %{allow_unfurl: true, is_locked: false, deleted_at: nil, is_suspended: false} = identity ->
+        json(conn, profile_og_full(identity) |> Map.merge(profile_access(identity)))
 
       %{deleted_at: nil, is_suspended: false} = identity ->
-        json(conn, profile_og_placeholder(identity))
+        json(conn, profile_og_placeholder(identity) |> Map.merge(profile_access(identity)))
 
       _ ->
         conn |> put_status(:not_found) |> json(%{error: "not_found"})
@@ -230,6 +236,66 @@ defmodule HybridsocialWeb.CrawlerController do
     send_xml(conn, urlset(urls))
   end
 
+  # --- Public view and search indexing ---
+
+  # What the web app needs to serve a page to a logged-out visitor. `seo` is text
+  # rendered in the page's initial HTML, so it's only sent for what may be indexed.
+  defp profile_access(identity) do
+    indexable = PublicProfile.indexable?(identity)
+
+    %{
+      public: PublicProfile.public?(identity),
+      indexable: indexable,
+      seo: if(indexable, do: profile_seo(identity))
+    }
+  end
+
+  defp profile_seo(identity) do
+    %{
+      name: identity.display_name || identity.handle,
+      handle: identity.handle,
+      bio: text_only(identity.bio),
+      posts: Enum.map(recent_public_posts(identity.id), &post_seo/1)
+    }
+  end
+
+  defp recent_public_posts(identity_id) do
+    from(p in Post,
+      where:
+        p.identity_id == ^identity_id and p.visibility == "public" and is_nil(p.deleted_at) and
+          is_nil(p.hidden_at) and not is_nil(p.published_at) and is_nil(p.parent_id),
+      order_by: [desc: p.published_at, desc: p.id],
+      limit: @seo_recent_posts
+    )
+    |> Repo.all()
+  end
+
+  defp post_seo(post) do
+    %{
+      id: post.id,
+      text: text_only(post.content_html || post.content),
+      published_at: post.published_at
+    }
+  end
+
+  defp post_access(post) do
+    author = Repo.preload(post, :identity).identity
+    live = is_nil(post.deleted_at) and is_nil(post.hidden_at) and not is_nil(post.published_at)
+    public = live and post.visibility in ["public", "unlisted"] and PublicProfile.public?(author)
+    indexable = public and post.visibility == "public" and PublicProfile.indexable?(author)
+
+    %{
+      public: public,
+      indexable: indexable,
+      seo:
+        if(indexable,
+          do:
+            post_seo(post)
+            |> Map.merge(%{name: author.display_name || author.handle, handle: author.handle})
+        )
+    }
+  end
+
   # ---------------------------------------------------------------------------
   # Sitemap helpers
   # ---------------------------------------------------------------------------
@@ -247,6 +313,19 @@ defmodule HybridsocialWeb.CrawlerController do
     |> where([p], is_nil(p.hidden_at))
     |> where([p], not is_nil(p.published_at))
     |> where([_p, i], i.is_local == true)
+    |> where_author_indexable()
+  end
+
+  # The sitemap has to agree with PublicProfile.indexable?/1, or it advertises
+  # pages that then say noindex.
+  defp where_author_indexable(query) do
+    where(
+      query,
+      [_p, i],
+      is_nil(i.deleted_at) and i.is_suspended == false and i.is_shadow_banned == false and
+        i.discoverable == true and i.allow_unfurl == true and i.is_locked == false and
+        i.is_silenced == false and i.search_indexing_blocked == false
+    )
   end
 
   defp discoverable_profiles_query do
@@ -257,6 +336,11 @@ defmodule HybridsocialWeb.CrawlerController do
     |> where([i], i.is_shadow_banned == false)
     |> where([i], i.allow_unfurl == true)
     |> where([i], is_nil(i.parent_identity_id))
+    |> where([i], i.is_local == true)
+    |> where([i], i.discoverable == true)
+    |> where([i], i.is_locked == false)
+    |> where([i], i.is_silenced == false)
+    |> where([i], i.search_indexing_blocked == false)
   end
 
   defp post_page_entries(base) do
@@ -571,7 +655,10 @@ defmodule HybridsocialWeb.CrawlerController do
         {:ok, :private, post}
 
       %Post{visibility: "public", ap_id: ap_id} = post ->
-        if local_or_unknown_ap_id?(ap_id), do: {:ok, :public, post}, else: {:ok, :private, post}
+        if local_or_unknown_ap_id?(ap_id) and
+             not Repo.preload(post, :identity).identity.is_locked,
+           do: {:ok, :public, post},
+           else: {:ok, :private, post}
 
       %Post{} = post ->
         {:ok, :private, post}

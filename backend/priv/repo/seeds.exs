@@ -357,6 +357,50 @@ settings = [
 
   # Security
   %{
+    key: "user_posts_per_minute",
+    value: %{"value" => 6},
+    type: "integer",
+    category: "security",
+    description:
+      "Posts allowed per minute for users, unless overridden per account (0 = unlimited)"
+  },
+  %{
+    key: "user_posts_per_hour",
+    value: %{"value" => 20},
+    type: "integer",
+    category: "security",
+    description: "Posts allowed per hour for users, unless overridden per account (0 = unlimited)"
+  },
+  %{
+    key: "user_posts_per_day",
+    value: %{"value" => 100},
+    type: "integer",
+    category: "security",
+    description: "Posts allowed per day for users, unless overridden per account (0 = unlimited)"
+  },
+  %{
+    key: "bot_posts_per_minute",
+    value: %{"value" => 10},
+    type: "integer",
+    category: "security",
+    description:
+      "Posts allowed per minute for bots, unless overridden per account (0 = unlimited)"
+  },
+  %{
+    key: "bot_posts_per_hour",
+    value: %{"value" => 30},
+    type: "integer",
+    category: "security",
+    description: "Posts allowed per hour for bots, unless overridden per account (0 = unlimited)"
+  },
+  %{
+    key: "bot_posts_per_day",
+    value: %{"value" => 0},
+    type: "integer",
+    category: "security",
+    description: "Posts allowed per day for bots, unless overridden per account (0 = unlimited)"
+  },
+  %{
     key: "rate_limit_authenticated",
     value: %{"value" => 300},
     type: "integer",

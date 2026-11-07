@@ -79,7 +79,12 @@ export function connectChatStream(apiBase: string): void {
             if (viewer && senderId && viewer.id === senderId) {
               // Our own echo — no sound.
             } else {
-              import('./sound.js').then((m) => m.playMessageSound());
+              const messageId = (data?.id ?? (data?.message as { id?: string } | undefined)?.id) as
+                | string
+                | undefined;
+              import('./sound.js').then((m) =>
+                m.playMessageSound(messageId ? `message:${messageId}` : undefined),
+              );
             }
           }
         } catch {

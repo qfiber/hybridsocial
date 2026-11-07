@@ -153,7 +153,12 @@ is pluggable: `home_timeline` dispatches through `AlgorithmResolver.impl(opts)` 
 `Feeds.Algorithms.{Chronological, Algorithmic, Trending}`, chosen by the `algorithm`/`sort`
 query param (Home's Latest/For You/Top; Explore's tabs). `Trending` scores public posts by
 engagement × velocity × time-decay over a config window and caps posts-per-author for
-diversity. **Cursor pagination is keyset, not id-based** — post ids are random UUIDv4, so a
+diversity. Explore's Trending tab is a separate feed, `Trending.ExploreFeed`: `Trending.Worker`
+precomputes a blend of engaged posts, trending tags' top posts and trending accounts' best posts
+into `trending_feed_entries`, ranking local and remote apart and interleaving them by
+`explore_trending_local_share`, and `GET /api/v1/timelines/trending` keysets over the stored slot
+with moderation and viewer filters applied on read. Its tunables are `explore_trending_*` settings.
+**Cursor pagination is keyset, not id-based** — post ids are random UUIDv4, so a
 `p.id < max_id` compare returns an arbitrary slice; the public/global timelines resolve a
 cursor id to its `(activity_ts, id)` tuple (`lookup_activity_cursor`) and row-tuple compare,
 `max_id` for older / `min_id` for newer (so ascending "oldest" paginates via `min_id`). Never
@@ -186,6 +191,13 @@ viewer's own interaction state layered on by `apply_viewer_state`.
   `pages.ex` — `can_edit?` (parent/org owner, admin, editor) ⊇ what `can_moderate?` adds
   (moderator), while `can_manage?` (owner/admin only) gates role grants and settings. Gate any
   "act as / edit the page" path on the matching predicate; instance staff don't implicitly get it.
+
+**Public profiles.** `Accounts.PublicProfile` is the one definition of what a logged-out visitor
+(`public?/1`) and a search engine (`indexable?/1`) may see. A route opts into the logged-out view by
+returning `publicView` from its `+page.server.ts`; `(app)/+layout.svelte` then renders `PublicLayout`
+instead of redirecting to login. A locked account is never public, and `Accounts.hidden_from_viewer?/2` hides it from anonymous API requests too. Mark controls that need an account with `data-requires-login`.
+Staff block indexing with `identities.search_indexing_blocked`, and sitemap queries must stay in step
+with `indexable?/1`. SSR fetches to the backend need `x-forwarded-proto: https`, or they get a 301.
 
 **Staff moderation & takedowns.** A staff (`:staff`) deletion of a group/page/post is an
 accountable **takedown**, not a raw delete: `moderation/takedown.ex` (`moderation_takedowns`

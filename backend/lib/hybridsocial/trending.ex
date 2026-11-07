@@ -67,6 +67,7 @@ defmodule Hybridsocial.Trending do
   def get_trending_posts(opts \\ []) do
     limit = parse_limit(opts)
     offset = parse_offset(opts)
+    viewer_id = Keyword.get(opts, :viewer_id)
 
     trending =
       TrendingData
@@ -89,6 +90,10 @@ defmodule Hybridsocial.Trending do
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> Visibility.apply_blocked_hashtag_filter()
+      |> Visibility.exclude_locked_for_anonymous(viewer_id)
+      |> Visibility.apply_block_filter(viewer_id)
+      |> Visibility.apply_mute_filter(viewer_id)
+      |> maybe_local_only(Keyword.get(opts, :local_only, false))
       |> Repo.all()
       |> Repo.preload(:identity)
       |> Map.new(&{&1.id, &1})
@@ -98,6 +103,13 @@ defmodule Hybridsocial.Trending do
     end)
     |> Enum.filter(fn %{post: post} -> post != nil end)
   end
+
+  defp maybe_local_only(query, true) do
+    local = from(i in Hybridsocial.Accounts.Identity, where: i.is_local == true, select: i.id)
+    where(query, [p], p.identity_id in subquery(local))
+  end
+
+  defp maybe_local_only(query, _), do: query
 
   @doc """
   Returns precomputed trending hashtags with limit/offset.
@@ -155,7 +167,9 @@ defmodule Hybridsocial.Trending do
       # the trending row.
       |> where([p], is_nil(p.hidden_at))
       |> where([p], p.visibility == "public")
-      |> where([p], p.published_at >= ^cutoff)
+      # A remote `published` is whatever the sender claims. A future date would
+      # make the decay below exceed 1 and pin the post to the top.
+      |> where([p], p.published_at >= ^cutoff and p.published_at <= ^now)
       |> where([p], p.identity_id not in subquery(Visibility.publicly_hidden_author_ids()))
       |> Visibility.apply_blocked_hashtag_filter()
       |> join(:left, [p], r in "reactions", on: r.post_id == p.id and r.inserted_at >= ^cutoff)
@@ -241,13 +255,20 @@ defmodule Hybridsocial.Trending do
       |> join(:inner, [_h, ph], p in Post,
         on:
           p.id == ph.post_id and p.inserted_at >= ^cutoff and is_nil(p.deleted_at) and
-            is_nil(p.hidden_at)
+            is_nil(p.hidden_at) and p.visibility == "public"
       )
       # Moderated authors must not be able to push a tag into trending: a few
       # flooding accounts are otherwise enough to fill the list on their own.
       |> where(
         [_h, _ph, p],
         p.identity_id not in subquery(Visibility.publicly_hidden_author_ids())
+      )
+      # Trending tags are a public list, so locked accounts don't feed them.
+      |> where(
+        [_h, _ph, p],
+        p.identity_id not in subquery(
+          from(i in Hybridsocial.Accounts.Identity, where: i.is_locked == true, select: i.id)
+        )
       )
       |> group_by([h, _ph, _p], [h.id, h.name])
       |> select([h, _ph, p], %{
@@ -328,6 +349,7 @@ defmodule Hybridsocial.Trending do
       |> join(:inner, [p], ph in "post_hashtags", on: ph.post_id == p.id)
       |> where([p, ph], ph.hashtag_id in type(^hashtag_ids, {:array, Ecto.UUID}))
       |> where([p, _ph], p.inserted_at >= ^history_cutoff and is_nil(p.deleted_at))
+      |> Visibility.exclude_locked_for_anonymous(nil)
       |> group_by([p, ph], [ph.hashtag_id, fragment("date_trunc('day', ?)", p.inserted_at)])
       |> select([p, ph], %{
         # `post_hashtags` is queried as a raw table source, so without

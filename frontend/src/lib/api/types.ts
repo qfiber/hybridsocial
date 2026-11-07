@@ -127,6 +127,10 @@ export interface Post {
   boost_count: number;
   reaction_count: number;
   is_pinned: boolean;
+  /** Explore's Trending feed only: why a post is there, when not self-evident. */
+  trending_reason?: { type: 'tag' | 'account'; tag?: string } | null;
+  /** Explore's Trending feed only: false offers an inline Follow button. */
+  viewer_follows_author?: boolean | null;
   // Which container the pin actually belongs to. Lets the UI hide the
   // "Pinned" badge / Unpin entry on feeds outside that scope so a
   // group-pin doesn't read as a profile-pin when the same row shows
@@ -181,6 +185,8 @@ export interface Post {
   media_reaction_counts?: Record<string, number>;
   in_reply_to_account_id: string | null;
   quote: Post | null;
+  /** This post quotes something the viewer can't see. `quote` is null. */
+  quote_unavailable?: boolean;
   card: LinkCard | null;
   mentions: PostMention[];
   tags: PostTag[];
@@ -528,6 +534,8 @@ export interface NotificationPreferences {
 
 export interface AdminUser {
   id: string;
+  post_limits?: { per_minute?: number; per_hour?: number; per_day?: number };
+  search_indexing_blocked?: boolean;
   handle: string;
   /**
    * Identity kind as the API names it — note `page`, not the stored
