@@ -107,12 +107,12 @@
 		{/if}
 		<meta name="twitter:card" content="summary_large_image" />
 	{/if}
-	<link rel="icon" href={$themeStore?.favicon_url || data?.instance?.favicon_url || favicon} />
 	<!-- iOS home-screen name and icon follow the instance, like the manifest
 	     (routes/manifest.json). iOS can't use an SVG here, so only a PNG
 	     favicon replaces the default. -->
 	<meta name="apple-mobile-web-app-title" content={data?.instance?.title || 'HybridSocial'} />
 	<link rel="apple-touch-icon" href={appleTouchIcon} />
+	<link rel="icon" href={$themeStore?.favicon_url || data?.instance?.favicon_url || favicon} />
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
