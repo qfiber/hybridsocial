@@ -51,7 +51,10 @@
   .npb-floater {
     position: fixed;
     inset-block-start: calc(var(--header-height) + 12px);
-    inset-inline-start: 50%;
+    /* Physical `left`: centering is direction-neutral, and with
+       `inset-inline-start` an RTL page anchors from the right while
+       translateX(-50%) still shifts left — a full width off-center. */
+    left: 50%;
     transform: translateX(-50%);
     z-index: 50;
     pointer-events: none;

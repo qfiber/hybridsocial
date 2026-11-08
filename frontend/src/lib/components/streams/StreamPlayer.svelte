@@ -398,7 +398,9 @@
       {/if}
     </button>
     {#if showTime}
-      <span class="stream-time" aria-hidden="true">{fmt(currentTime)} / {fmt(duration)}</span>
+      <!-- dir="ltr": "0:08 / 0:19" is all digits and neutrals, so in an RTL page
+           the bidi algorithm would flip it to "0:19 / 0:08". -->
+      <span class="stream-time" dir="ltr" aria-hidden="true">{fmt(currentTime)} / {fmt(duration)}</span>
     {/if}
   </div>
 
@@ -525,7 +527,10 @@
   .tap-glyph {
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-start: 50%;
+    /* Physical `left`: centering is direction-neutral, and with
+       `inset-inline-start` an RTL page anchors from the right while
+       translateX(-50%) still shifts left — a full width off-center. */
+    left: 50%;
     transform: translate(-50%, -50%);
     display: grid;
     place-items: center;
@@ -591,7 +596,10 @@
   .stream-mute {
     position: absolute;
     inset-block-start: 50%;
-    inset-inline-start: 50%;
+    /* Physical `left`: centering is direction-neutral, and with
+       `inset-inline-start` an RTL page anchors from the right while
+       translateX(-50%) still shifts left — a full width off-center. */
+    left: 50%;
     transform: translate(-50%, -50%);
     width: 34px;
     height: 34px;
@@ -607,7 +615,10 @@
   .stream-time {
     position: absolute;
     inset-block-start: calc(100% + 4px);
-    inset-inline-start: 50%;
+    /* Physical `left`: centering is direction-neutral, and with
+       `inset-inline-start` an RTL page anchors from the right while
+       translateX(-50%) still shifts left — a full width off-center. */
+    left: 50%;
     transform: translateX(-50%);
     white-space: nowrap;
     font-size: var(--text-xs);
