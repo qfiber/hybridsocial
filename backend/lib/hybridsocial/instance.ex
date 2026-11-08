@@ -174,7 +174,10 @@ defmodule Hybridsocial.Instance do
         banner_enabled: Config.get("app_banner_enabled", false)
       },
       analytics: analytics_config(),
-      theme: theme_config()
+      theme: theme_config(),
+      # PNG launcher/home-screen icons derived from the favicon at upload
+      # (Media.AppIcons); nil keeps the frontend's built-in defaults.
+      app_icons: Hybridsocial.Media.AppIcons.icons()
     }
   end
 

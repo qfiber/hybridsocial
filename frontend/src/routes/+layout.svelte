@@ -12,7 +12,7 @@
 	import { initializeI18n, isRtl, locale } from '$lib/stores/i18n.js';
 	import { applyTheme, themeStore } from '$lib/stores/theme.js';
 	import { getInstanceInfo } from '$lib/api/instance.js';
-	import { browser } from '$app/environment';
+	import { browser, dev } from '$app/environment';
 	import { page } from '$app/stores';
 
 	let { children, data } = $props();
@@ -42,8 +42,24 @@
 	const ogImageWidth = $derived(pageOg?.image_width ?? data?.instance?.og_image_width ?? null);
 	const ogImageHeight = $derived(pageOg?.image_height ?? data?.instance?.og_image_height ?? null);
 	const canonicalUrl = $derived(`${$page.url.origin}${$page.url.pathname}`);
+	// The backend derives a 180px opaque PNG from the favicon (only when the
+	// source is big enough), so a small favicon never becomes a blurry icon.
+	const appleTouchIcon = $derived(
+		data?.instance?.app_icons?.apple_touch || '/icons/apple-touch-icon.png'
+	);
 
 	onMount(async () => {
+		// Register the service worker for everyone, not only on push opt-in
+		// (push.ts registers the same /sw.js — a no-op once it's here). Without
+		// it the offline fallback and installability never applied to anyone
+		// who hadn't enabled notifications. Skipped in dev so a cached worker
+		// can't get in the way of local work.
+		if (!dev && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js').catch(() => {
+				/* unsupported or blocked (e.g. private mode) — the app works without it */
+			});
+		}
+
 		// Initialize i18n (auto-detects browser locale)
 		await initializeI18n();
 
@@ -95,6 +111,10 @@
 		{/if}
 		<meta name="twitter:card" content="summary_large_image" />
 	{/if}
+	<!-- iOS home-screen name and icon follow the instance, like the manifest
+	     (routes/manifest.json). -->
+	<meta name="apple-mobile-web-app-title" content={data?.instance?.title || 'HybridSocial'} />
+	<link rel="apple-touch-icon" href={appleTouchIcon} />
 	<link rel="icon" href={$themeStore?.favicon_url || data?.instance?.favicon_url || favicon} />
 </svelte:head>
 

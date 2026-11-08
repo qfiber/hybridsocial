@@ -792,7 +792,14 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
         {:ok, media} ->
           url = Hybridsocial.Media.media_url(media)
           Hybridsocial.Config.set("theme_favicon_url", url)
-          json(conn, %{url: url})
+
+          # Derive the installed-app icons (manifest + iOS) from it. Best-effort
+          # and non-fatal: an unusable source (a small raster) keeps the default
+          # icons, and `AppIcons.icons/0` ignores anything derived from an older
+          # favicon.
+          app_icons? = match?({:ok, _}, Hybridsocial.Media.AppIcons.derive(upload, url))
+
+          json(conn, %{url: url, app_icons: app_icons?})
 
         {:error, reason} ->
           conn

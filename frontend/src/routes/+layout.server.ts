@@ -45,7 +45,10 @@ export const load: LayoutServerLoad = async ({ fetch, cookies }) => {
         og_image_url:
           (info.og_image_url as string) || (theme?.og_image_url as string) || null,
         og_image_width: (info.og_image_width as number) ?? null,
-        og_image_height: (info.og_image_height as number) ?? null
+        og_image_height: (info.og_image_height as number) ?? null,
+        // Derived from the favicon at upload (backend Media.AppIcons); null
+        // keeps the built-in icons.
+        app_icons: (info.app_icons as { apple_touch?: string } | null) ?? null
       }
     };
   } catch {

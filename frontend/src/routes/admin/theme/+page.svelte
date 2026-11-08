@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { addToast } from '$lib/stores/toast.js';
+  import { t } from '$lib/stores/i18n.js';
+  import { t as tr } from '$lib/utils/i18n.js';
   import { getAdminTheme, saveAdminTheme, uploadLogo, uploadFavicon, uploadOgImage } from '$lib/api/admin.js';
   import { applyTheme, liftForDark, resolveFontFamily } from '$lib/stores/theme.js';
   import type { AdminThemeConfig } from '$lib/api/types.js';
@@ -381,6 +383,7 @@
       theme.favicon_url = result.url;
       theme = { ...theme };
       addToast('Favicon uploaded', 'success');
+      if (result.app_icons === false) addToast(tr('admin.theme.app_icons_skipped'), 'info');
     } catch {
       addToast('Failed to upload favicon', 'error');
     }
@@ -636,6 +639,7 @@
           </div>
           <div class="branding-field">
             <label class="color-label">Favicon</label>
+            <p class="branding-hint">{$t('admin.theme.favicon_hint')}</p>
             <div class="upload-row">
               {#if theme.favicon_url}
                 <img src={theme.favicon_url} alt="Favicon" class="upload-preview upload-favicon" />

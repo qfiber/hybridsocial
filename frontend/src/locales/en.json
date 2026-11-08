@@ -333,6 +333,8 @@
   "streams.fediverse_off": "Fediverse videos off",
   "streams.fediverse_hint": "Also show videos from across the fediverse",
   "explore.trending_empty": "Nothing trending right now",
+  "admin.theme.favicon_hint": "Also used as the app icon when the site is installed on a phone or desktop. Use a square SVG, or a PNG of at least 512×512.",
+  "admin.theme.app_icons_skipped": "This favicon is too small to use as the app icon, so the default icon is kept. Upload a square SVG or a PNG of at least 512×512.",
   "explore.tab_local": "Local",
   "explore.tab_global": "Global",
   "explore.tab_trending": "Trending",
