@@ -16,7 +16,7 @@ defmodule HybridsocialWeb.Api.V1.ScheduledStatusController do
     with {:ok, author_id} <- Hybridsocial.Pages.resolve_post_author(params, identity.id),
          # Counted when scheduled, not when published: otherwise a queue could
          # release any number of posts at once, past every limit.
-         :ok <- PostRateLimit.check(identity),
+         :ok <- PostRateLimit.check_post(identity, params),
          {:ok, post} <- ScheduledPosts.schedule_post(author_id, params) do
       conn
       |> put_status(:created)

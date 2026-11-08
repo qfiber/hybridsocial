@@ -131,6 +131,33 @@ defmodule Hybridsocial.Social.PostRateLimitTest do
       assert {:error, %{window: :minute}} = PostRateLimit.check(identity, down)
     end
 
+    test "with Valkey down the database count ignores replies" do
+      identity = user(%{"per_minute" => 2})
+      down = fn _key, _ttl -> {:error, :unavailable} end
+
+      {:ok, parent} = Posts.create_post(identity.id, %{"content" => "one"})
+
+      for n <- 1..3,
+          do:
+            {:ok, _} =
+              Posts.create_post(identity.id, %{"content" => "r#{n}", "parent_id" => parent.id})
+
+      assert :ok = PostRateLimit.check(identity, down)
+    end
+
+    test "check_post/2 lets replies through without counting them" do
+      identity = user(%{"per_minute" => 1})
+      assert :ok = PostRateLimit.check_post(identity, %{"content" => "post"})
+
+      for _ <- 1..3,
+          do:
+            assert(
+              :ok = PostRateLimit.check_post(identity, %{"parent_id" => Ecto.UUID.generate()})
+            )
+
+      assert {:error, %{window: :minute}} = PostRateLimit.check_post(identity, %{})
+    end
+
     test "does nothing when rate limiting is disabled" do
       Application.put_env(:hybridsocial, :rate_limiting_enabled, false)
       identity = user(%{"per_minute" => 1})
