@@ -7,6 +7,7 @@
   import { dmUnreadTotal } from '$lib/stores/dm-unread.js';
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/stores/i18n.js';
+  import { lockScroll } from '$lib/utils/scroll-lock.js';
   import type { Identity } from '$lib/api/types.js';
 
   let user: Identity | null = $state(null);
@@ -115,6 +116,11 @@
     e.preventDefault();
     goto(href, { replaceState: true });
   }
+
+  // Hold the page still behind the open sheet.
+  $effect(() => {
+    if (showMoreSheet) return lockScroll();
+  });
 
   function handleSheetKey(e: KeyboardEvent) {
     if (e.key === 'Escape') closeMoreSheet();
