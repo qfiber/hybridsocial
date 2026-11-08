@@ -73,6 +73,95 @@
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
   }
 
+  // ── Touch ──
+  // Hover never happens on touch, so the card's Follow/Mute/Block were
+  // unreachable there. A tap still opens the profile (the name is a link);
+  // a long-press opens the card instead. The browser's emulated
+  // mouseenter/focus that follow a tap are ignored so the card doesn't
+  // flash on the way to the profile.
+  const LONG_PRESS_MS = 500;
+  const MOVE_TOLERANCE_PX = 10;
+  let pressTimer: ReturnType<typeof setTimeout> | null = null;
+  let pressStart = { x: 0, y: 0 };
+  let lastTouchAt = 0;
+  let openedByTouch = $state(false);
+  let suppressClick = false;
+
+  function cancelPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+  }
+
+  function handlePointerDown(e: PointerEvent) {
+    if (e.pointerType === 'mouse') return;
+    // A long-press that ended in Android's context menu never delivers its
+    // click, so don't let that stale flag swallow this new tap.
+    suppressClick = false;
+    lastTouchAt = Date.now();
+    pressStart = { x: e.clientX, y: e.clientY };
+    cancelPress();
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+      if (triggerEl) openBelow = triggerEl.getBoundingClientRect().top < 320;
+      openedByTouch = true;
+      suppressClick = true;
+      visible = true;
+      fetchAccount();
+      navigator.vibrate?.(10);
+    }, LONG_PRESS_MS);
+  }
+
+  function handlePointerMove(e: PointerEvent) {
+    if (!pressTimer) return;
+    if (Math.hypot(e.clientX - pressStart.x, e.clientY - pressStart.y) > MOVE_TOLERANCE_PX) cancelPress();
+  }
+
+  // The click that ends a long-press must not follow the name's link.
+  function handleClickCapture(e: MouseEvent) {
+    if (!suppressClick) return;
+    suppressClick = false;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  // Keep Android's link context menu from opening over the card.
+  function handleContextMenu(e: Event) {
+    if (pressTimer || openedByTouch) e.preventDefault();
+  }
+
+  function handlePointerEnter(e: PointerEvent) {
+    if (e.pointerType === 'mouse') show();
+  }
+
+  function handlePointerLeave(e: PointerEvent) {
+    if (e.pointerType === 'mouse') hide();
+  }
+
+  function handleFocusIn() {
+    // A tap focuses the link too; only keyboard focus should open the card.
+    if (Date.now() - lastTouchAt < 1000) return;
+    show();
+  }
+
+  // A touch-opened card has no mouseleave to close it: close on a tap
+  // anywhere outside it instead.
+  $effect(() => {
+    if (!visible || !openedByTouch) return;
+    const onOutside = (e: PointerEvent) => {
+      if (cardEl?.contains(e.target as Node)) return;
+      visible = false;
+      openedByTouch = false;
+    };
+    document.addEventListener('pointerdown', onOutside, true);
+    return () => document.removeEventListener('pointerdown', onOutside, true);
+  });
+
+  $effect(() => () => {
+    cancelPress();
+    if (hoverTimer) clearTimeout(hoverTimer);
+    if (hideTimer) clearTimeout(hideTimer);
+  });
+
   let isOwnAccount = $derived(account ? get(authStore).user?.id === account.id : false);
 
   let isFollowing = $derived(relationship?.following ?? false);
@@ -136,10 +225,17 @@
 <span
   class="hover-card-trigger"
   bind:this={triggerEl}
-  onmouseenter={show}
-  onmouseleave={hide}
-  onfocusin={show}
+  onpointerenter={handlePointerEnter}
+  onpointerleave={handlePointerLeave}
+  onpointerdown={handlePointerDown}
+  onpointermove={handlePointerMove}
+  onpointerup={cancelPress}
+  onpointercancel={cancelPress}
+  onclickcapture={handleClickCapture}
+  oncontextmenu={handleContextMenu}
+  onfocusin={handleFocusIn}
   onfocusout={hide}
+  role="presentation"
 >
   {@render children()}
 
@@ -148,8 +244,8 @@
       class="hover-card"
       class:hover-card-below={openBelow}
       bind:this={cardEl}
-      onmouseenter={cancelHide}
-      onmouseleave={hide}
+      onpointerenter={(e) => { if (e.pointerType === 'mouse') cancelHide(); }}
+      onpointerleave={handlePointerLeave}
     >
       {#if loading || !account}
         <div class="hc-loading">
@@ -248,12 +344,23 @@
     display: inline;
   }
 
+  /* Long-press opens the card on touch: suppress iOS's link preview
+     callout and text selection so they don't compete with it. */
+  @media (pointer: coarse) {
+    .hover-card-trigger {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  }
+
   .hover-card {
     position: absolute;
     bottom: 100%;
     inset-inline-start: 0;
     margin-bottom: 8px;
     width: 320px;
+    max-width: calc(100vw - 32px);
     background: var(--color-surface-container-lowest);
     border: 1px solid var(--color-border);
     border-radius: 16px;

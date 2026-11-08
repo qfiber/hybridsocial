@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
+  import { lockScroll } from '$lib/utils/scroll-lock.js';
   import ReactionPicker from '$lib/components/post/ReactionPicker.svelte';
   import { premiumCatalog, ensurePremiumCatalog } from '$lib/stores/reaction-catalog.js';
   import { getPostContext } from '$lib/api/statuses.js';
@@ -279,12 +280,13 @@
   }
 
   onMount(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // On <html>, not <body> — a body lock doesn't reach the viewport here
+    // (see utils/scroll-lock.ts).
+    const unlockScroll = lockScroll();
     window.addEventListener('keydown', handleKey);
     window.addEventListener('new-post', handleNewReply);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('new-post', handleNewReply);
     };
