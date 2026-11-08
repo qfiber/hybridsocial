@@ -70,7 +70,7 @@
     background: transparent;
     border: none;
     border-radius: 9999px;
-    font-family: 'Inter', var(--font-sans);
+    font-family: 'Inter Variable', var(--font-sans);
     font-size: 0.875rem;
     font-weight: 600;
     color: var(--color-text-secondary);
