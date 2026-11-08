@@ -387,7 +387,7 @@
               <strong>Use my own profile</strong>
               <span>Post, read, and interact as yourself via the API.</span>
             </div>
-            <span class="material-symbols-outlined wizard-arrow">chevron_right</span>
+            <span class="material-symbols-outlined wizard-arrow rtl-mirror">chevron_right</span>
           </button>
 
           <button type="button" class="wizard-option" onclick={() => wizardStep = 'bot'}>
@@ -396,7 +396,7 @@
               <strong>Create a bot</strong>
               <span>Create a separate bot profile that posts on its own.</span>
             </div>
-            <span class="material-symbols-outlined wizard-arrow">chevron_right</span>
+            <span class="material-symbols-outlined wizard-arrow rtl-mirror">chevron_right</span>
           </button>
         </div>
 

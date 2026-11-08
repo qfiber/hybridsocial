@@ -7,6 +7,7 @@
   import { dmUnreadTotal } from '$lib/stores/dm-unread.js';
   import { api } from '$lib/api/client.js';
   import { t } from '$lib/stores/i18n.js';
+  import { lockScroll } from '$lib/utils/scroll-lock.js';
   import type { Identity } from '$lib/api/types.js';
 
   let user: Identity | null = $state(null);
@@ -116,9 +117,83 @@
     goto(href, { replaceState: true });
   }
 
+  // Hold the page still behind the open sheet.
+  $effect(() => {
+    if (showMoreSheet) return lockScroll();
+  });
+
   function handleSheetKey(e: KeyboardEvent) {
     if (e.key === 'Escape') closeMoreSheet();
   }
+
+  // A tap anywhere outside the sheet and the tab bar only closes the sheet.
+  // The header (bell, search, avatar) sits above the backdrop's z-index, so
+  // without this a tap on the bell opened its popover *over* the open sheet.
+  // Capture phase on window runs before the target's own handlers, and
+  // stopping it there also keeps the header's click-outside listeners quiet.
+  $effect(() => {
+    if (!showMoreSheet) return;
+    const onClickOutside = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (target?.closest('.more-sheet, .bottom-tabs')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeMoreSheet();
+    };
+    window.addEventListener('click', onClickOutside, true);
+    return () => window.removeEventListener('click', onClickOutside, true);
+  });
+
+  // Swipe down to dismiss. Only starts when the list is scrolled to the top,
+  // so a downward swipe inside a scrolled list still scrolls it. Touch events
+  // (not pointer) because the browser would otherwise claim the gesture as a
+  // scroll and cancel the pointer stream; the move listener is non-passive so
+  // it can hold the page still while the sheet follows the finger.
+  const DISMISS_PX = 80;
+  let sheetEl: HTMLDivElement | undefined = $state();
+  let dragY = $state(0);
+  let dragging = $state(false);
+
+  $effect(() => {
+    const el = sheetEl;
+    if (!el) return;
+    let startY = 0;
+    let tracking = false;
+
+    const onStart = (e: TouchEvent) => {
+      tracking = el.scrollTop <= 0 && e.touches.length === 1;
+      startY = e.touches[0].clientY;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy <= 0 && !dragging) {
+        // Upward first: it's a scroll, not a dismiss.
+        tracking = false;
+        return;
+      }
+      dragging = true;
+      dragY = Math.max(0, dy);
+      if (e.cancelable) e.preventDefault();
+    };
+    const onEnd = () => {
+      if (dragging && dragY > DISMISS_PX) closeMoreSheet();
+      tracking = false;
+      dragging = false;
+      dragY = 0;
+    };
+
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  });
 
   // The header avatar dropdown (the old logout home) is hidden on mobile,
   // so the More sheet carries logout now — separated from nav links.
@@ -178,7 +253,10 @@
     role="presentation"
   ></div>
   <div
+    bind:this={sheetEl}
     class="more-sheet"
+    class:dragging
+    style:transform={dragY ? `translateY(${dragY}px)` : undefined}
     role="dialog"
     aria-modal="true"
     aria-label={$t('nav.more_label')}
@@ -294,12 +372,15 @@
   }
 
   /* ---- More sheet ----
-     Slides up from the bottom on mobile. Sits above BottomTabs
-     (z-sticky=20) but below modals (z-modal=40) — same rationale
-     as the post 3-dot menu. */
+     Slides up from just above BottomTabs on mobile, leaving the tab bar
+     visible and tappable (tabs navigate straight from the open sheet, and
+     More closes it). z-index stays above BottomTabs (z-sticky=20) but below
+     modals (z-modal=40) — same rationale as the post 3-dot menu. The
+     backdrop stops at the bar too, so the bar isn't dimmed. */
   .more-sheet-backdrop {
     position: fixed;
     inset: 0;
+    inset-block-end: calc(var(--header-height) + env(safe-area-inset-bottom, 0px));
     background: var(--scrim-medium);
     z-index: 28;
     animation: more-fade 0.15s ease;
@@ -308,16 +389,23 @@
   .more-sheet {
     position: fixed;
     inset-inline: 0;
-    bottom: 0;
+    bottom: calc(var(--header-height) + env(safe-area-inset-bottom, 0px));
     z-index: 29;
     background: var(--color-surface-raised);
     border-start-start-radius: 18px;
     border-start-end-radius: 18px;
     box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.12);
-    padding: var(--space-2) var(--space-2) calc(var(--header-height) + env(safe-area-inset-bottom, 0px) + var(--space-3));
+    padding: var(--space-2) var(--space-2) var(--space-3);
     max-height: 70vh;
     overflow-y: auto;
+    overscroll-behavior: contain;
     animation: more-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 0.2s ease;
+  }
+
+  /* Follow the finger 1:1 while dragging; ease back only on release. */
+  .more-sheet.dragging {
+    transition: none;
   }
 
   @keyframes more-fade {

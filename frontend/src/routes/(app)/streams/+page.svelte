@@ -268,6 +268,26 @@
     }
   }
 
+  // The composer shows a comment optimistically (`new-post`, flagged
+  // `pending` → "Posting…"), then swaps in the server's copy with
+  // `post-replace` — or drops it with `post-deleted` if publishing failed.
+  // Only `new-post` was handled here, so a comment stayed "Posting…" until
+  // the sheet was closed and reloaded, even though it had been published.
+  function handleCommentReplace(e: Event) {
+    const { oldId, post: real } = (e as CustomEvent<{ oldId: string; post: Post }>).detail ?? {};
+    if (!oldId || !real) return;
+    if (!commentsDescendants.some((d) => d.id === oldId)) return;
+    commentsDescendants = commentsDescendants
+      .filter((d) => d.id !== real.id)
+      .map((d) => (d.id === oldId ? real : d));
+  }
+
+  function handleCommentDeleted(e: Event) {
+    const id = (e as CustomEvent<{ id: string }>).detail?.id;
+    if (!id || !commentsDescendants.some((d) => d.id === id)) return;
+    commentsDescendants = commentsDescendants.filter((d) => d.id !== id);
+  }
+
   onMount(() => {
     try {
       const v = localStorage.getItem(AUTOPLAY_KEY);
@@ -284,7 +304,13 @@
     }
     loadStreams();
     window.addEventListener('new-post', handleNewComment);
-    return () => window.removeEventListener('new-post', handleNewComment);
+    window.addEventListener('post-replace', handleCommentReplace);
+    window.addEventListener('post-deleted', handleCommentDeleted);
+    return () => {
+      window.removeEventListener('new-post', handleNewComment);
+      window.removeEventListener('post-replace', handleCommentReplace);
+      window.removeEventListener('post-deleted', handleCommentDeleted);
+    };
   });
 </script>
 

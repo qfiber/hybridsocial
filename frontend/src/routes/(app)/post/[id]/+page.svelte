@@ -125,7 +125,7 @@
 <div class="post-detail-page">
   <div class="page-header">
     <button type="button" class="back-btn" onclick={goBack} aria-label="Go back">
-      <span class="material-symbols-outlined back-icon">arrow_back</span>
+      <span class="material-symbols-outlined back-icon rtl-mirror">arrow_back</span>
     </button>
   </div>
 

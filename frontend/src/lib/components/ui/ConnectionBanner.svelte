@@ -229,7 +229,10 @@
   .offline-pill {
     position: fixed;
     inset-block-end: 16px;
-    inset-inline-start: 50%;
+    /* Physical `left`: centering is direction-neutral, and with
+       `inset-inline-start` an RTL page anchors from the right while
+       translateX(-50%) still shifts left — a full width off-center. */
+    left: 50%;
     transform: translateX(-50%);
     display: inline-flex;
     align-items: center;

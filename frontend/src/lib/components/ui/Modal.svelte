@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import { fly, fade } from 'svelte/transition';
+  import { lockScroll } from '$lib/utils/scroll-lock.js';
 
   let {
     open = $bindable(false),
@@ -57,6 +58,12 @@
       close();
     }
   }
+
+  // Hold the page still behind the dialog (touch scrolls otherwise leak
+  // through the backdrop to the feed).
+  $effect(() => {
+    if (open) return lockScroll();
+  });
 
   $effect(() => {
     if (open) {
@@ -167,5 +174,8 @@
   .modal-body {
     padding: var(--space-6);
     overflow-y: auto;
+    /* Reaching the end of a long dialog shouldn't hand the swipe on to
+       whatever is behind it. */
+    overscroll-behavior: contain;
   }
 </style>

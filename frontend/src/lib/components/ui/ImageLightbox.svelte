@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { goto } from '$app/navigation';
+  import { lockScroll } from '$lib/utils/scroll-lock.js';
   import ReactionPicker from '$lib/components/post/ReactionPicker.svelte';
   import { premiumCatalog, ensurePremiumCatalog } from '$lib/stores/reaction-catalog.js';
   import { getPostContext } from '$lib/api/statuses.js';
@@ -265,8 +266,13 @@
 
   function handleKey(e: KeyboardEvent) {
     if (e.key === 'Escape') close();
-    else if (e.key === 'ArrowLeft') prev();
-    else if (e.key === 'ArrowRight') next();
+    // The prev/next buttons sit on the start/end edges, so in an RTL locale
+    // "previous" is on the right — map the arrow keys to match what's seen.
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const rtl = document.documentElement.dir === 'rtl';
+      if ((e.key === 'ArrowLeft') !== rtl) prev();
+      else next();
+    }
     else if (e.key === ' ' || e.key.toLowerCase() === 'z') {
       e.preventDefault();
       toggleZoom();
@@ -274,12 +280,13 @@
   }
 
   onMount(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    // On <html>, not <body> — a body lock doesn't reach the viewport here
+    // (see utils/scroll-lock.ts).
+    const unlockScroll = lockScroll();
     window.addEventListener('keydown', handleKey);
     window.addEventListener('new-post', handleNewReply);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('new-post', handleNewReply);
     };
@@ -386,12 +393,12 @@
 
   {#if hasPrev}
     <button type="button" class="lightbox-nav lightbox-nav-prev" onclick={prev} aria-label="Previous image">
-      <span class="material-symbols-outlined">chevron_left</span>
+      <span class="material-symbols-outlined rtl-mirror">chevron_left</span>
     </button>
   {/if}
   {#if hasNext}
     <button type="button" class="lightbox-nav lightbox-nav-next" onclick={next} aria-label="Next image">
-      <span class="material-symbols-outlined">chevron_right</span>
+      <span class="material-symbols-outlined rtl-mirror">chevron_right</span>
     </button>
   {/if}
 
@@ -597,8 +604,8 @@
     background: rgba(0, 0, 0, 0.8);
   }
 
-  .lightbox-nav-prev { left: 16px; }
-  .lightbox-nav-next { right: 16px; }
+  .lightbox-nav-prev { inset-inline-start: 16px; }
+  .lightbox-nav-next { inset-inline-end: 16px; }
 
   .lightbox-nav :global(.material-symbols-outlined) {
     font-size: 28px;

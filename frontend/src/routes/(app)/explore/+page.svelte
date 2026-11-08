@@ -15,7 +15,6 @@
   import FeedTabs from '$lib/components/feed/FeedTabs.svelte';
   import { exploreFeedCache } from '$lib/stores/explore-feed-cache.js';
   import { t } from '$lib/stores/i18n.js';
-  import { onMount } from 'svelte';
 
   // ── Public feeds (Local / Global / Trending) ─────────────────────────
   async function loadPublic(base: string, cursor: string | null): Promise<Post[]> {
@@ -126,23 +125,6 @@
 
   let feedTab = $derived(exploreTabs.find((tab) => tab.id === topTab) ?? exploreTabs[0]);
 
-  // The switcher hides on scroll-down and reveals on scroll-up (and at the
-  // top), so the main header stays the only permanently-fixed chrome.
-  let barHidden = $state(false);
-  let lastDirY = 0;
-
-  function handleExploreScroll() {
-    const y = window.scrollY;
-    if (y < 50) barHidden = false;
-    else if (y > lastDirY + 6) barHidden = true;
-    else if (y < lastDirY - 6) barHidden = false;
-    lastDirY = y;
-  }
-
-  onMount(() => {
-    window.addEventListener('scroll', handleExploreScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleExploreScroll);
-  });
 
   // ── Search ───────────────────────────────────────────────────────────
   let query = $state('');
@@ -276,10 +258,7 @@
       {/if}
     </Tabs>
   {:else}
-    <div
-      class="explore-toptabs"
-      class:explore-toptabs-hidden={barHidden}
-    >
+    <div class="explore-toptabs">
       <FeedTabs tabs={exploreTabs} active={topTab} onchange={changeTopTab} />
     </div>
     <!-- One feed at a time (its own tab bar hidden since a single tab is
@@ -299,9 +278,10 @@
     gap: var(--space-4);
   }
 
-  /* Pin the Local/Global/Trending switcher under the header, but let it hide
-     on scroll-down and reveal on scroll-up, so it's reachable after a deep
-     scroll without permanently taking a second fixed row. */
+  /* Pin the Local/Global/Trending switcher under the header, like Home's
+     Latest/For You/Top bar, so switching feeds deep in a timeline needs no
+     scroll back up. (It used to hide on scroll-down; with the sort chips
+     gone it's the only bar here, so it stays put, matching Home.) */
   .explore-toptabs {
     position: sticky;
     inset-block-start: var(--header-height);
@@ -310,19 +290,6 @@
     padding-block: var(--space-2);
     /* Absorb the page's flex gap so the pinned bar has no seam above it. */
     margin-block-start: calc(-1 * var(--space-2));
-    overflow: hidden;
-    max-height: 5rem;
-    transition:
-      max-height 0.22s ease,
-      opacity 0.18s ease,
-      padding-block 0.22s ease;
-  }
-
-  .explore-toptabs-hidden {
-    max-height: 0;
-    padding-block: 0;
-    opacity: 0;
-    pointer-events: none;
   }
 
   .search-loading {

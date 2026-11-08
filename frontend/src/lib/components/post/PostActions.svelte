@@ -169,7 +169,7 @@
         ? `top: ${Math.round(rect.bottom + 8)}px`
         : `bottom: ${Math.round(window.innerHeight - rect.top + 8)}px`;
       // `inset: auto` clears the base `.picker-anchor` logical insets
-      // (`inset-block-end: 100%`, `inset-inline-start: 50%`) so a downward-
+      // (`inset-block-end: 100%`, `left: 50%`) so a downward-
       // opening picker (which sets only `top`) isn't left with `bottom: 100%`
       // and shoved off-screen — the same leftover-inset trap as the ⋯ menu.
       reactionPickerFixedStyle =
@@ -2492,7 +2492,10 @@
   .picker-anchor {
     position: absolute;
     inset-block-end: 100%;
-    inset-inline-start: 50%;
+    /* Physical `left`: centering is direction-neutral, and with
+       `inset-inline-start` an RTL page anchors from the right while
+       translateX(-50%) still shifts left — a full width off-center. */
+    left: 50%;
     transform: translateX(-50%);
     margin-block-end: 8px;
     z-index: var(--z-dropdown);

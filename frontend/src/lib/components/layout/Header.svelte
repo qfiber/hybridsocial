@@ -136,7 +136,7 @@
         {:else}
           <svg class="logo-mark" width="32" height="32" viewBox="0 0 32 32" fill="none">
             <rect width="32" height="32" rx="10" fill="url(#logo-grad)" />
-            <text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="800" font-family="'Manrope', sans-serif">H</text>
+            <text x="16" y="22" text-anchor="middle" fill="white" font-size="16" font-weight="800" font-family="'Manrope Variable', sans-serif">H</text>
             <defs>
               <linearGradient id="logo-grad" x1="0" y1="0" x2="32" y2="32">
                 <stop offset="0%" stop-color="#6c3edd" />
