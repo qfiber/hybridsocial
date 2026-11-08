@@ -130,13 +130,15 @@
   </div>
 
   {#if loading && page.data.seo}
-    <!-- Readable in the initial HTML, for search engines and before scripts load.
-         The live post replaces it. -->
-    <article class="seo-content">
+    <!-- In the initial HTML for search engines and screen readers, but visually
+         hidden: shown as-is it flashed unstyled text before the live post
+         replaced it. People see the spinner below meanwhile. -->
+    <article class="visually-hidden">
       <p><a href="/@{page.data.seo.handle}">{page.data.seo.name}</a></p>
       <p>{page.data.seo.text}</p>
     </article>
-  {:else if loading}
+  {/if}
+  {#if loading}
     <div class="page-loading">
       <Spinner />
     </div>
@@ -172,11 +174,6 @@
 </div>
 
 <style>
-  .seo-content {
-    padding: var(--space-4);
-    overflow-wrap: anywhere;
-  }
-
   .post-detail-page {
     max-width: var(--feed-max-width);
     margin: 0 auto;
