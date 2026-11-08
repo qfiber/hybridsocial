@@ -26,7 +26,7 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
     with :ok <- validate_tier_limits(params, limits),
          {:ok, author_id} <- Hybridsocial.Pages.resolve_post_author(params, identity.id),
-         :ok <- PostRateLimit.check(identity) do
+         :ok <- PostRateLimit.check_post(identity, params) do
       case Posts.create_post(author_id, params, identity) do
         {:ok, post} ->
           post = Hybridsocial.Repo.preload(post, [:identity, :quote])

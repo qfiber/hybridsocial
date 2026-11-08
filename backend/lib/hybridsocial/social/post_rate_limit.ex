@@ -2,6 +2,10 @@ defmodule Hybridsocial.Social.PostRateLimit do
   @moduledoc """
   Limits how fast an account can create posts, per minute, hour and day.
 
+  Only posts: replies are neither limited nor counted (`check_post/2` lets them
+  through, and the database fallback skips them), so taking part in a
+  conversation never uses up the allowance for posting.
+
   A limit resolves, for each window: the account's own override (set by staff in
   `identities.post_limits`), then a bot's own `posts_per_hour`, then the instance
   default (`user_posts_per_*` or `bot_posts_per_*`). `0` means unlimited, at any
@@ -67,6 +71,19 @@ defmodule Hybridsocial.Social.PostRateLimit do
     end
   end
 
+  @doc """
+  `check/1` for a create request, unless it's a reply (`parent_id` set, which
+  is also what Mastodon's `in_reply_to_id` normalizes to): replies are not
+  limited. A reply to a post that doesn't exist fails in `create_post`, so
+  this can't be used to slip a top-level post past the limit.
+  """
+  def check_post(identity, params) do
+    if reply?(params), do: :ok, else: check(identity)
+  end
+
+  defp reply?(%{"parent_id" => id}) when is_binary(id) and id != "", do: true
+  defp reply?(_params), do: false
+
   defp enabled? do
     Application.get_env(:hybridsocial, :rate_limiting_enabled, true)
   end
@@ -90,12 +107,14 @@ defmodule Hybridsocial.Social.PostRateLimit do
     end
   end
 
-  # Includes deleted posts, matching the counters.
+  # Top-level posts only, like the counters; includes deleted posts, also like
+  # the counters.
   defp count_since(identity_id, seconds) do
     since = DateTime.add(DateTime.utc_now(), -seconds, :second)
 
     Post
     |> where([p], p.identity_id == ^identity_id and p.inserted_at > ^since)
+    |> where([p], is_nil(p.parent_id) and is_nil(p.parent_ap_id))
     |> Repo.aggregate(:count)
   end
 

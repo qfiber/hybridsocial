@@ -370,6 +370,49 @@ defmodule HybridsocialWeb.Api.V1.StatusControllerTest do
       assert conn |> post("/api/v1/statuses", %{"content" => "two"}) |> json_response(429)
     end
 
+    test "replies are not limited and don't use up the allowance", %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 1})
+      conn = auth_conn(conn, identity)
+
+      %{"id" => id} =
+        conn |> post("/api/v1/statuses", %{"content" => "post"}) |> json_response(201)
+
+      # Past the limit for posts, replies still go through, in both spellings.
+      for n <- 1..3 do
+        assert conn
+               |> post("/api/v1/statuses", %{"content" => "reply #{n}", "parent_id" => id})
+               |> json_response(201)
+      end
+
+      assert conn
+             |> post("/api/v1/statuses", %{"content" => "masto", "in_reply_to_id" => id})
+             |> json_response(201)
+
+      assert conn |> post("/api/v1/statuses", %{"content" => "post 2"}) |> json_response(429)
+    end
+
+    test "a reply to a post that doesn't exist can't slip a post past the limit",
+         %{conn: conn} do
+      identity = limited_user(%{"per_minute" => 1})
+      conn = auth_conn(conn, identity)
+
+      assert conn |> post("/api/v1/statuses", %{"content" => "post"}) |> json_response(201)
+
+      conn
+      |> post("/api/v1/statuses", %{"content" => "sneaky", "parent_id" => Ecto.UUID.generate()})
+
+      top_level =
+        Hybridsocial.Repo.aggregate(
+          from(p in Hybridsocial.Social.Post,
+            where:
+              p.identity_id == ^identity.id and is_nil(p.parent_id) and is_nil(p.parent_ap_id)
+          ),
+          :count
+        )
+
+      assert top_level == 1
+    end
+
     test "scheduling a post uses the allowance too", %{conn: conn} do
       identity = limited_user(%{"per_minute" => 1})
       conn = auth_conn(conn, identity)
