@@ -25,7 +25,7 @@
 <div class="feed-tabs" role="tablist" aria-label="Feed type">
   <div
     class="feed-tabs-slider"
-    style="left: calc({activeIndex} * (100% / {tabs.length}) + 3px); width: calc(100% / {tabs.length} - 6px);"
+    style="inset-inline-start: calc({activeIndex} * (100% / {tabs.length}) + 3px); width: calc(100% / {tabs.length} - 6px);"
     aria-hidden="true"
   ></div>
   {#each tabs as tab (tab.id)}
@@ -101,8 +101,11 @@
     background: var(--gradient-primary);
     border-radius: 9999px;
     box-shadow: 0 1px 4px rgba(var(--color-primary-rgb), 0.18);
+    /* Logical offset: the tabs flow right-to-left in an RTL locale, so a
+       physical `left` drew the highlight over the mirrored tab — tapping
+       "Local" lit up "Trending" (the right feed loaded; only the pill lied). */
     transition:
-      left 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+      inset-inline-start 0.25s cubic-bezier(0.22, 1, 0.36, 1),
       width 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
 </style>
