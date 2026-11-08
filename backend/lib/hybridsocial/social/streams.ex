@@ -13,6 +13,10 @@ defmodule Hybridsocial.Social.Streams do
   # Default minimum clip length (seconds) for the streams feed when the
   # `streams_min_duration_seconds` setting isn't configured.
   @default_min_duration 10
+  # Trending "hot" score scale: every 10x in reactions is worth this many
+  # seconds of recency (45_000s = 12.5h). DB-backed via
+  # `streams_trending_decay_seconds`.
+  @default_trending_decay_seconds 45_000
 
   @doc """
   Records a view event for a video stream post.
@@ -91,6 +95,8 @@ defmodule Hybridsocial.Social.Streams do
   cursor paginated.
   """
   def streams_feed(viewer_id, opts \\ []) do
+    # Read once so the ORDER BY and the keyset cursor use the same score.
+    opts = Keyword.put(opts, :trending_decay, trending_decay_seconds())
     limit = parse_limit(opts)
     min_duration = Keyword.get(opts, :min_duration_seconds) || min_duration_seconds()
     search = normalize_search(Keyword.get(opts, :q))
@@ -142,7 +148,7 @@ defmodule Hybridsocial.Social.Streams do
       |> filter_by_qualifying_video(orientation, min_duration)
       |> apply_search(search)
       |> apply_cursor_filters(opts)
-      |> apply_sort(Keyword.get(opts, :sort))
+      |> apply_sort(Keyword.get(opts, :sort), Keyword.fetch!(opts, :trending_decay))
       |> limit(^limit)
       |> preload(:identity)
 
@@ -265,12 +271,18 @@ defmodule Hybridsocial.Social.Streams do
     # (the asc "oldest" feed); either way it's just the boundary row. Resolve it
     # and keyset-compare on the SAME key the sort orders by.
     cursor_id = Keyword.get(opts, :max_id) || Keyword.get(opts, :min_id)
-    apply_keyset(query, Keyword.get(opts, :sort), cursor_id)
+
+    apply_keyset(
+      query,
+      Keyword.get(opts, :sort),
+      cursor_id,
+      Keyword.fetch!(opts, :trending_decay)
+    )
   end
 
-  defp apply_keyset(query, _sort, nil), do: query
+  defp apply_keyset(query, _sort, nil, _decay), do: query
 
-  defp apply_keyset(query, sort, cursor_id) do
+  defp apply_keyset(query, sort, cursor_id, decay) do
     case Repo.one(
            from(p in Post,
              where: p.id == ^cursor_id,
@@ -278,14 +290,14 @@ defmodule Hybridsocial.Social.Streams do
            )
          ) do
       nil -> query
-      boundary -> keyset_where(query, sort, boundary)
+      boundary -> keyset_where(query, sort, boundary, decay)
     end
   end
 
   # Keyset compares mirror `apply_sort` exactly (same key, same direction, same
   # id tiebreak) so pagination is accurate — post ids are random UUIDv4, so the
   # old `p.id < max_id` returned an arbitrary slice and the feed froze.
-  defp keyset_where(query, "newest", {_rc, ia, id}) do
+  defp keyset_where(query, "newest", {_rc, ia, id}, _decay) do
     where(
       query,
       [p],
@@ -293,7 +305,7 @@ defmodule Hybridsocial.Social.Streams do
     )
   end
 
-  defp keyset_where(query, "oldest", {_rc, ia, id}) do
+  defp keyset_where(query, "oldest", {_rc, ia, id}, _decay) do
     where(
       query,
       [p],
@@ -301,30 +313,78 @@ defmodule Hybridsocial.Social.Streams do
     )
   end
 
-  defp keyset_where(query, _trending, {rc, ia, id}) do
+  # The boundary's score is computed in SQL from the boundary row itself, with
+  # the very expression `apply_sort` orders by, so the compare is exact — no
+  # float round-trip through Elixir.
+  defp keyset_where(query, _trending, {_rc, _ia, id}, decay) do
     where(
       query,
       [p],
       fragment(
-        "(?, ?, ?) < (?, ?, ?)",
+        """
+        (LOG(GREATEST(?, 1)::double precision) + EXTRACT(EPOCH FROM ?)::double precision / ?::double precision, ?, ?) <
+        (SELECT LOG(GREATEST(b.reaction_count, 1)::double precision) + EXTRACT(EPOCH FROM b.inserted_at)::double precision / ?::double precision, b.inserted_at, b.id
+         FROM posts b WHERE b.id = ?)
+        """,
         p.reaction_count,
         p.inserted_at,
+        ^decay,
+        p.inserted_at,
         p.id,
-        ^rc,
-        ^ia,
+        ^decay,
         type(^id, Ecto.UUID)
       )
     )
   end
 
-  # Timeline ordering the viewer picks: trending (engagement-weighted, the
-  # default), newest, or oldest. The `id` tiebreak makes the order total and
-  # matches the keyset cursor above.
-  defp apply_sort(query, "newest"), do: order_by(query, [p], desc: p.inserted_at, desc: p.id)
-  defp apply_sort(query, "oldest"), do: order_by(query, [p], asc: p.inserted_at, asc: p.id)
+  # Timeline ordering the viewer picks: trending (the default), newest, or
+  # oldest. The `id` tiebreak makes the order total and matches the keyset
+  # cursor above.
+  #
+  # Trending is a "hot" score — log10(reactions) + post time / decay — not the
+  # all-time reaction count. Ranking by raw count buried every new clip under
+  # any older one with a reaction or two; that hit federated clips hardest
+  # (they arrive with ~0 local reactions), so with the fediverse toggle on,
+  # Trending still looked local-only. The score is fixed per post (it doesn't
+  # depend on "now"), so keyset pagination stays exact across requests.
+  defp apply_sort(query, "newest", _decay),
+    do: order_by(query, [p], desc: p.inserted_at, desc: p.id)
 
-  defp apply_sort(query, _trending),
-    do: order_by(query, [p], desc: p.reaction_count, desc: p.inserted_at, desc: p.id)
+  defp apply_sort(query, "oldest", _decay),
+    do: order_by(query, [p], asc: p.inserted_at, asc: p.id)
+
+  defp apply_sort(query, _trending, decay),
+    do:
+      order_by(query, [p],
+        desc:
+          fragment(
+            "LOG(GREATEST(?, 1)::double precision) + EXTRACT(EPOCH FROM ?)::double precision / ?::double precision",
+            p.reaction_count,
+            p.inserted_at,
+            ^decay
+          ),
+        desc: p.inserted_at,
+        desc: p.id
+      )
+
+  defp trending_decay_seconds do
+    case Hybridsocial.Config.get(
+           "streams_trending_decay_seconds",
+           @default_trending_decay_seconds
+         ) do
+      n when is_number(n) and n > 0 ->
+        n / 1
+
+      s when is_binary(s) ->
+        case Float.parse(s) do
+          {f, _} when f > 0 -> f
+          _ -> @default_trending_decay_seconds / 1
+        end
+
+      _ ->
+        @default_trending_decay_seconds / 1
+    end
+  end
 
   # Free-text filter over the post body. Hashtags live literally in the
   # content (e.g. "#gaza"), so a single case-insensitive match covers both

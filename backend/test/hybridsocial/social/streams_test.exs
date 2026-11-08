@@ -480,6 +480,100 @@ defmodule Hybridsocial.Social.StreamsTest do
       assert page2 == [p3.id]
     end
 
+    test "sort: trending lifts a fresh clip with no reactions above an old one with a few" do
+      # The fediverse case: a remote clip arrives with ~0 local reactions. Ranked
+      # by all-time count it sat under every older local clip that had any.
+      local = create_user("sfeed_hot_l", "sfeed_hot_l@example.com")
+      remote = create_user("sfeed_hot_r", "sfeed_hot_r@example.com") |> make_remote()
+
+      old_local = create_post(local, %{content: "Old local"}) |> attach_video(local)
+      fresh_remote = create_post(remote, %{content: "Fresh remote"}) |> attach_video(remote)
+
+      Repo.update_all(from(p in Post, where: p.id == ^old_local.id),
+        set: [reaction_count: 3, inserted_at: ~U[2020-01-01 00:00:00.000000Z]]
+      )
+
+      ids = Streams.streams_feed(nil, include_federated: true) |> Enum.map(& &1.id)
+
+      assert Enum.find_index(ids, &(&1 == fresh_remote.id)) <
+               Enum.find_index(ids, &(&1 == old_local.id))
+    end
+
+    test "sort: trending still ranks the more-engaged of two same-age clips first" do
+      alice = create_user("sfeed_hot_eng", "sfeed_hot_eng@example.com")
+
+      quiet = create_post(alice, %{content: "Quiet"}) |> attach_video(alice)
+      popular = create_post(alice, %{content: "Popular"}) |> attach_video(alice)
+
+      Repo.update_all(from(p in Post, where: p.id == ^quiet.id),
+        set: [reaction_count: 0, inserted_at: ~U[2020-01-01 00:00:00.000000Z]]
+      )
+
+      Repo.update_all(from(p in Post, where: p.id == ^popular.id),
+        set: [reaction_count: 100, inserted_at: ~U[2020-01-01 00:00:00.000000Z]]
+      )
+
+      ids = Streams.streams_feed(nil) |> Enum.map(& &1.id)
+
+      assert Enum.find_index(ids, &(&1 == popular.id)) <
+               Enum.find_index(ids, &(&1 == quiet.id))
+    end
+
+    test "sort: trending paginates accurately via the keyset cursor (no dupes, no gaps)" do
+      alice = create_user("sfeed_hot_page", "sfeed_hot_page@example.com")
+
+      p1 = create_post(alice, %{content: "one"}) |> attach_video(alice)
+      p2 = create_post(alice, %{content: "two"}) |> attach_video(alice)
+      p3 = create_post(alice, %{content: "three"}) |> attach_video(alice)
+
+      # Same reactions, strictly increasing times → trending order is [p3, p2, p1].
+      for {p, day} <- [{p1, 1}, {p2, 2}, {p3, 3}] do
+        Repo.update_all(from(x in Post, where: x.id == ^p.id),
+          set: [
+            reaction_count: 5,
+            inserted_at: DateTime.new!(Date.new!(2020, 1, day), ~T[00:00:00.000000])
+          ]
+        )
+      end
+
+      page1 = Streams.streams_feed(nil, limit: 2) |> Enum.map(& &1.id)
+      assert page1 == [p3.id, p2.id]
+
+      page2 =
+        Streams.streams_feed(nil, limit: 2, max_id: List.last(page1))
+        |> Enum.map(& &1.id)
+
+      assert page2 == [p1.id]
+    end
+
+    test "the trending decay is tunable — a huge decay makes engagement dominate" do
+      alice = create_user("sfeed_hot_cfg", "sfeed_hot_cfg@example.com")
+
+      old_popular = create_post(alice, %{content: "Old popular"}) |> attach_video(alice)
+      new_quiet = create_post(alice, %{content: "New quiet"}) |> attach_video(alice)
+
+      Repo.update_all(from(p in Post, where: p.id == ^old_popular.id),
+        set: [reaction_count: 50, inserted_at: ~U[2020-01-01 00:00:00.000000Z]]
+      )
+
+      # Default decay: years of recency outweigh 50 reactions.
+      ids = Streams.streams_feed(nil) |> Enum.map(& &1.id)
+
+      assert Enum.find_index(ids, &(&1 == new_quiet.id)) <
+               Enum.find_index(ids, &(&1 == old_popular.id))
+
+      # With a decay of ~1000 years, recency barely moves the score. The config
+      # store isn't in the test tree; start_supervised! also tears it down after
+      # the test, so the setting can't leak (no on_exit reset needed).
+      start_supervised!(Hybridsocial.Config.Store)
+      Hybridsocial.Config.set("streams_trending_decay_seconds", 3.0e10)
+
+      ids = Streams.streams_feed(nil) |> Enum.map(& &1.id)
+
+      assert Enum.find_index(ids, &(&1 == old_popular.id)) <
+               Enum.find_index(ids, &(&1 == new_quiet.id))
+    end
+
     test "q: filters by phrase or hashtag in the post body" do
       alice = create_user("sfeed_q", "sfeed_q@example.com")
 
