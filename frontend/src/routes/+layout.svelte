@@ -1,4 +1,8 @@
 <script lang="ts">
+	import '@fontsource-variable/manrope';
+	import '@fontsource-variable/rubik';
+	import '@fontsource-variable/cascadia-code';
+	import '@fontsource-variable/inter';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import Analytics from '$lib/components/ui/Analytics.svelte';
@@ -92,9 +96,6 @@
 		<meta name="twitter:card" content="summary_large_image" />
 	{/if}
 	<link rel="icon" href={$themeStore?.favicon_url || data?.instance?.favicon_url || favicon} />
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </svelte:head>
 
 <Analytics />

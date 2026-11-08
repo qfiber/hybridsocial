@@ -557,7 +557,7 @@
   }
 
   .auth-logo { display: flex; justify-content: center; margin-block-end: 24px; }
-  .auth-title { font-family: 'Manrope', var(--font-sans); font-size: 1.25rem; font-weight: 700; color: var(--color-text); margin-block-end: 4px; }
+  .auth-title { font-family: var(--font-sans); font-size: 1.25rem; font-weight: 700; color: var(--color-text); margin-block-end: 4px; }
   .auth-subtitle { font-size: 0.875rem; color: var(--color-text-secondary); margin-block-end: 24px; }
   .auth-success-icon { display: flex; justify-content: center; margin-block-end: 16px; color: var(--color-success); }
 
@@ -660,7 +660,7 @@
   }
 
   .plans-title {
-    font-family: 'Manrope', var(--font-sans);
+    font-family: var(--font-sans);
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--color-text);

@@ -635,7 +635,7 @@
   }
 
   .auth-title {
-    font-family: 'Manrope', var(--font-sans);
+    font-family: var(--font-sans);
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--color-text);
@@ -1072,7 +1072,7 @@
   }
 
   .auth-info-title {
-    font-family: 'Manrope', var(--font-sans);
+    font-family: var(--font-sans);
     font-size: 0.875rem;
     font-weight: 700;
     color: var(--color-text);

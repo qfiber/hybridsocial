@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { addToast } from '$lib/stores/toast.js';
   import { getAdminTheme, saveAdminTheme, uploadLogo, uploadFavicon, uploadOgImage } from '$lib/api/admin.js';
-  import { applyTheme, liftForDark } from '$lib/stores/theme.js';
+  import { applyTheme, liftForDark, resolveFontFamily } from '$lib/stores/theme.js';
   import type { AdminThemeConfig } from '$lib/api/types.js';
 
   // Auto dark values, keyed by theme key. Mirrors what applyTheme() renders
@@ -206,7 +206,7 @@
       `--p-text-link: ${v('color_text_link')}`,
       `--p-gradient: linear-gradient(${theme.gradient_direction}, ${v('gradient_start')}, ${v('gradient_end')})`,
       `--p-radius: ${radius}`,
-      `--p-font: ${theme.font_family}`
+      `--p-font: ${resolveFontFamily(theme.font_family)}`
     ].join('; ');
   }
 

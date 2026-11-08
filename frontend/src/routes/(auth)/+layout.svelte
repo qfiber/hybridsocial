@@ -268,14 +268,14 @@
   }
 
   .hero-logo-text {
-    font-family: 'Manrope', var(--font-sans);
+    font-family: var(--font-sans);
     font-size: var(--text-lg);
     font-weight: 700;
     color: var(--color-primary);
   }
 
   .hero-headline {
-    font-family: 'Manrope', var(--font-sans);
+    font-family: var(--font-sans);
     font-size: 3.5rem;
     font-weight: 800;
     line-height: 1.08;

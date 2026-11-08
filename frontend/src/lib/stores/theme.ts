@@ -44,6 +44,17 @@ const PROPERTY_MAP: Record<string, string[]> = {
   font_family: ['--font-sans'],
 };
 
+// Admin-selectable fonts we self-host are registered under @fontsource's
+// "<Name> Variable" family, so a stored plain name ("Inter") must map to it.
+// Other choices are passed through and rely on the visitor having the font.
+const SELF_HOSTED_FONTS: Record<string, string> = {
+  Inter: "'Inter Variable', Inter, sans-serif",
+};
+
+export function resolveFontFamily(name: string): string {
+  return SELF_HOSTED_FONTS[name.trim()] ?? name;
+}
+
 // Hybrid dark model: only the BRAND hues are derived from the light theme
 // (set the brand once, both modes track it). Everything else in dark comes
 // from the designed [data-theme="dark"] ramp in app.css, unless the admin
@@ -232,6 +243,7 @@ function render(cfg: Record<string, unknown>, mode: ThemeMode): void {
     } else if (lightVal) {
       value = lightVal;
     }
+    if (value && key === 'font_family') value = resolveFontFamily(value);
 
     for (const v of cssVars) {
       if (value) root.style.setProperty(v, value);
