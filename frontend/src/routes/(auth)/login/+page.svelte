@@ -600,7 +600,7 @@
         {/if}
 
         <button type="button" class="passkey-back" onclick={() => { passkeyStep = 'email'; passkeyError = ''; }}>
-          <span class="material-symbols-outlined" style="font-size: 16px">arrow_back</span>
+          <span class="material-symbols-outlined rtl-mirror" style="font-size: 16px">arrow_back</span>
           Use a different email
         </button>
       {/if}

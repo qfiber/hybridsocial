@@ -191,7 +191,7 @@
   {:else if pageData}
     <div class="page-header">
       <button type="button" class="back-btn" onclick={() => goto(`/pages/${pageId}`)} aria-label="Back to page">
-        <span class="material-symbols-outlined">arrow_back</span>
+        <span class="material-symbols-outlined rtl-mirror">arrow_back</span>
       </button>
       <div class="page-header-info">
         <h1 class="page-title">Manage {displayName}</h1>

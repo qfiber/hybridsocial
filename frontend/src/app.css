@@ -831,3 +831,13 @@ img.custom-emoji {
   margin: 0 1px;
   object-fit: contain;
 }
+
+/* Directional icons (back arrows, chevrons, reply/undo) are drawn pointing
+   one way and neither Material Symbols nor our inline SVGs mirror on their
+   own, so an Arabic UI got "back" arrows pointing forward. Add `rtl-mirror`
+   to an icon whose meaning follows the reading direction; it flips only
+   under an RTL locale. Don't put it on an element that already sets its
+   own `transform` — wrap the icon instead. */
+:root[dir='rtl'] .rtl-mirror {
+  transform: scaleX(-1);
+}

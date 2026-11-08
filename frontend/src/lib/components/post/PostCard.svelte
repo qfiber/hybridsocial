@@ -905,7 +905,7 @@
 
       {#if post.parent_id}
         <div class="post-reply-indicator">
-          <span class="material-symbols-outlined reply-icon" aria-hidden="true">reply</span>
+          <span class="material-symbols-outlined reply-icon rtl-mirror" aria-hidden="true">reply</span>
           {#if post.target_media_id}
             <button
               type="button"
@@ -1081,7 +1081,7 @@
                   class="poll-cancel-btn"
                   onclick={cancelPendingVote}
                 >
-                  <span class="material-symbols-outlined poll-cancel-icon">undo</span>
+                  <span class="material-symbols-outlined poll-cancel-icon rtl-mirror">undo</span>
                   {$t('poll.cancel_vote', { seconds: countdownRemaining })}
                 </button>
               {/if}
@@ -1568,7 +1568,7 @@
      into far more lines than needed. Rather than pull the body with fragile
      negative margins (which over/under-shot and, worse, flipped sides on
      RTL content), take the avatar OUT of the flow: absolutely position it
-     top-left so the content column becomes a full-width block. The body is
+     at the top start corner so the content column becomes a full-width block. The body is
      then laid out normally (no magic offset, can't crop). Only the author
      line is padded to clear the avatar. */
   @media (max-width: 768px) {
@@ -1586,9 +1586,11 @@
     .post-avatar {
       position: absolute;
       top: 0;
-      /* Physical left: the avatar is always on the left in this LTR layout,
-         even when the post text is RTL. */
-      left: 0;
+      /* Logical, not physical: this box inherits the UI direction (the
+         post body's own `dir="auto"` sits below it), so the avatar pins to
+         the start edge — left in LTR, right in an RTL locale — matching
+         the desktop flex layout, regardless of the post text's direction. */
+      inset-inline-start: 0;
     }
 
     .avatar-img,
@@ -1605,7 +1607,7 @@
        the "Pinned" label under the avatar (clipping it to "...ed"). */
     .post-layout .post-pinned-indicator,
     .post-layout .post-author-line {
-      padding-left: 52px;
+      padding-inline-start: 52px;
       min-height: 44px;
     }
   }

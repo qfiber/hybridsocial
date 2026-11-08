@@ -224,7 +224,7 @@
               <span class="hub-card-label">{item.label}</span>
               <span class="hub-card-desc">{item.description}</span>
             </span>
-            <svg class="hub-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+            <svg class="rtl-mirror hub-card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
           </a>
         {/each}
       </div>
