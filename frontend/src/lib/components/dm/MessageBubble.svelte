@@ -482,7 +482,7 @@
             aria-label="Reply to message"
             onclick={() => onreply?.(message)}
           >
-            <span class="material-symbols-outlined">reply</span>
+            <span class="material-symbols-outlined rtl-mirror">reply</span>
           </button>
         {/if}
 
@@ -1031,14 +1031,15 @@
 
   /* Reactions sit half-outside the bubble's bottom edge — anchor
      to the inside-corner so the chip overlaps the rounded edge.
-     Physical left/right (not logical inset-inline-*) so an RTL
-     `dir="auto"` on the message text inside the bubble can't flip
-     the overlay's own axis. */
+     Logical insets resolve against `.bubble`, which inherits the UI
+     direction (the `dir="auto"` is only on the message text inside it),
+     so the chip follows the locale — own bubbles sit on the end side in
+     both LTR and RTL — and the text's own direction can't flip it. */
   .reactions-overlay {
     position: absolute;
     bottom: -12px;
-    left: 12px;
-    right: auto;
+    inset-inline-start: 12px;
+    inset-inline-end: auto;
     display: flex;
     flex-direction: row;
     gap: 3px;
@@ -1050,10 +1051,10 @@
     pointer-events: auto;
   }
 
-  /* Own bubble (right side) — bleed out the bottom-RIGHT instead. */
+  /* Own bubble (end side) — bleed out the bottom-end corner instead. */
   .overlay-own {
-    left: auto;
-    right: 12px;
+    inset-inline-start: auto;
+    inset-inline-end: 12px;
   }
 
   .msg-reaction {

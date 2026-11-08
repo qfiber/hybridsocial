@@ -471,7 +471,7 @@
 
 <div class="user-detail">
   <a href="/admin/user-management/users" class="back-link">
-    <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span> Back to users
+    <span class="material-symbols-outlined rtl-mirror" aria-hidden="true">arrow_back</span> Back to users
   </a>
 
   {#if loading}
