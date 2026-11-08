@@ -42,10 +42,10 @@
 	const ogImageWidth = $derived(pageOg?.image_width ?? data?.instance?.og_image_width ?? null);
 	const ogImageHeight = $derived(pageOg?.image_height ?? data?.instance?.og_image_height ?? null);
 	const canonicalUrl = $derived(`${$page.url.origin}${$page.url.pathname}`);
+	// The backend derives a 180px opaque PNG from the favicon (only when the
+	// source is big enough), so a small favicon never becomes a blurry icon.
 	const appleTouchIcon = $derived(
-		data?.instance?.favicon_url && /\.png(\?|$)/i.test(data.instance.favicon_url)
-			? data.instance.favicon_url
-			: '/icons/apple-touch-icon.png'
+		data?.instance?.app_icons?.apple_touch || '/icons/apple-touch-icon.png'
 	);
 
 	onMount(async () => {
@@ -112,8 +112,7 @@
 		<meta name="twitter:card" content="summary_large_image" />
 	{/if}
 	<!-- iOS home-screen name and icon follow the instance, like the manifest
-	     (routes/manifest.json). iOS can't use an SVG here, so only a PNG
-	     favicon replaces the default. -->
+	     (routes/manifest.json). -->
 	<meta name="apple-mobile-web-app-title" content={data?.instance?.title || 'HybridSocial'} />
 	<link rel="apple-touch-icon" href={appleTouchIcon} />
 	<link rel="icon" href={$themeStore?.favicon_url || data?.instance?.favicon_url || favicon} />

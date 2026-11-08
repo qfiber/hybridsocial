@@ -19,12 +19,6 @@ const DEFAULT_ICONS: ManifestIcon[] = [
   { src: '/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
 ];
 
-// Browsers want a launcher icon of at least this size; a smaller custom icon
-// would install blurry, so the defaults are kept instead.
-const MIN_ICON_PX = 192;
-const ICON_PROBE_TIMEOUT_MS = 3000;
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
 interface ManifestIcon {
   src: string;
   sizes: string;
@@ -32,50 +26,24 @@ interface ManifestIcon {
   purpose: string;
 }
 
-// The probe fetches the icon, so remember the answer per URL for a while.
-const iconCache = new Map<string, { icon: ManifestIcon | null; at: number }>();
-
-// Read a PNG's dimensions from its IHDR chunk (bytes 16–24), so the manifest
-// declares the icon's real size — browsers skip an icon whose declared size
-// doesn't match, and then the instance can't be installed with it.
-function pngSize(bytes: Uint8Array): { width: number; height: number } | null {
-  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-  if (bytes.length < 24 || !sig.every((b, i) => bytes[i] === b)) return null;
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return { width: view.getUint32(16), height: view.getUint32(20) };
+interface AppIcons {
+  icon_192?: string;
+  icon_512?: string;
+  maskable_512?: string;
 }
 
-async function probeIcon(fetchFn: typeof fetch, url: string): Promise<ManifestIcon | null> {
-  const cached = iconCache.get(url);
-  if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.icon;
-
-  let icon: ManifestIcon | null = null;
-  try {
-    const res = await fetchFn(url, { signal: AbortSignal.timeout(ICON_PROBE_TIMEOUT_MS) });
-    if (res.ok) {
-      const type = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      const isSvg = type === 'image/svg+xml' || /\.svg(\?|$)/i.test(url);
-      if (isSvg) {
-        icon = { src: url, sizes: 'any', type: 'image/svg+xml', purpose: 'any' };
-      } else {
-        const size = pngSize(bytes);
-        if (size && size.width === size.height && size.width >= MIN_ICON_PX) {
-          icon = {
-            src: url,
-            sizes: `${size.width}x${size.height}`,
-            type: 'image/png',
-            purpose: 'any',
-          };
-        }
-      }
-    }
-  } catch {
-    // Unreachable or slow: fall back to the default icons.
-  }
-
-  iconCache.set(url, { icon, at: Date.now() });
-  return icon;
+// The backend derives these PNGs from the favicon when it's uploaded
+// (Media.AppIcons), already at the exact sizes declared here, and only when
+// the source is big enough, so nothing is fetched or measured per request.
+// All three or none: a partial set falls back to the defaults.
+function instanceIcons(appIcons: AppIcons | null | undefined): ManifestIcon[] | null {
+  const { icon_192, icon_512, maskable_512 } = appIcons ?? {};
+  if (!icon_192 || !icon_512 || !maskable_512) return null;
+  return [
+    { src: icon_192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+    { src: icon_512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: maskable_512, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+  ];
 }
 
 export const GET: RequestHandler = async ({ fetch }) => {
@@ -105,14 +73,10 @@ export const GET: RequestHandler = async ({ fetch }) => {
       const primary = theme?.color_primary;
       if (typeof primary === 'string' && /^#[0-9a-f]{3,8}$/i.test(primary)) themeColor = primary;
 
-      const faviconUrl = (info.favicon_url as string) || (theme?.favicon_url as string) || '';
-      if (faviconUrl) {
-        const custom = await probeIcon(fetch, faviconUrl);
-        // The instance's own icon replaces the defaults entirely: Android
-        // prefers a `maskable` icon when one is listed, so leaving the default
-        // maskable "H" in would put it on the launcher instead of the logo.
-        if (custom) icons = [custom];
-      }
+      // The instance's icons replace the defaults entirely: Android prefers a
+      // `maskable` icon when one is listed, so leaving the default maskable
+      // "H" in would put it on the launcher instead of the logo.
+      icons = instanceIcons(info.app_icons as AppIcons | null) ?? icons;
     }
   } catch {
     // Backend unreachable: serve the defaults so the app stays installable.
