@@ -742,9 +742,13 @@ defmodule HybridsocialWeb.CrawlerController do
 
   defp text_only(nil), do: ""
 
+  # Plain text out of stored HTML. Entities are decoded because every consumer
+  # escapes again on output (`escape_html` here, Svelte in the web app's SEO
+  # block); left encoded, a quote in a post showed as a literal `&quot;`.
   defp text_only(html_or_text) when is_binary(html_or_text) do
     html_or_text
     |> String.replace(~r/<[^>]+>/u, " ")
+    |> Hybridsocial.Content.HtmlStripper.decode_entities()
     |> String.replace(~r/\s+/u, " ")
     |> String.trim()
   end

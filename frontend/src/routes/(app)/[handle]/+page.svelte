@@ -391,9 +391,10 @@
 
 <div class="profile-page">
   {#if loading && pageState.data.seo}
-    <!-- Readable in the initial HTML, for search engines and before scripts load.
-         The live profile replaces it. -->
-    <article class="seo-content">
+    <!-- In the initial HTML for search engines and screen readers, but visually
+         hidden: shown as-is it flashed an unstyled page before the live
+         profile replaced it. People see the skeleton below meanwhile. -->
+    <article class="visually-hidden">
       <h1>{pageState.data.seo.name}</h1>
       <p>@{pageState.data.seo.handle}</p>
       {#if pageState.data.seo.bio}<p>{pageState.data.seo.bio}</p>{/if}
@@ -401,7 +402,8 @@
         <p><a href="/post/{post.id}">{post.text}</a></p>
       {/each}
     </article>
-  {:else if loading}
+  {/if}
+  {#if loading}
     <div class="profile-skeleton">
       <Skeleton width="100%" height="210px" />
       <div class="profile-skeleton-info">
@@ -539,11 +541,6 @@
 </Modal>
 
 <style>
-  .seo-content {
-    padding: var(--space-4);
-    overflow-wrap: anywhere;
-  }
-
   .profile-page {
     max-width: var(--feed-max-width);
     margin: 0 auto;

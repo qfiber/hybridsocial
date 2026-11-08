@@ -280,6 +280,19 @@ defmodule HybridsocialWeb.CrawlerControllerTest do
       assert [%{"text" => "Visible text"}] = body["seo"]["posts"]
     end
 
+    test "search engine text is plain, with HTML entities decoded" do
+      # The web app escapes this text again when rendering it, so an encoded
+      # quote showed as a literal `&quot;` on the profile.
+      identity = register("seo_entities")
+      public_post(identity, %{"content" => ~s("respecter" & 'tom' <tag>)})
+
+      assert [%{"text" => text}] = profile_meta(identity)["seo"]["posts"]
+      refute text =~ "&quot;"
+      refute text =~ "&amp;"
+      assert text =~ ~s("respecter")
+      assert text =~ "&"
+    end
+
     test "only public top-level posts reach the search engine text" do
       identity = register("seo_posts")
       kept = public_post(identity)

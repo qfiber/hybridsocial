@@ -26,20 +26,30 @@ defmodule Hybridsocial.Content.HtmlStripper do
     |> String.replace(~r/<br\s*\/?>/i, "\n")
     |> String.replace(~r/<\/p>\s*<p[^>]*>/i, "\n\n")
     |> String.replace(~r/<[^>]+>/, "")
-    |> decode_basic_entities()
+    |> decode_entities()
     |> String.trim()
   end
 
   def to_plaintext(_), do: ""
 
-  defp decode_basic_entities(text) do
+  @doc """
+  Decodes the handful of HTML entities our sanitizer emits and federated
+  content uses in practice. For text that leaves HTML: anything that is
+  escaped again on output (Svelte, `escape_html`) would otherwise show
+  `&quot;` literally.
+
+  `&amp;` goes last, so an escaped entity (`&amp;quot;`, i.e. the literal
+  text "&quot;") decodes once, to "&quot;", not twice to a quote mark.
+  """
+  def decode_entities(text) when is_binary(text) do
     text
-    |> String.replace("&amp;", "&")
     |> String.replace("&lt;", "<")
     |> String.replace("&gt;", ">")
     |> String.replace("&quot;", "\"")
     |> String.replace("&#39;", "'")
+    |> String.replace("&#x27;", "'")
     |> String.replace("&apos;", "'")
     |> String.replace("&nbsp;", " ")
+    |> String.replace("&amp;", "&")
   end
 end
