@@ -8,7 +8,7 @@
 	import { initializeI18n, isRtl, locale } from '$lib/stores/i18n.js';
 	import { applyTheme, themeStore } from '$lib/stores/theme.js';
 	import { getInstanceInfo } from '$lib/api/instance.js';
-	import { browser } from '$app/environment';
+	import { browser, dev } from '$app/environment';
 	import { page } from '$app/stores';
 
 	let { children, data } = $props();
@@ -40,6 +40,17 @@
 	const canonicalUrl = $derived(`${$page.url.origin}${$page.url.pathname}`);
 
 	onMount(async () => {
+		// Register the service worker for everyone, not only on push opt-in
+		// (push.ts registers the same /sw.js — a no-op once it's here). Without
+		// it the offline fallback and installability never applied to anyone
+		// who hadn't enabled notifications. Skipped in dev so a cached worker
+		// can't get in the way of local work.
+		if (!dev && 'serviceWorker' in navigator) {
+			navigator.serviceWorker.register('/sw.js').catch(() => {
+				/* unsupported or blocked (e.g. private mode) — the app works without it */
+			});
+		}
+
 		// Initialize i18n (auto-detects browser locale)
 		await initializeI18n();
 
