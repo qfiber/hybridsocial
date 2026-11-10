@@ -204,6 +204,7 @@
     margin-block-start: var(--space-2);
     width: min(380px, calc(100vw - 2rem));
     max-height: min(70vh, 560px);
+    max-height: min(70dvh, 560px);
     display: flex;
     flex-direction: column;
     background: var(--color-surface-raised);
@@ -330,6 +331,7 @@
       margin-inline: auto;
       width: min(420px, calc(100vw - 2 * var(--space-2)));
       max-height: min(75vh, 620px);
+      max-height: min(75dvh, 620px);
     }
   }
 </style>

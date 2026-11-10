@@ -1000,6 +1000,7 @@
     padding: var(--space-5) var(--space-6);
     overflow-y: auto;
     max-height: 80vh;
+    max-height: 80dvh;
   }
 
   .section-title {

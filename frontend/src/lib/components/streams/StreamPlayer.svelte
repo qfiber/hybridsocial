@@ -668,6 +668,7 @@
     line-height: 1.4;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
     max-height: 30vh;
+    max-height: 30dvh;
     overflow-y: auto;
     white-space: pre-wrap;
     overscroll-behavior: contain;

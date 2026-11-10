@@ -505,6 +505,7 @@
     max-width: 520px;
     width: 100%;
     max-height: 90vh;
+    max-height: 90dvh;
     overflow-y: auto;
   }
 

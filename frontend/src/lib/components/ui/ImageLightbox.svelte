@@ -513,6 +513,7 @@
   .lightbox-stage {
     max-width: 100vw;
     max-height: 100vh;
+    max-height: 100dvh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -529,6 +530,7 @@
   .lightbox-img {
     max-width: calc(100vw - 80px);
     max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
     object-fit: contain;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     user-select: none;

@@ -176,6 +176,7 @@
     width: 100%;
     max-width: 480px;
     max-height: 90vh;
+    max-height: 90dvh;
     background: var(--color-surface);
     border-radius: 16px;
     overflow: hidden;
@@ -235,6 +236,7 @@
     background: var(--color-surface-container);
     aspect-ratio: 9 / 16;
     max-height: 50vh;
+    max-height: 50dvh;
     display: flex;
     align-items: center;
     justify-content: center;

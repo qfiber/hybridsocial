@@ -290,6 +290,7 @@
        bar's top edge clipped because 380px didn't fit above the
        composer toolbar. */
     max-height: min(380px, calc(100vh - 96px));
+    max-height: min(380px, calc(100dvh - 96px));
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
