@@ -5,7 +5,7 @@
   import { setUser, currentUser } from '$lib/stores/auth.js';
   import { getCurrentUser } from '$lib/api/auth.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
-  import { subscribeToPush } from '$lib/utils/push.js';
+  import { syncPushSubscription } from '$lib/utils/push.js';
   import { tError } from '$lib/utils/i18n.js';
   import { solvePow, type PowChallenge, type PowSolution } from '$lib/utils/pow.js';
   import { instanceName } from '$lib/stores/instance.js';
@@ -148,7 +148,7 @@
             const user = await getCurrentUser();
             setUser(user);
           } catch {}
-          subscribeToPush();
+          syncPushSubscription();
           await goto(nextPath);
         }
       } else {
@@ -183,7 +183,7 @@
             const user = await getCurrentUser();
             setUser(user);
           } catch {}
-          subscribeToPush();
+          syncPushSubscription();
           await goto(nextPath);
         }
       }
@@ -289,7 +289,7 @@
         // Cookies set by response — just fetch user and redirect
         const user = await getCurrentUser();
         setUser(user);
-        subscribeToPush();
+        syncPushSubscription();
         goto(nextPath);
       }
     } catch (e) {

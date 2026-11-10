@@ -13,7 +13,7 @@
   import { initDmUnread } from '$lib/stores/dm-unread.js';
   import { cookieConsent, hasConsented } from '$lib/stores/consent.js';
   import CookieBanner from '$lib/components/ui/CookieBanner.svelte';
-  import { subscribeToPush } from '$lib/utils/push.js';
+  import { syncPushSubscription } from '$lib/utils/push.js';
   import { loadFilters } from '$lib/stores/content-filters.js';
   import PostComposer from '$lib/components/post/PostComposer.svelte';
   import SudoModal from '$lib/components/admin/SudoModal.svelte';
@@ -73,7 +73,7 @@
       connectChatStream(apiBase);
       initSound();
       initDmUnread();
-      subscribeToPush();
+      syncPushSubscription();
       loadFilters();
       uninstallShortcuts = installShortcuts();
 
