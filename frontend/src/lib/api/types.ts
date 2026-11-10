@@ -124,6 +124,8 @@ export interface Post {
   language: string | null;
   post_type: 'text' | 'media' | 'video_stream' | 'poll' | 'article';
   reply_count: number;
+  /** Root posts: every reply in the conversation. Replies: same as `reply_count`. */
+  thread_reply_count?: number;
   boost_count: number;
   reaction_count: number;
   is_pinned: boolean;
