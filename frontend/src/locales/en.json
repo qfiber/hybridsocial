@@ -338,6 +338,8 @@
   "explore.tab_local": "Local",
   "explore.tab_global": "Global",
   "explore.tab_trending": "Trending",
+  "thread.show_replies_one": "Show 1 more reply",
+  "thread.show_replies_other": "Show {count} more replies",
   "home.tab_latest": "Latest",
   "home.tab_foryou": "For You",
   "home.tab_top": "Top",

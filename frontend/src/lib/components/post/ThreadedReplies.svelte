@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Post } from '$lib/api/types.js';
   import PostCard from './PostCard.svelte';
+  import { t } from '$lib/stores/i18n.js';
 
   let {
     descendants,
@@ -51,6 +52,13 @@
 
   let tree = $derived(buildTree(descendants, rootPostId));
 
+  // Everything under a node — what the "show replies" button reveals (it
+  // opens EXPAND_STEP more *levels*, so the old "View next 5 replies" label
+  // rarely matched what appeared).
+  function countDescendants(node: ReplyNode): number {
+    return node.children.reduce((sum, child) => sum + 1 + countDescendants(child), 0);
+  }
+
   const EXPAND_STEP = 5;
 
   let expandedExtra = $state<Record<string, number>>({});
@@ -95,8 +103,10 @@
 
       <!-- Expand-by-5 button when we've hit the visible-depth budget -->
       {#if node.children.length > 0 && node.depth >= localBudget}
+        {@const hidden = countDescendants(node)}
         <button type="button" class="view-replies-btn" onclick={() => expandMore(node.post.id)}>
-          View next {EXPAND_STEP} replies
+          <span class="material-symbols-outlined view-replies-icon" aria-hidden="true">forum</span>
+          {hidden === 1 ? $t('thread.show_replies_one') : $t('thread.show_replies_other', { count: hidden })}
         </button>
       {/if}
 
@@ -247,20 +257,46 @@
   }
 
   /* ---- View replies link ---- */
+  /* A clear pill button rather than a bare text link: easy to spot at the
+     end of a long thread and a full-size tap target on touch. */
   .view-replies-btn {
-    background: none;
-    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    align-self: flex-start;
+    min-height: 40px;
+    margin-block: var(--space-2);
+    margin-inline-start: 4px;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-primary) 10%, transparent);
     color: var(--color-primary);
+    font: inherit;
     font-size: var(--text-sm);
     font-weight: 600;
     cursor: pointer;
-    padding: 6px 0;
-    text-align: start;
-    margin-inline-start: 4px;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
   }
 
   .view-replies-btn:hover {
-    text-decoration: underline;
+    background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+    border-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+  }
+
+  .view-replies-btn:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  .view-replies-icon {
+    font-size: 18px;
+  }
+
+  @media (pointer: coarse) {
+    .view-replies-btn {
+      min-height: 44px;
+    }
   }
 
 </style>
