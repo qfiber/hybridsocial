@@ -106,7 +106,7 @@
         {@const hidden = countDescendants(node)}
         <button type="button" class="view-replies-btn" onclick={() => expandMore(node.post.id)}>
           <span class="material-symbols-outlined view-replies-icon" aria-hidden="true">forum</span>
-          {hidden === 1 ? $t('thread.show_replies_one') : $t('thread.show_replies_other', { count: hidden })}
+          {$t('thread.show_replies', { count: hidden })}
         </button>
       {/if}
 
