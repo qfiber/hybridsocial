@@ -103,11 +103,11 @@
   let searchOpen = $state(false);
   let sortOpen = $state(false);
 
-  const SORTS: { value: (typeof SORT_VALUES)[number]; label: string }[] = [
-    { value: 'trending', label: 'Trending' },
-    { value: 'newest', label: 'Newest' },
-    { value: 'oldest', label: 'Oldest' },
-  ];
+  let SORTS = $derived<{ value: (typeof SORT_VALUES)[number]; label: string }[]>([
+    { value: 'trending', label: $t('streams.sort_trending') },
+    { value: 'newest', label: $t('streams.sort_newest') },
+    { value: 'oldest', label: $t('streams.sort_oldest') },
+  ]);
 
   // The feed carries clips of every orientation (the server is asked for
   // `orientation=all`), so the only client-side requirement is that the post
@@ -168,7 +168,7 @@
       // have more, keep trying to fill the viewport.
       if (feedEl) maybeLoadMore();
     } catch {
-      error = 'Failed to load streams.';
+      error = $t('streams.load_failed');
     } finally {
       loading = false;
     }
@@ -315,7 +315,7 @@
 </script>
 
 <svelte:head>
-  <title>Streams - {$instanceName}</title>
+  <title>{$t('streams.title')} - {$instanceName}</title>
 </svelte:head>
 
 <div class="streams-page">
@@ -331,21 +331,21 @@
         <input
           type="search"
           class="streams-search-input"
-          placeholder="Search clips or #tags…"
-          aria-label="Search streams"
+          placeholder={$t('streams.search_placeholder')}
+          aria-label={$t('streams.search_label')}
           autofocus
           bind:value={search}
           oninput={onSearchInput}
         />
       </div>
-      <button type="button" class="streams-overlay-close" aria-label="Close search" onclick={() => (searchOpen = false)}>
+      <button type="button" class="streams-overlay-close" aria-label={$t('streams.close_search')} onclick={() => (searchOpen = false)}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
       </button>
     </div>
   {/if}
 
   {#if sortOpen}
-    <div class="streams-sort-menu" role="group" aria-label="Sort clips by">
+    <div class="streams-sort-menu" role="group" aria-label={$t('streams.sort_label')}>
       {#each SORTS as s (s.value)}
         <button
           type="button"
@@ -367,15 +367,15 @@
   {:else if error}
     <div class="state">
       <p class="state-text">{error}</p>
-      <button type="button" class="btn btn-outline" onclick={loadStreams}>Retry</button>
+      <button type="button" class="btn btn-outline" onclick={loadStreams}>{$t('common.retry')}</button>
     </div>
   {:else if streams.length === 0}
     <div class="state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-tertiary)" stroke-width="1.5" aria-hidden="true">
         <rect x="3" y="5" width="18" height="14" rx="2" /><path d="M10 13l4 2-4 2z" /><path d="M8 5v4M13 5v4M18 5v4" />
       </svg>
-      <p class="state-text">No streams yet</p>
-      <p class="state-sub">Video clips will appear here.</p>
+      <p class="state-text">{$t('streams.empty')}</p>
+      <p class="state-sub">{$t('streams.empty_hint')}</p>
     </div>
   {:else}
     <div class="streams-feed" bind:this={feedEl} onscroll={maybeLoadMore}>

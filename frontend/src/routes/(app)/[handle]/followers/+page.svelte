@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { instanceName } from '$lib/stores/instance.js';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
@@ -49,7 +50,7 @@
       cursor = Array.isArray(result) ? null : result.next_cursor;
       hasMore = Array.isArray(result) ? data.length >= 20 : !!result.next_cursor;
     } catch {
-      error = 'Failed to load followers.';
+      error = $t('followers.load_failed');
     } finally {
       loading = false;
       loadingMore = false;
@@ -93,18 +94,18 @@
 </script>
 
 <svelte:head>
-  <title>Followers - {handle} - {$instanceName}</title>
+  <title>{$t('followers.page_title', { handle })} - {$instanceName}</title>
 </svelte:head>
 
 <div class="followers-page">
   <div class="page-header">
-    <a href="/@{handle}" class="back-link" aria-label="Back to profile">
+    <a href="/@{handle}" class="back-link" aria-label={$t('profile.back')}>
       <svg class="rtl-mirror" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="15 18 9 12 15 6"/>
       </svg>
     </a>
     <div>
-      <h1 class="page-title">Followers</h1>
+      <h1 class="page-title">{$t('profile.followers')}</h1>
       <p class="page-subtitle">@{handle}</p>
     </div>
   </div>
@@ -116,11 +117,11 @@
   {:else if error}
     <div class="error-state">
       <p>{error}</p>
-      <button type="button" class="btn btn-outline" onclick={() => loadFollowers(true)}>Retry</button>
+      <button type="button" class="btn btn-outline" onclick={() => loadFollowers(true)}>{$t('common.retry')}</button>
     </div>
   {:else if followers.length === 0}
     <div class="empty-state">
-      <p class="empty-text">No followers yet</p>
+      <p class="empty-text">{$t('followers.empty')}</p>
     </div>
   {:else}
     <div class="account-list">
@@ -143,7 +144,7 @@
               onclick={() => toggleFollow(acct.id, followingSet.has(acct.id))}
               disabled={followLoading.has(acct.id)}
             >
-              {followingSet.has(acct.id) ? 'Following' : 'Follow'}
+              {followingSet.has(acct.id) ? $t('explore.following') : $t('explore.follow')}
             </button>
           {/if}
         </div>

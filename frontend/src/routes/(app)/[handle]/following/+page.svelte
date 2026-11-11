@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { page } from '$app/stores';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
@@ -114,7 +115,7 @@
 
       await Promise.all(tasks);
     } catch {
-      error = 'Failed to load following.';
+      error = $t('following.load_failed');
     } finally {
       loading = false;
     }
@@ -149,11 +150,11 @@
 
   function modalTitle(section: SectionKey): string {
     return {
-      people: 'People',
-      pages: 'Pages',
-      groups: 'Groups',
-      hashtags: 'Hashtags',
-      bots: 'Bots',
+      people: $t('following.people'),
+      pages: $t('following.pages'),
+      groups: $t('following.groups'),
+      hashtags: $t('following.hashtags'),
+      bots: $t('following.bots'),
     }[section];
   }
 
@@ -261,18 +262,18 @@
 </script>
 
 <svelte:head>
-  <title>Following - {handle} - {$instanceName}</title>
+  <title>{$t('following.page_title', { handle })} - {$instanceName}</title>
 </svelte:head>
 
 <div class="following-page">
   <div class="page-header">
-    <a href="/@{handle}" class="back-link" aria-label="Back to profile">
+    <a href="/@{handle}" class="back-link" aria-label={$t('profile.back')}>
       <svg class="rtl-mirror" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="15 18 9 12 15 6"/>
       </svg>
     </a>
     <div>
-      <h1 class="page-title">Following</h1>
+      <h1 class="page-title">{$t('profile.following')}</h1>
       <p class="page-subtitle">@{handle}</p>
     </div>
   </div>
@@ -284,19 +285,19 @@
   {:else if error}
     <div class="error-state">
       <p>{error}</p>
-      <button type="button" class="btn btn-outline" onclick={loadAll}>Retry</button>
+      <button type="button" class="btn btn-outline" onclick={loadAll}>{$t('common.retry')}</button>
     </div>
   {:else}
     {@render section(
       'people',
-      'People',
+      $t('following.people'),
       people.length,
-      'Following: real human accounts you follow.',
+      $t('following.people_hint'),
     )}
     {#if expanded.people}
       <div class="section-body">
         {#if people.length === 0}
-          <p class="section-empty">Not following any people yet.</p>
+          <p class="section-empty">{$t('following.people_empty')}</p>
         {:else}
           <ul class="account-list">
             {#each people.slice(0, 10) as acct (acct.id)}
@@ -305,18 +306,18 @@
           </ul>
           {#if people.length > 10}
             <button type="button" class="show-more" onclick={() => openModal('people')}>
-              Show all {people.length} people
+              {$t('following.show_all_people', { count: people.length })}
             </button>
           {/if}
         {/if}
       </div>
     {/if}
 
-    {@render section('pages', 'Pages', pages.length, 'Pages you follow.')}
+    {@render section('pages', $t('following.pages'), pages.length, $t('following.pages_hint'))}
     {#if expanded.pages}
       <div class="section-body">
         {#if pages.length === 0}
-          <p class="section-empty">No followed pages yet.</p>
+          <p class="section-empty">{$t('following.pages_empty')}</p>
         {:else}
           <ul class="account-list">
             {#each pages.slice(0, 10) as acct (acct.id)}
@@ -325,20 +326,20 @@
           </ul>
           {#if pages.length > 10}
             <button type="button" class="show-more" onclick={() => openModal('pages')}>
-              Show all {pages.length} pages
+              {$t('following.show_all_pages', { count: pages.length })}
             </button>
           {/if}
         {/if}
       </div>
     {/if}
 
-    {@render section('groups', 'Groups', myGroups.length, 'Groups you belong to.')}
+    {@render section('groups', $t('following.groups'), myGroups.length, $t('following.groups_hint'))}
     {#if expanded.groups}
       <div class="section-body">
         {#if !isSelf}
-          <p class="section-empty">Group memberships are private.</p>
+          <p class="section-empty">{$t('following.groups_private')}</p>
         {:else if myGroups.length === 0}
-          <p class="section-empty">Not part of any groups yet.</p>
+          <p class="section-empty">{$t('following.groups_empty')}</p>
         {:else}
           <ul class="account-list">
             {#each myGroups.slice(0, 10) as g (g.id)}
@@ -347,7 +348,7 @@
           </ul>
           {#if myGroups.length > 10}
             <button type="button" class="show-more" onclick={() => openModal('groups')}>
-              Show all {myGroups.length} groups
+              {$t('following.show_all_groups', { count: myGroups.length })}
             </button>
           {/if}
         {/if}
@@ -356,16 +357,16 @@
 
     {@render section(
       'hashtags',
-      'Hashtags',
+      $t('following.hashtags'),
       followedHashtags.length,
-      'Hashtags you follow.',
+      $t('following.hashtags_hint'),
     )}
     {#if expanded.hashtags}
       <div class="section-body">
         {#if !isSelf}
-          <p class="section-empty">Followed hashtags are private.</p>
+          <p class="section-empty">{$t('following.hashtags_private')}</p>
         {:else if followedHashtags.length === 0}
-          <p class="section-empty">No followed hashtags yet.</p>
+          <p class="section-empty">{$t('following.hashtags_empty')}</p>
         {:else}
           <ul class="hashtag-list">
             {#each followedHashtags.slice(0, 10) as tag (tag.name)}
@@ -374,7 +375,7 @@
           </ul>
           {#if followedHashtags.length > 10}
             <button type="button" class="show-more" onclick={() => openModal('hashtags')}>
-              Show all {followedHashtags.length} hashtags
+              {$t('following.show_all_hashtags', { count: followedHashtags.length })}
             </button>
           {/if}
         {/if}
@@ -383,14 +384,14 @@
 
     {@render section(
       'bots',
-      'Bots',
+      $t('following.bots'),
       bots.length,
-      'Automated accounts you follow.',
+      $t('following.bots_hint'),
     )}
     {#if expanded.bots}
       <div class="section-body">
         {#if bots.length === 0}
-          <p class="section-empty">No followed bots yet.</p>
+          <p class="section-empty">{$t('following.bots_empty')}</p>
         {:else}
           <ul class="account-list">
             {#each bots.slice(0, 10) as acct (acct.id)}
@@ -399,7 +400,7 @@
           </ul>
           {#if bots.length > 10}
             <button type="button" class="show-more" onclick={() => openModal('bots')}>
-              Show all {bots.length} bots
+              {$t('following.show_all_bots', { count: bots.length })}
             </button>
           {/if}
         {/if}
@@ -443,7 +444,7 @@
         onclick={() => handleUnfollow(acct.id)}
         disabled={unfollowingIds.has(acct.id)}
       >
-        {unfollowingIds.has(acct.id) ? '…' : 'Unfollow'}
+        {unfollowingIds.has(acct.id) ? '…' : $t('profile.unfollow')}
       </button>
     {/if}
   </li>
@@ -459,7 +460,7 @@
       </div>
     </a>
     {#if isSelf}
-      <button type="button" class="btn btn-outline btn-sm" onclick={() => handleLeaveGroup(g.id)}>Leave</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick={() => handleLeaveGroup(g.id)}>{$t('following.leave')}</button>
     {/if}
   </li>
 {/snippet}
@@ -471,24 +472,24 @@
       <span class="account-name">{tag.name}</span>
     </a>
     {#if isSelf}
-      <button type="button" class="btn btn-outline btn-sm" onclick={() => handleUnfollowHashtag(tag.name)}>Unfollow</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick={() => handleUnfollowHashtag(tag.name)}>{$t('profile.unfollow')}</button>
     {/if}
   </li>
 {/snippet}
 
-<Modal bind:open={modalOpen} title="All {modalTitle(modalSection)} ({modalFiltered.length})">
+<Modal bind:open={modalOpen} title={$t('following.modal_title', { section: modalTitle(modalSection), count: modalFiltered.length })}>
   <div class="modal-search">
     <input
       type="search"
       class="modal-search-input"
-      placeholder="Search…"
+      placeholder={$t('following.search_placeholder')}
       bind:value={modalQuery}
-      aria-label="Search {modalTitle(modalSection)}"
+      aria-label={$t('following.search_label', { section: modalTitle(modalSection) })}
     />
   </div>
 
   {#if modalFiltered.length === 0}
-    <p class="modal-empty">No matches.</p>
+    <p class="modal-empty">{$t('following.no_matches')}</p>
   {:else}
     <ul class="modal-list">
       {#each modalSlice as item (modalSection === 'hashtags' ? (item as HashtagItem).name : (item as { id: string }).id)}
@@ -509,14 +510,14 @@
       class="btn btn-outline btn-sm"
       disabled={modalPage === 0}
       onclick={() => (modalPage = Math.max(0, modalPage - 1))}
-    >Prev</button>
-    <span class="modal-page-label">Page {modalPage + 1} of {modalTotalPages}</span>
+    >{$t('following.prev')}</button>
+    <span class="modal-page-label">{$t('following.page_of', { page: modalPage + 1, total: modalTotalPages })}</span>
     <button
       type="button"
       class="btn btn-outline btn-sm"
       disabled={modalPage >= modalTotalPages - 1}
       onclick={() => (modalPage = Math.min(modalTotalPages - 1, modalPage + 1))}
-    >Next</button>
+    >{$t('common.next')}</button>
   </div>
 </Modal>
 

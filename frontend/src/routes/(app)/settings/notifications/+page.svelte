@@ -17,20 +17,19 @@
 
   const notifTypes = ['follow', 'mention', 'reaction', 'boost', 'poll', 'group_invite'] as const;
 
-  const channels = [
-    { key: 'in_app', label: 'In-app' },
-    { key: 'email', label: 'Email' },
-    { key: 'push', label: 'Push' },
-  ] as const;
+  let channels = $derived([
+    { key: 'in_app', label: $t('settings.notif_channel_in_app') },
+    { key: 'email', label: $t('settings.notif_channel_email') },
+    { key: 'push', label: $t('settings.notif_channel_push') },
+  ] as const);
 
-  const rows = [
-    { type: 'follow', name: 'Follows', desc: 'Someone follows you or sends a follow request' },
-    { type: 'mention', name: 'Mentions', desc: 'Someone mentions you in a post' },
-    { type: 'reaction', name: 'Reactions', desc: 'Someone reacts to your post' },
-    { type: 'boost', name: 'Boosts', desc: 'Someone boosts your post' },
-    { type: 'poll', name: 'Polls', desc: 'A poll you voted in has ended' },
-    { type: 'group_invite', name: 'Group invites', desc: 'Someone invites you to a group' },
-  ];
+  let rows = $derived(
+    notifTypes.map((type) => ({
+      type,
+      name: $t(`settings.notif_${type}`),
+      desc: $t(`settings.notif_${type}_desc`),
+    })),
+  );
 
   let prefs = $state<Record<string, ChannelPrefs>>({});
   let loading = $state(true);
@@ -78,9 +77,9 @@
           in_app: p.in_app,
         });
       }
-      addToast('Notification preferences saved', 'success');
+      addToast($t('settings.notif_saved'), 'success');
     } catch {
-      addToast('Could not save notification preferences', 'error');
+      addToast($t('settings.notif_save_failed'), 'error');
     } finally {
       saving = false;
     }
@@ -95,15 +94,15 @@
 
   <AsyncState
     {loading}
-    error={loadError ? 'Could not load your notification preferences.' : ''}
+    error={loadError ? $t('settings.notif_load_failed') : ''}
     onretry={load}
   >
     <form class="notif-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-      <p class="notif-intro">Choose how you're notified for each event. Turn any channel on or off.</p>
+      <p class="notif-intro">{$t('settings.notif_intro')}</p>
 
-      <div class="notif-table" role="group" aria-label="Notification preferences">
+      <div class="notif-table" role="group" aria-label={$t('settings.notif_prefs_label')}>
         <div class="notif-head" aria-hidden="true">
-          <span class="notif-head-event">Event</span>
+          <span class="notif-head-event">{$t('settings.notif_event')}</span>
           <span class="notif-head-channels">
             {#each channels as ch (ch.key)}<span>{ch.label}</span>{/each}
           </span>
@@ -124,7 +123,7 @@
                     class="notif-check"
                     checked={pref(item.type)[ch.key]}
                     onchange={(e) => setChannel(item.type, ch.key, (e.target as HTMLInputElement).checked)}
-                    aria-label={`${ch.label} notifications for ${item.name}`}
+                    aria-label={$t('settings.notif_toggle_label', { channel: ch.label, event: item.name })}
                   />
                 </label>
               {/each}
@@ -159,7 +158,7 @@
       <div class="notif-actions">
         <button class="stitch-btn-primary" type="submit" disabled={saving}>
           {#if saving}<Spinner size={16} color="#fff" />{/if}
-          Save changes
+          {$t('settings.save_changes')}
         </button>
       </div>
     </form>

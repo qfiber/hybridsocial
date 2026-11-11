@@ -10,6 +10,7 @@
   import Skeleton from '$lib/components/ui/Skeleton.svelte';
   import InfiniteScroll from '$lib/components/ui/InfiniteScroll.svelte';
   import { instanceName } from '$lib/stores/instance.js';
+  import { t } from '$lib/stores/i18n.js';
 
   let items: Notification[] = $state([]);
   let loading = $state(true);
@@ -18,13 +19,13 @@
   let cursor: string | null = $state(null);
   let activeTab = $state('all');
 
-  const tabs = [
-    { id: 'all', label: 'All' },
-    { id: 'mention', label: 'Mentions' },
-    { id: 'reply', label: 'Replies' },
-    { id: 'follow', label: 'Follows' },
-    { id: 'reaction', label: 'Reactions' },
-  ];
+  let tabs = $derived([
+    { id: 'all', label: $t('notifications.tab_all') },
+    { id: 'mention', label: $t('notifications.tab_mentions') },
+    { id: 'reply', label: $t('notifications.tab_replies') },
+    { id: 'follow', label: $t('notifications.tab_follows') },
+    { id: 'reaction', label: $t('notifications.tab_reactions') },
+  ]);
 
   let typeFilter = $derived.by(() => {
     switch (activeTab) {
@@ -155,15 +156,15 @@
 </script>
 
 <svelte:head>
-  <title>Notifications - {$instanceName}</title>
+  <title>{$t('notifications.title')} - {$instanceName}</title>
 </svelte:head>
 
 <div class="notifications-page">
   <div class="notifications-header">
-    <h1 class="notifications-title">Notifications</h1>
+    <h1 class="notifications-title">{$t('notifications.title')}</h1>
     {#if hasUnread}
       <button class="btn btn-ghost btn-sm" type="button" onclick={handleMarkAllRead}>
-        Mark all as read
+        {$t('notifications.mark_all_as_read')}
       </button>
     {/if}
   </div>
@@ -194,8 +195,8 @@
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </div>
-        <h2 class="notifications-empty-title">You're all caught up</h2>
-        <p class="empty-text">New reactions, replies, and follows will show up here.</p>
+        <h2 class="notifications-empty-title">{$t('notifications.caught_up')}</h2>
+        <p class="empty-text">{$t('notifications.caught_up_hint')}</p>
       </div>
     {:else}
       <div class="notifications-list">

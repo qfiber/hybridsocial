@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { onMount } from 'svelte';
   import { listStoryFeed, type StoryGroup, type StoryMedia } from '$lib/api/stories.js';
   import { currentUser } from '$lib/stores/auth.js';
@@ -70,7 +71,7 @@
 </script>
 
 {#if !loading && (selfGroup || otherGroups.length > 0 || me)}
-  <div class="stories-carousel" aria-label="Stories">
+  <div class="stories-carousel" aria-label={$t('stories.label')}>
     <div class="stories-track">
       {#if me}
         <!-- Self / "Create story" tile. Two-pane Facebook-style layout:
@@ -96,7 +97,7 @@
               )}
             </div>
             <div class="self-footer">
-              <span class="self-label">Create story</span>
+              <span class="self-label">{$t('stories.create')}</span>
             </div>
             <span
               class="self-plus"
@@ -113,7 +114,7 @@
             type="button"
             class="self-plus-target"
             onclick={(e) => { e.stopPropagation(); openComposer(); }}
-            aria-label="Add story"
+            aria-label={$t('stories.add')}
           ></button>
         </div>
       {/if}
