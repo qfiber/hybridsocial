@@ -57,6 +57,8 @@ export interface Identity {
   allow_unfurl?: boolean;
   /** When true, follower/following counts are hidden from other viewers. */
   hide_follow_counts?: boolean;
+  /** Own account only: auto-delete posts after this many months (1..12); null = off. */
+  auto_delete_after_months?: number | null;
   roles: string[];
   permissions: string[];
   two_factor_enabled: boolean;

@@ -17,6 +17,9 @@
   let discoverable: boolean = $state(true);
   let allowUnfurl: boolean = $state(true);
   let hideFollowCounts: boolean = $state(false);
+  // Auto-delete period in months as a <select> value; '' = off (#254).
+  let autoDeleteMonths: string = $state('');
+  const autoDeleteOptions = Array.from({ length: 12 }, (_, i) => i + 1);
   let dmPreference: string = $state('everyone');
   let groupDmOptIn: boolean = $state(false);
   type InvitePref = 'anyone' | 'only_follows' | 'nobody';
@@ -41,6 +44,7 @@
       discoverable = (state.user as any).discoverable ?? true;
       allowUnfurl = (state.user as any).allow_unfurl ?? true;
       hideFollowCounts = (state.user as any).hide_follow_counts ?? false;
+      autoDeleteMonths = String(state.user.auto_delete_after_months ?? '');
       allowGroupInvites = ((state.user as any).allow_group_invites ?? 'anyone') as InvitePref;
       allowPageInvites = ((state.user as any).allow_page_invites ?? 'anyone') as InvitePref;
     }
@@ -64,6 +68,9 @@
         discoverable = (fresh as any).discoverable ?? discoverable;
         allowUnfurl = (fresh as any).allow_unfurl ?? allowUnfurl;
         hideFollowCounts = fresh.hide_follow_counts ?? hideFollowCounts;
+        if (fresh.auto_delete_after_months !== undefined) {
+          autoDeleteMonths = String(fresh.auto_delete_after_months ?? '');
+        }
       } catch {
         // Keep cached values.
       }
@@ -93,6 +100,7 @@
         hide_follow_counts: hideFollowCounts,
         allow_group_invites: allowGroupInvites,
         allow_page_invites: allowPageInvites,
+        auto_delete_after_months: autoDeleteMonths ? Number(autoDeleteMonths) : null,
       } as any);
       setUser(updated);
 
@@ -268,6 +276,23 @@
         <option value="direct">Direct (mentioned people only)</option>
       </select>
       <span class="form-hint">New posts will default to this visibility setting</span>
+    </div>
+
+    <div class="setting-row">
+      <div class="setting-info">
+        <label class="setting-label" for="auto-delete">Automatically delete my posts</label>
+        <span class="setting-description">
+          Delete your posts once they reach this age. Only posts you publish after
+          turning this on are affected; your existing posts are kept. Deleted posts
+          are also removed from other servers and can't be recovered.
+        </span>
+      </div>
+      <select id="auto-delete" class="setting-select" bind:value={autoDeleteMonths}>
+        <option value="">Off</option>
+        {#each autoDeleteOptions as m (m)}
+          <option value={String(m)}>After {m} {m === 1 ? 'month' : 'months'}</option>
+        {/each}
+      </select>
     </div>
 
     <div class="form-actions">

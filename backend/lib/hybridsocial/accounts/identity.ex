@@ -95,6 +95,14 @@ defmodule Hybridsocial.Accounts.Identity do
     # admin moderation surfaces.
     field :hide_follow_counts, :boolean, default: false
 
+    # Automatic post deletion (#254): delete this identity's posts once they
+    # are this many months old (1..12). nil = off, the default.
+    # `auto_delete_enabled_at` is set when it is switched on and never cast
+    # from params; posts published before it are kept. See
+    # Social.AutoDeleteWorker.
+    field :auto_delete_after_months, :integer
+    field :auto_delete_enabled_at, :utc_datetime_usec
+
     # Optional account recovery code. Hashed. See Accounts.RecoveryCode
     # and Accounts.generate_recovery_code/2 / recover_account/4.
     field :recovery_code_hash, :string
@@ -193,6 +201,7 @@ defmodule Hybridsocial.Accounts.Identity do
     :location,
     :discoverable,
     :allow_unfurl,
+    :auto_delete_after_months,
     :hide_follow_counts
   ]
 
@@ -211,9 +220,34 @@ defmodule Hybridsocial.Accounts.Identity do
     |> validate_length(:header_url, max: 2048)
     |> validate_inclusion(:allow_group_invites, ~w(anyone only_follows nobody))
     |> validate_inclusion(:allow_page_invites, ~w(anyone only_follows nobody))
+    |> validate_number(:auto_delete_after_months,
+      greater_than_or_equal_to: 1,
+      less_than_or_equal_to: 12
+    )
+    |> track_auto_delete_enabled()
     |> reject_display_name_change_if_verified()
     |> reject_bot_change_if_forced(identity)
     |> reject_type_change_on_main_account(identity)
+  end
+
+  # Stamp when auto-delete is switched on, clear it when switched off.
+  # Changing the period while it is on keeps the original stamp, so posts
+  # from before it was first enabled stay safe.
+  defp track_auto_delete_enabled(changeset) do
+    case fetch_change(changeset, :auto_delete_after_months) do
+      {:ok, nil} ->
+        put_change(changeset, :auto_delete_enabled_at, nil)
+
+      {:ok, _months} ->
+        if is_nil(get_field(changeset, :auto_delete_enabled_at)) do
+          put_change(changeset, :auto_delete_enabled_at, DateTime.utc_now())
+        else
+          changeset
+        end
+
+      :error ->
+        changeset
+    end
   end
 
   @profile_field_name_max 60
