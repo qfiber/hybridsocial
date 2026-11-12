@@ -1370,6 +1370,9 @@
 
       // Capture parent ID before reset clears it
       const parentId = replyTo?.id;
+      // A root post's counter covers its whole thread, so a reply deeper down
+      // bumps the root as well as the direct parent.
+      const rootId = replyTo?.root_id && replyTo.root_id !== parentId ? replyTo.root_id : null;
 
       // Show optimistic post immediately
       window.dispatchEvent(new CustomEvent('new-post', { detail: optimisticPost }));
@@ -1387,6 +1390,9 @@
         window.dispatchEvent(new CustomEvent('post-deleted', { detail: { id: optimisticId } }));
         if (parentId) {
           window.dispatchEvent(new CustomEvent('reply-count-update', { detail: { postId: parentId, delta: -1 } }));
+        }
+        if (rootId) {
+          window.dispatchEvent(new CustomEvent('reply-count-update', { detail: { postId: rootId, delta: -1 } }));
         }
         clearTimeout(closeTimer);
         isClosing = false;
@@ -1408,6 +1414,9 @@
       if (parentId) {
         markSeen(parentId);
         window.dispatchEvent(new CustomEvent('reply-count-update', { detail: { postId: parentId, delta: 1 } }));
+      }
+      if (rootId) {
+        window.dispatchEvent(new CustomEvent('reply-count-update', { detail: { postId: rootId, delta: 1 } }));
       }
 
       // Send to server, then replace optimistic with real

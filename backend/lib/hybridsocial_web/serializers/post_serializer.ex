@@ -112,6 +112,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       spoiler_text: post.spoiler_text,
       language: post.language,
       reply_count: post.reply_count,
+      thread_reply_count: thread_reply_count(post),
       boost_count: post.boost_count,
       reaction_count: post.reaction_count,
       is_pinned: post.is_pinned,
@@ -252,6 +253,9 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
     # post in the batch is a per-image reply.
     target_media_summaries = batch_target_media_summaries(posts)
 
+    # Whole-thread reply totals for the root posts in the batch (one query).
+    thread_counts = batch_thread_reply_counts(posts)
+
     Enum.map(posts, fn post ->
       badges =
         Hybridsocial.Badges.badges_for_post(
@@ -290,6 +294,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
         spoiler_text: post.spoiler_text,
         language: post.language,
         reply_count: post.reply_count,
+        thread_reply_count: thread_count_for(post, thread_counts),
         boost_count: post.boost_count,
         reaction_count: post.reaction_count,
         is_pinned: post.is_pinned,
@@ -744,6 +749,44 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
     |> order_by([m], asc: m.inserted_at)
     |> Repo.all()
     |> Enum.map(&serialize_media_attachment/1)
+  end
+
+  # `reply_count` counts direct replies only (it is Mastodon's
+  # `replies_count`, and other clients rely on that), so a root post with two
+  # comments and a dozen replies under them showed "2". `thread_reply_count`
+  # is the whole conversation under a root post: every live reply whose
+  # `root_id` is that post. Only roots get one (a reply's own figure stays its
+  # direct `reply_count`), and only roots that have replies at all are
+  # queried, so a feed page costs a single grouped count on the
+  # `posts.root_id` index.
+  defp thread_root?(post), do: is_nil(post.root_id) and (post.reply_count || 0) > 0
+
+  defp thread_reply_count(post) do
+    if thread_root?(post) do
+      Map.get(batch_thread_reply_counts([post]), post.id, post.reply_count)
+    else
+      post.reply_count
+    end
+  end
+
+  defp thread_count_for(post, counts) do
+    if thread_root?(post), do: Map.get(counts, post.id, post.reply_count), else: post.reply_count
+  end
+
+  defp batch_thread_reply_counts(posts) do
+    root_ids = for post <- posts, thread_root?(post), do: post.id
+
+    if root_ids == [] do
+      %{}
+    else
+      from(p in Hybridsocial.Social.Post,
+        where: p.root_id in ^root_ids and is_nil(p.deleted_at) and not is_nil(p.published_at),
+        group_by: p.root_id,
+        select: {p.root_id, count(p.id)}
+      )
+      |> Repo.all()
+      |> Map.new()
+    end
   end
 
   defp batch_media_attachments([]), do: %{}

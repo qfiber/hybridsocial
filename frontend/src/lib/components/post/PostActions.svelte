@@ -82,7 +82,9 @@
 
   let isBoosted = $state(post.is_boosted);
   let boostCount = $state(post.boost_count);
-  let replyCount = $state(post.reply_count);
+  // A root post shows the whole conversation (`thread_reply_count`); a reply
+  // shows its direct replies. Falls back for payloads without the field.
+  let replyCount = $state(post.thread_reply_count ?? post.reply_count);
   let reactionCount = $state(post.reaction_count);
   // Local mirror of the server flag — mutating `post.is_bookmarked`
   // directly was unreliable because `post` is a $props() proxy and
