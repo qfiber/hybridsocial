@@ -7,9 +7,12 @@
 
   let {
     count = 0,
+    offset = 0,
     onclick
   }: {
     count: number;
+    /** Height of any sticky bar under the header (e.g. feed tabs) to clear. */
+    offset?: number;
     onclick?: () => void;
   } = $props();
 
@@ -22,6 +25,7 @@
 {#if count > 0}
   <div
     class="npb-floater"
+    style:--npb-offset="{offset}px"
     in:fly={{ y: -24, duration: 280, easing: cubicOut }}
     out:fly={{ y: -24, duration: 180, easing: cubicOut }}
   >
@@ -50,7 +54,7 @@
 <style>
   .npb-floater {
     position: fixed;
-    inset-block-start: calc(var(--header-height) + 12px);
+    inset-block-start: calc(var(--header-height) + var(--npb-offset, 0px) + 12px);
     /* Physical `left`: centering is direction-neutral, and with
        `inset-inline-start` an RTL page anchors from the right while
        translateX(-50%) still shifts left — a full width off-center. */

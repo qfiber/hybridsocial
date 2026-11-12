@@ -266,19 +266,23 @@
       window.removeEventListener('timeline-status-update', handleStatusUpdate);
     };
   });
+
+  // Height of the sticky tabs bar, so the "new posts" pill sits below it
+  // instead of covering the tabs (#256).
+  let stickyBarHeight = $state(0);
 </script>
 
 <div class="timeline-feed">
   {#if tabs.length > 1}
     <!-- Sticky feed switcher: pinned under the header so switching feeds
          deep in a long timeline doesn't force a scroll to top. -->
-    <div class="timeline-sticky-bar">
+    <div class="timeline-sticky-bar" bind:offsetHeight={stickyBarHeight}>
       <FeedTabs {tabs} active={activeId} onchange={switchTab} />
     </div>
   {/if}
 
   {#if activeTab?.stream}
-    <NewPostsBanner count={$queuedCount} onclick={mergeQueued} />
+    <NewPostsBanner count={$queuedCount} onclick={mergeQueued} offset={tabs.length > 1 ? stickyBarHeight : 0} />
   {/if}
 
   <FeedList
