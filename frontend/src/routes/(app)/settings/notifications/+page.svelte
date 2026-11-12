@@ -5,6 +5,7 @@
   import AsyncState from '$lib/components/ui/AsyncState.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import { t } from '$lib/stores/i18n.js';
+  import PushOptIn from '$lib/components/notification/PushOptIn.svelte';
   import {
     getMessageSoundEnabled,
     getNotificationSoundEnabled,
@@ -87,6 +88,11 @@
 </script>
 
 <div class="stitch-settings">
+  <!-- Outside the form: it acts immediately (and its buttons must not submit). -->
+  <div class="notif-device">
+    <PushOptIn />
+  </div>
+
   <AsyncState
     {loading}
     error={loadError ? 'Could not load your notification preferences.' : ''}
@@ -163,6 +169,12 @@
 <style>
   .stitch-settings {
     max-width: 720px;
+  }
+
+  .notif-device {
+    margin-block-end: var(--space-5);
+    padding-block-end: var(--space-5);
+    border-block-end: 1px solid var(--color-border);
   }
 
   .notif-form {

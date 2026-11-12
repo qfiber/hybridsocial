@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PushOptIn from '$lib/components/notification/PushOptIn.svelte';
   import { onMount } from 'svelte';
   import type { Notification } from '$lib/api/types.js';
   import { getNotifications, markAllNotificationsRead } from '$lib/api/notifications.js';
@@ -166,6 +167,8 @@
       </button>
     {/if}
   </div>
+
+  <PushOptIn variant="banner" />
 
   <Tabs {tabs} bind:active={activeTab}>
     {#if loading}
