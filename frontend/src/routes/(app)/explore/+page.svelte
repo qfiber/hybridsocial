@@ -185,6 +185,10 @@
       handleSearch();
     }
   });
+
+  // Height of the sticky Local/Global/Trending bar, so the feed's "new posts"
+  // pill sits below it instead of covering it (#256).
+  let topTabsHeight = $state(0);
 </script>
 
 <svelte:head>
@@ -258,13 +262,18 @@
       {/if}
     </Tabs>
   {:else}
-    <div class="explore-toptabs">
+    <div class="explore-toptabs" bind:offsetHeight={topTabsHeight}>
       <FeedTabs tabs={exploreTabs} active={topTab} onchange={changeTopTab} />
     </div>
     <!-- One feed at a time (its own tab bar hidden since a single tab is
          passed); keyed so switching tabs remounts with the right feed. -->
     {#key topTab}
-      <TimelineFeed tabs={[feedTab]} filterContext="public" cache={exploreFeedCache(topTab)} />
+      <TimelineFeed
+        tabs={[feedTab]}
+        filterContext="public"
+        cache={exploreFeedCache(topTab)}
+        bannerOffset={topTabsHeight}
+      />
     {/key}
   {/if}
 </div>

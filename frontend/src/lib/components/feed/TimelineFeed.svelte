@@ -67,8 +67,12 @@
     tabs,
     filterContext = 'home',
     cache = null,
+    bannerOffset = 0,
   }: {
     tabs: TimelineTab[];
+    /** Height of a sticky tab bar the page renders itself (Explore), so the
+     *  "new posts" pill clears it. Ignored when this feed draws its own tabs. */
+    bannerOffset?: number;
     filterContext?: string;
     cache?: TimelineCache | null;
   } = $props();
@@ -282,7 +286,7 @@
   {/if}
 
   {#if activeTab?.stream}
-    <NewPostsBanner count={$queuedCount} onclick={mergeQueued} offset={tabs.length > 1 ? stickyBarHeight : 0} />
+    <NewPostsBanner count={$queuedCount} onclick={mergeQueued} offset={tabs.length > 1 ? stickyBarHeight : bannerOffset} />
   {/if}
 
   <FeedList
