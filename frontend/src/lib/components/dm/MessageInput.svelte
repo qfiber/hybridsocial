@@ -266,6 +266,7 @@
     uploaded = [];
     if (textareaEl) {
       textareaEl.style.height = 'auto';
+      textareaEl.style.overflowY = 'hidden';
     }
   }
 
@@ -293,6 +294,9 @@
     if (!textareaEl) return;
     textareaEl.style.height = 'auto';
     textareaEl.style.height = Math.min(textareaEl.scrollHeight, 120) + 'px';
+    // Only show a scrollbar once the text outgrows the 120px cap. With
+    // `auto`, sub-pixel rounding drew one even for a single line (#255).
+    textareaEl.style.overflowY = textareaEl.scrollHeight > 120 ? 'auto' : 'hidden';
     pingTyping();
   }
 
@@ -672,7 +676,7 @@
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     resize: none;
-    overflow-y: auto;
+    overflow-y: hidden;
     max-height: 120px;
     transition: border-color var(--transition-fast);
     /* Pair with dir="auto" — lets browser pick LTR/RTL from the first
