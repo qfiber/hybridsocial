@@ -49,10 +49,17 @@ export function filterBadges(badges: Badge[] | undefined | null, isVerified: boo
   let highestTier: Badge | null = null;
   let bestRank = 0;
   const nonTier: Badge[] = [];
+  // Several badges can share a type: on a group/page post the backend adds
+  // a context badge ("Admin of X") next to the instance one ("Admin").
+  // Renderers key by type+label, so drop only exact repeats.
+  const seen = new Set<string>();
 
   for (const b of list) {
     const rank = TIER_RANK[b.type] ?? 0;
     if (rank === 0) {
+      const key = `${b.type}:${b.label ?? ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       nonTier.push(b);
       continue;
     }

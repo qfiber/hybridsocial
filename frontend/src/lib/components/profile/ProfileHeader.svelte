@@ -250,7 +250,7 @@
             <VerifiedBadge size="md" />
           {/if}
           <AccountTypeIndicator account={account} size={16} />
-          {#each badgeView.nonTier as badge (badge.type)}
+          {#each badgeView.nonTier as badge (`${badge.type}:${badge.label ?? ''}`)}
             <RoleBadge type={badge.type} label={badge.label} size="md" />
           {/each}
           {#if badgeView.highestTier}

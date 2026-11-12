@@ -848,7 +848,7 @@
                     : $t('explore.follow')}
               </button>
             {/if}
-            {#each accountBadgeView.nonTier as badge (badge.type)}
+            {#each accountBadgeView.nonTier as badge (`${badge.type}:${badge.label ?? ''}`)}
               <RoleBadge type={badge.type} label={badge.label} size="sm" />
             {/each}
             {#if accountBadgeView.highestTier}
