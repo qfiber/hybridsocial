@@ -405,8 +405,10 @@
        absurdly large card. The previous 420 px ceiling left huge
        black bars on anything wider than a phone. */
     max-width: clamp(320px, calc(90vh * 0.5625), 560px);
+    max-width: clamp(320px, calc(90dvh * 0.5625), 560px);
     height: 100%;
     max-height: 90vh;
+    max-height: 90dvh;
     background: #000;
     border-radius: 14px;
     overflow: hidden;
@@ -652,9 +654,11 @@
     /* Mirror .story-frame's responsive cap so the sheet aligns with
        the frame above it when desktop sizing kicks in. */
     max-width: clamp(320px, calc(90vh * 0.5625), 560px);
+    max-width: clamp(320px, calc(90dvh * 0.5625), 560px);
     background: var(--color-surface);
     border-radius: 16px 16px 0 0;
     max-height: 70vh;
+    max-height: 70dvh;
     display: flex;
     flex-direction: column;
   }

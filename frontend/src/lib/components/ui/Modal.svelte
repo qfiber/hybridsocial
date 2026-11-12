@@ -128,7 +128,12 @@
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
     width: 100%;
+    /* dvh: on phones `vh` measures the viewport with the browser chrome
+       hidden, so with the address bar showing the dialog ran past the
+       visible area and hid its bottom (often the action buttons). `vh` stays
+       as the fallback for browsers without dynamic viewport units. */
     max-height: 85vh;
+    max-height: 85dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -137,7 +142,7 @@
   .modal-sm { max-width: 480px; }
   .modal-md { max-width: 640px; }
   .modal-lg { max-width: 900px; }
-  .modal-full { max-width: min(1100px, 96vw); max-height: 92vh; }
+  .modal-full { max-width: min(1100px, 96vw); max-height: 92vh; max-height: 92dvh; }
 
   .modal-header {
     display: flex;

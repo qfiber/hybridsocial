@@ -752,6 +752,7 @@
     right: 0;
     width: min(360px, calc(100vw - 32px));
     max-height: 70vh;
+    max-height: 70dvh;
     overflow-y: auto;
     background: var(--color-surface-raised);
     border: 1px solid var(--color-warning, #f59e0b);

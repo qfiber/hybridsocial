@@ -2273,6 +2273,7 @@
     width: 90%;
     max-width: 400px;
     max-height: 70vh;
+    max-height: 70dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -2453,6 +2454,7 @@
     flex-direction: column;
     gap: 12px;
     max-height: 50vh;
+    max-height: 50dvh;
     overflow-y: auto;
   }
 

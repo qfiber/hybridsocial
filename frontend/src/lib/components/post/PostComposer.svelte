@@ -2332,6 +2332,7 @@
     width: calc(100% - 32px);
     max-width: 560px;
     max-height: 80vh;
+    max-height: 80dvh;
     background: var(--color-surface-container-lowest);
     border-radius: 14px;
     padding: 24px;
@@ -2564,6 +2565,7 @@
     width: 100%;
     min-height: 100px;
     max-height: 40vh;
+    max-height: 40dvh;
     padding: 4px 0;
     border: none;
     font-size: 1.125rem;
@@ -3310,6 +3312,7 @@
   .video-preview-player {
     max-width: min(960px, 100%);
     max-height: 90vh;
+    max-height: 90dvh;
     border-radius: var(--radius-lg);
     background: #000;
   }

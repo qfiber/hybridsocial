@@ -170,6 +170,7 @@
     flex-direction: column;
     gap: var(--space-1, 4px);
     max-height: 55vh;
+    max-height: 55dvh;
     overflow-y: auto;
   }
 
