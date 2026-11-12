@@ -43,6 +43,8 @@ defmodule Hybridsocial.Application do
             Hybridsocial.Feeds.PrewarmWorker,
             # Activity expiration cleanup
             Hybridsocial.Federation.ActivityExpirationWorker,
+            # Per-user automatic post deletion (#254)
+            Hybridsocial.Social.AutoDeleteWorker,
             # Prunes terminal federation_deliveries rows older than
             # federation_delivery_retention_days (default 30)
             Hybridsocial.Federation.DeliveryRetentionWorker,

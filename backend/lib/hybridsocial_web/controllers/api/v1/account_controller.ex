@@ -104,7 +104,7 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
 
         conn
         |> put_status(:ok)
-        |> json(serialize_identity(updated))
+        |> json(serialize_identity(updated, updated.id))
 
       {:error, changeset} ->
         conn
@@ -530,8 +530,15 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       onboarded_at: identity.onboarded_at,
       created_at: identity.inserted_at
     }
+    |> maybe_put_own_settings(identity, own_view)
     |> maybe_put_suspension(identity, viewer_id)
   end
+
+  # Settings only the account itself should see.
+  defp maybe_put_own_settings(payload, identity, true),
+    do: Map.put(payload, :auto_delete_after_months, identity.auto_delete_after_months)
+
+  defp maybe_put_own_settings(payload, _identity, _own_view), do: payload
 
   # Staff-only, for the banner on a suspended profile. The account itself can
   # still load its profile, but doesn't get this.

@@ -18,6 +18,7 @@ export function updateAccount(data: {
   is_bot?: boolean;
   show_badge?: boolean;
   hide_follow_counts?: boolean;
+  auto_delete_after_months?: number | null;
   default_visibility?: string;
   birthday?: string | null;
   location?: string | null;

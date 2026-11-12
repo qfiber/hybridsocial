@@ -282,6 +282,7 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       is_admin: identity.is_admin,
       show_badge: identity.show_badge,
       hide_follow_counts: identity.hide_follow_counts,
+      auto_delete_after_months: identity.auto_delete_after_months,
       followers_count: Hybridsocial.Social.followers_count(identity.id),
       following_count: Hybridsocial.Social.following_count(identity.id),
       badges: Hybridsocial.Badges.instance_badges(identity),
