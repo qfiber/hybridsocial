@@ -8,6 +8,19 @@ defmodule Hybridsocial.Federation.WebFinger do
   @doc """
   Returns the WebFinger JRD representation for a local identity.
   """
+  def represent(:instance_actor) do
+    domain = HybridsocialWeb.Endpoint.host()
+    actor = Hybridsocial.Federation.InstanceActor.ap_id()
+
+    %{
+      "subject" => "acct:#{domain}@#{domain}",
+      "aliases" => [actor],
+      "links" => [
+        %{"rel" => "self", "type" => "application/activity+json", "href" => actor}
+      ]
+    }
+  end
+
   def represent(identity) do
     domain = HybridsocialWeb.Endpoint.host()
 
@@ -85,22 +98,35 @@ defmodule Hybridsocial.Federation.WebFinger do
   @doc """
   Resolves a local acct URI, returning the identity if found.
   """
+  # The instance actor (`/actor`, preferredUsername = our domain) is the
+  # keyId of every signed GET we make. Mastodon re-resolves a stale actor by
+  # WebFinger on its handle before refetching its key; a 404 here made it
+  # refuse all our signed fetches ("Could not refresh public key").
   def resolve_local(resource) do
+    instance_actor = Hybridsocial.Federation.InstanceActor.ap_id()
+
     case parse_resource(resource) do
+      _ when resource == instance_actor ->
+        {:ok, :instance_actor}
+
       {:ok, handle, domain} ->
         local_domain = HybridsocialWeb.Endpoint.host()
 
-        if domain == local_domain do
-          case Accounts.get_identity_by_handle(handle) do
-            nil -> {:error, :not_found}
-            identity -> {:ok, identity}
-          end
-        else
-          {:error, :not_local}
+        cond do
+          domain != local_domain -> {:error, :not_local}
+          handle == local_domain -> {:ok, :instance_actor}
+          true -> resolve_local_handle(handle)
         end
 
       :error ->
         {:error, :invalid_resource}
+    end
+  end
+
+  defp resolve_local_handle(handle) do
+    case Accounts.get_identity_by_handle(handle) do
+      nil -> {:error, :not_found}
+      identity -> {:ok, identity}
     end
   end
 
