@@ -70,6 +70,10 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
       bob = create_trusted_user("cc_grp2", "cc_grp2@example.com")
       carol = create_trusted_user("cc_grp3", "cc_grp3@example.com")
 
+      for p <- [bob, carol] do
+        {:ok, _} = Messaging.update_dm_preferences(p.id, %{"allow_group_dms" => true})
+      end
+
       conn =
         conn
         |> authenticate(alice)
@@ -77,6 +81,34 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
       response = json_response(conn, 201)
       assert response["type"] == "group_dm"
+    end
+
+    test "refuses a group DM naming who can't be added", %{conn: conn} do
+      alice = create_trusted_user("cc_grp_no")
+      bob = create_trusted_user("cc_grp_no2")
+      carol = create_trusted_user("cc_grp_no3")
+      {:ok, _} = Messaging.update_dm_preferences(bob.id, %{"allow_group_dms" => true})
+
+      conn =
+        conn
+        |> authenticate(alice)
+        |> post("/api/v1/conversations", %{"recipient_ids" => [bob.id, carol.id]})
+
+      assert %{"error" => "dm.group_not_allowed", "recipient_ids" => [refused]} =
+               json_response(conn, 403)
+
+      assert refused == carol.id
+    end
+
+    test "a DM to an unknown account is a 404, not a crash", %{conn: conn} do
+      alice = create_trusted_user("cc_unknown")
+
+      conn =
+        conn
+        |> authenticate(alice)
+        |> post("/api/v1/conversations", %{"recipient_ids" => [Ecto.UUID.generate()]})
+
+      assert json_response(conn, 404)["error"] == "dm.recipient_not_found"
     end
 
     test "returns error for self-messaging", %{conn: conn} do

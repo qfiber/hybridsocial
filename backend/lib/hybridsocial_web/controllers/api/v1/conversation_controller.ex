@@ -58,40 +58,72 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
         |> put_status(:created)
         |> json(serialize_conversation(conversation))
 
-      {:error, :dm_not_allowed} ->
-        conn |> put_status(:forbidden) |> json(%{error: "dm.not_allowed"})
-
-      {:error, :trust_dm_not_allowed} ->
-        conn |> put_status(:forbidden) |> json(%{error: "trust.dm_not_allowed"})
-
-      {:error, :dm_not_supported, info} ->
-        # Peer software doesn't speak ChatMessage. The frontend will
-        # catch this and silently compose a direct-visibility post
-        # with the recipient mentioned instead.
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{
-          error: "dm.not_supported_by_peer",
-          fallback: "direct_post",
-          recipient: info
-        })
-
-      {:error, :cannot_message_self} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.cannot_message_self"})
-
-      {:error, :insufficient_participants} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: "dm.insufficient_participants"})
-
-      {:error, :invalid_recipients} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.invalid_recipients"})
-
-      {:error, changeset} ->
-        conn
-        |> put_status(:unprocessable_entity)
-        |> json(%{error: "validation.failed", details: format_errors(changeset)})
+      error ->
+        render_create_error(conn, error)
     end
+  end
+
+  defp render_create_error(conn, {:error, :dm_not_allowed}) do
+    conn |> put_status(:forbidden) |> json(%{error: "dm.not_allowed"})
+  end
+
+  defp render_create_error(conn, {:error, :trust_dm_not_allowed}) do
+    conn |> put_status(:forbidden) |> json(%{error: "trust.dm_not_allowed"})
+  end
+
+  defp render_create_error(conn, {:error, :dm_not_supported, info}) do
+    # Peer software doesn't speak ChatMessage. The frontend will
+    # catch this and silently compose a direct-visibility post
+    # with the recipient mentioned instead.
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{
+      error: "dm.not_supported_by_peer",
+      fallback: "direct_post",
+      recipient: info
+    })
+  end
+
+  defp render_create_error(conn, {:error, :recipient_not_found}) do
+    conn |> put_status(:not_found) |> json(%{error: "dm.recipient_not_found"})
+  end
+
+  defp render_create_error(conn, {:error, :group_dm_not_allowed, refused}) do
+    conn
+    |> put_status(:forbidden)
+    |> json(%{error: "dm.group_not_allowed", recipient_ids: refused})
+  end
+
+  defp render_create_error(conn, {:error, :group_dm_remote_not_supported, remote}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "dm.group_remote_not_supported", recipient_ids: remote})
+  end
+
+  defp render_create_error(conn, {:error, :group_dm_too_large, max}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "dm.group_too_large", max: max})
+  end
+
+  defp render_create_error(conn, {:error, :cannot_message_self}) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.cannot_message_self"})
+  end
+
+  defp render_create_error(conn, {:error, :insufficient_participants}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "dm.insufficient_participants"})
+  end
+
+  defp render_create_error(conn, {:error, :invalid_recipients}) do
+    conn |> put_status(:unprocessable_entity) |> json(%{error: "dm.invalid_recipients"})
+  end
+
+  defp render_create_error(conn, {:error, changeset}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> json(%{error: "validation.failed", details: format_errors(changeset)})
   end
 
   # POST /api/v1/conversations/:id/messages
