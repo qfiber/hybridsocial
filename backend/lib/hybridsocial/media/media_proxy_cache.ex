@@ -141,8 +141,11 @@ defmodule Hybridsocial.Media.MediaProxyCache do
           {:error, reason}
       end
     else
+      # Callers check `enabled?/0` first; this only runs if the setting
+      # flips mid-request. An explicit error beats a bare `:ok` the
+      # caller can't serve from (the source file is gone).
       File.rm(source_path)
-      :ok
+      {:error, :cache_disabled}
     end
   end
 
