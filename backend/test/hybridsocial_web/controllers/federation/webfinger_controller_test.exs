@@ -19,6 +19,28 @@ defmodule HybridsocialWeb.Federation.WebfingerControllerTest do
   end
 
   describe "GET /.well-known/webfinger" do
+    # Mastodon re-resolves a stale actor by WebFinger before refetching its
+    # key. A 404 for the instance actor made it refuse every signed GET we
+    # made: "Could not refresh public key .../actor#main-key".
+    test "resolves the instance actor by its handle (acct:domain@domain)", %{conn: conn} do
+      domain = HybridsocialWeb.Endpoint.host()
+      actor = Hybridsocial.Federation.InstanceActor.ap_id()
+
+      body =
+        json_response(get(conn, "/.well-known/webfinger?resource=acct:#{domain}@#{domain}"), 200)
+
+      assert body["subject"] == "acct:#{domain}@#{domain}"
+
+      assert %{"type" => "application/activity+json", "href" => ^actor} =
+               Enum.find(body["links"], &(&1["rel"] == "self"))
+    end
+
+    test "resolves the instance actor by its URL", %{conn: conn} do
+      actor = Hybridsocial.Federation.InstanceActor.ap_id()
+      body = json_response(get(conn, "/.well-known/webfinger", %{"resource" => actor}), 200)
+      assert Enum.any?(body["links"], &(&1["rel"] == "self" and &1["href"] == actor))
+    end
+
     test "returns JRD for valid local user", %{conn: conn, identity: identity} do
       domain = HybridsocialWeb.Endpoint.host()
       resource = "acct:#{identity.handle}@#{domain}"
