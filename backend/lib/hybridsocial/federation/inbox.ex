@@ -356,7 +356,7 @@ defmodule Hybridsocial.Federation.Inbox do
 
         result =
           %Post{}
-          |> Post.create_changeset(insert_attrs)
+          |> Post.create_changeset(insert_attrs, has_media: remote_media?(ap_object))
           |> maybe_put_published_at(post_attrs["published_at"])
           |> maybe_put_content_html(post_attrs["content_html"])
           |> Repo.insert()
@@ -684,6 +684,17 @@ defmodule Hybridsocial.Federation.Inbox do
   # mentions don't grant access to a local post.
   defp lookup_local_identity_for_mention(href) do
     lookup_local_identity(href)
+  end
+
+  # Whether the object carries media we'll store: the same test
+  # `persist_remote_attachments/3` applies, so a post accepted on the
+  # strength of its media always gets that media. Lets an image-only Note
+  # (no text, common from Pleroma/Misskey) through the content check, the
+  # same rule a local post with media follows.
+  defp remote_media?(ap_object) do
+    ap_object["attachment"]
+    |> List.wrap()
+    |> Enum.any?(&match?(%{"url" => url} when is_binary(url), &1))
   end
 
   defp persist_remote_attachments(post, ap_object, remote_identity) do
@@ -1520,7 +1531,7 @@ defmodule Hybridsocial.Federation.Inbox do
               |> Posts.maybe_resolve_root_id()
 
             case %Post{}
-                 |> Post.create_changeset(insert_attrs)
+                 |> Post.create_changeset(insert_attrs, has_media: remote_media?(object))
                  |> maybe_put_published_at(post_attrs["published_at"])
                  |> maybe_put_content_html(post_attrs["content_html"])
                  |> Repo.insert() do
@@ -1648,7 +1659,9 @@ defmodule Hybridsocial.Federation.Inbox do
           "spoiler_text" => object["summary"]
         }
 
-        case post |> Post.edit_changeset(attrs) |> Repo.update() do
+        case post
+             |> Post.edit_changeset(attrs, has_media: remote_media?(object))
+             |> Repo.update() do
           {:ok, updated_post} = ok ->
             # Mirror the local edit broadcast (Posts.edit_post/4)
             # so a local user replying to a remote post also gets

@@ -23,7 +23,10 @@ defmodule HybridsocialWeb.Plugs.DigestPlug do
 
       [] ->
         if signature_check_enabled?() do
-          Logger.warning("Inbox POST missing Digest header (#{conn.request_path})")
+          Logger.warning(
+            "Inbox POST missing Digest header (#{conn.request_path}) " <>
+              missing_digest_context(conn)
+          )
 
           conn
           |> put_status(401)
@@ -39,6 +42,27 @@ defmodule HybridsocialWeb.Plugs.DigestPlug do
   end
 
   def call(conn, _opts), do: conn
+
+  # Who sent a Digest-less POST and how it was signed, so a peer that signs
+  # with RFC 9421 (`Signature-Input` + `Content-Digest`) can be told apart
+  # from junk. Only the key's host is logged; keyIds are public anyway.
+  defp missing_digest_context(conn) do
+    host =
+      [get_req_header(conn, "signature"), get_req_header(conn, "signature-input")]
+      |> List.flatten()
+      |> Enum.find_value("unknown", fn header ->
+        case Regex.run(~r/keyid="([^"]+)"/i, header) do
+          [_, key_id] -> URI.parse(key_id).host
+          _ -> nil
+        end
+      end)
+
+    "from=#{host} content_digest=#{header?(conn, "content-digest")} " <>
+      "signature_input=#{header?(conn, "signature-input")} " <>
+      "signature=#{header?(conn, "signature")}"
+  end
+
+  defp header?(conn, name), do: get_req_header(conn, name) != []
 
   defp signature_check_enabled? do
     Application.get_env(:hybridsocial, :federation_signature_check, true)

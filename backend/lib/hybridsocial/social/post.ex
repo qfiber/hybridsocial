@@ -120,7 +120,7 @@ defmodule Hybridsocial.Social.Post do
     |> validate_required([:identity_id])
     |> validate_inclusion(:visibility, @valid_visibilities)
     |> validate_inclusion(:post_type, @valid_post_types)
-    |> validate_content_for_type()
+    |> validate_content_for_type(Keyword.get(opts, :has_media, false))
     |> validate_length(:content, max: char_limit)
     |> validate_length(:spoiler_text, max: 500)
     |> validate_length(:language, max: 5)
@@ -215,7 +215,7 @@ defmodule Hybridsocial.Social.Post do
     end
   end
 
-  defp validate_content_for_type(changeset, has_media \\ false) do
+  defp validate_content_for_type(changeset, has_media) do
     post_type = get_field(changeset, :post_type)
 
     # media, video_stream and audio posts can be caption-less — a photo,

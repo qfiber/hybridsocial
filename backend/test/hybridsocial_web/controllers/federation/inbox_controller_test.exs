@@ -260,6 +260,26 @@ defmodule HybridsocialWeb.Federation.InboxControllerTest do
 
       assert json_response(conn, 401)["error"] == "Digest header required"
     end
+
+    test "logs who sent a Digest-less POST and how it was signed", %{conn: conn} do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          conn
+          |> put_req_header("content-type", "application/activity+json")
+          |> put_req_header(
+            "signature-input",
+            ~s|sig1=("@method");keyid="https://rfc9421.example/users/a#main-key"|
+          )
+          |> put_req_header("content-digest", "sha-256=:abc=:")
+          |> post("/inbox", %{"type" => "Follow"})
+        end)
+
+      assert log =~ "missing Digest header"
+      assert log =~ "from=rfc9421.example"
+      assert log =~ "content_digest=true"
+      assert log =~ "signature_input=true"
+      assert log =~ "signature=false"
+    end
   end
 
   describe "Digest mismatch (always-on)" do
