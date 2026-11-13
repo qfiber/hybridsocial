@@ -807,10 +807,14 @@ export interface DeliveryQueueStats {
 
 export interface AdminSetting {
   key: string;
-  value: string;
+  /** Typed as the backend registry declares it; `null` for a secret. */
+  value: string | number | boolean | null;
   type: 'string' | 'integer' | 'boolean' | 'text' | 'json';
   category: string;
   description: string;
+  /** Write-only setting: `value` is never returned, `set` says whether one is stored. */
+  secret?: boolean;
+  set?: boolean;
 }
 
 export interface ServiceHealth {

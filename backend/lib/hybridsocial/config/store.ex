@@ -1,7 +1,7 @@
 defmodule Hybridsocial.Config.Store do
   use GenServer
 
-  alias Hybridsocial.Config.Setting
+  alias Hybridsocial.Config.{Registry, Setting}
   alias Hybridsocial.Repo
 
   import Ecto.Query
@@ -34,9 +34,16 @@ defmodule Hybridsocial.Config.Store do
     ArgumentError -> default
   end
 
-  @doc "Set a setting value. Writes to DB and updates ETS."
+  @doc """
+  Set a setting value. Writes to DB and updates ETS.
+
+  A registered key's value is typed through `Config.Registry.normalize/2`
+  first, so `"800"` is stored as `800` for an integer setting. Values that
+  don't cast are stored as given; strict validation is the caller's job
+  (the admin settings API rejects them with a 422).
+  """
   def set(key, value) do
-    GenServer.call(__MODULE__, {:set, key, value})
+    GenServer.call(__MODULE__, {:set, key, Registry.normalize(key, value)})
   end
 
   @doc "Get all settings as a map of key => value."
@@ -82,7 +89,9 @@ defmodule Hybridsocial.Config.Store do
     settings = Repo.all(Setting)
 
     Enum.each(settings, fn setting ->
-      :ets.insert(@table, {setting.key, setting.value["value"]})
+      # Rows saved as strings before the registry existed read back typed.
+      value = Registry.normalize(setting.key, setting.value["value"])
+      :ets.insert(@table, {setting.key, value})
     end)
   end
 
