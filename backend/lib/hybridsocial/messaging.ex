@@ -157,15 +157,91 @@ defmodule Hybridsocial.Messaging do
 
   defp identity_is_local?(_), do: false
 
-  @doc "Create a group DM with multiple participants."
+  @doc """
+  Creates a group DM. Every participant must pass the same checks as a 1:1
+  DM (no block either way, their `allow_dms_from`), must have opted into
+  group DMs (`allow_group_dms`), and must be local: group DMs fan out as one
+  `ChatMessage` per recipient, which most fediverse software can't receive,
+  and a remote account has no group-DM consent we can read (#264).
+
+  The whole request is refused when any participant fails, naming them, so
+  the creator knows who wasn't added. The participant count is capped by
+  `group_dm_max_participants` (default 25, creator included).
+  """
   def create_group_dm(creator_id, participant_ids) when is_list(participant_ids) do
-    with :ok <- check_trust(creator_id, participant_ids) do
-      do_create_group_dm(creator_id, participant_ids)
+    others = participant_ids |> Enum.uniq() |> Enum.reject(&(&1 == creator_id))
+
+    with :ok <- check_group_size(others),
+         {:ok, identities} <- load_group_participants(others),
+         :ok <- check_group_remote(identities),
+         :ok <- check_group_consent(creator_id, identities),
+         :ok <- check_trust(creator_id, others) do
+      do_create_group_dm(creator_id, others)
+    end
+  end
+
+  @doc "Most participants a group DM may have, creator included."
+  def group_dm_max_participants do
+    case Hybridsocial.Config.get("group_dm_max_participants", 25) do
+      n when is_integer(n) and n >= 2 ->
+        n
+
+      n when is_binary(n) ->
+        case Integer.parse(n) do
+          {int, ""} when int >= 2 -> int
+          _ -> 25
+        end
+
+      _ ->
+        25
+    end
+  end
+
+  defp check_group_size(others) do
+    max = group_dm_max_participants()
+    if length(others) + 1 > max, do: {:error, :group_dm_too_large, max}, else: :ok
+  end
+
+  # Every id must be a UUID naming a live identity; anything else is the
+  # caller's mistake, not a reason to 500 on a cast error.
+  defp load_group_participants(ids) do
+    valid = Enum.filter(ids, &match?({:ok, _}, Ecto.UUID.cast(&1)))
+
+    found =
+      Hybridsocial.Accounts.Identity
+      |> where([i], i.id in ^valid and is_nil(i.deleted_at))
+      |> Repo.all()
+
+    if length(found) == length(ids), do: {:ok, found}, else: {:error, :recipient_not_found}
+  end
+
+  defp check_group_remote(identities) do
+    case Enum.reject(identities, & &1.is_local) do
+      [] -> :ok
+      remote -> {:error, :group_dm_remote_not_supported, Enum.map(remote, & &1.id)}
+    end
+  end
+
+  # One reason for every refusal (block, `allow_dms_from`, not opted in), so
+  # a group invite reveals no more about a block than a 1:1 DM does.
+  defp check_group_consent(creator_id, identities) do
+    ids = Enum.map(identities, & &1.id)
+
+    opted_in =
+      DmPreference
+      |> where([p], p.identity_id in ^ids and p.allow_group_dms == true)
+      |> select([p], p.identity_id)
+      |> Repo.all()
+      |> MapSet.new()
+
+    case Enum.reject(ids, &(MapSet.member?(opted_in, &1) and can_dm?(creator_id, &1))) do
+      [] -> :ok
+      refused -> {:error, :group_dm_not_allowed, refused}
     end
   end
 
   defp do_create_group_dm(creator_id, participant_ids) do
-    all_ids = Enum.uniq([creator_id | participant_ids])
+    all_ids = [creator_id | participant_ids]
 
     if length(all_ids) < 2 do
       {:error, :insufficient_participants}

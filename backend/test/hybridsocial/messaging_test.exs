@@ -69,9 +69,102 @@ defmodule Hybridsocial.MessagingTest do
       alice = create_trusted_user("grp_alice", "grp_alice@example.com")
       bob = create_trusted_user("grp_bob", "grp_bob@example.com")
       carol = create_trusted_user("grp_carol", "grp_carol@example.com")
+      opt_into_group_dms(bob)
+      opt_into_group_dms(carol)
 
       assert {:ok, conversation} = Messaging.create_group_dm(alice.id, [bob.id, carol.id])
       assert conversation.type == "group_dm"
+    end
+
+    test "refuses participants who haven't opted into group DMs, naming them" do
+      alice = create_trusted_user("grp_optout_a")
+      bob = create_trusted_user("grp_optout_b")
+      carol = create_trusted_user("grp_optout_c")
+      opt_into_group_dms(bob)
+
+      assert {:error, :group_dm_not_allowed, [refused]} =
+               Messaging.create_group_dm(alice.id, [bob.id, carol.id])
+
+      assert refused == carol.id
+    end
+
+    test "refuses a participant who blocked the creator, or whom the creator blocked" do
+      alice = create_trusted_user("grp_blk_a")
+      bob = create_trusted_user("grp_blk_b")
+      carol = create_trusted_user("grp_blk_c")
+      opt_into_group_dms(bob)
+      opt_into_group_dms(carol)
+
+      {:ok, _} = Hybridsocial.Social.block(bob.id, alice.id)
+
+      assert {:error, :group_dm_not_allowed, [refused]} =
+               Messaging.create_group_dm(alice.id, [bob.id, carol.id])
+
+      assert refused == bob.id
+
+      {:ok, _} = Hybridsocial.Social.block(alice.id, carol.id)
+
+      assert {:error, :group_dm_not_allowed, refused} =
+               Messaging.create_group_dm(alice.id, [bob.id, carol.id])
+
+      assert Enum.sort(refused) == Enum.sort([bob.id, carol.id])
+    end
+
+    test "honours allow_dms_from" do
+      alice = create_trusted_user("grp_from_a")
+      bob = create_trusted_user("grp_from_b")
+      carol = create_trusted_user("grp_from_c")
+      opt_into_group_dms(bob, %{"allow_dms_from" => "nobody"})
+      opt_into_group_dms(carol, %{"allow_dms_from" => "followers"})
+
+      assert {:error, :group_dm_not_allowed, refused} =
+               Messaging.create_group_dm(alice.id, [bob.id, carol.id])
+
+      assert Enum.sort(refused) == Enum.sort([bob.id, carol.id])
+
+      # Carol follows Alice, so "followers" lets Alice in; Bob still says nobody.
+      {:ok, _} = Hybridsocial.Social.follow(carol.id, alice.id)
+
+      assert {:error, :group_dm_not_allowed, [refused]} =
+               Messaging.create_group_dm(alice.id, [bob.id, carol.id])
+
+      assert refused == bob.id
+    end
+
+    test "refuses remote participants" do
+      alice = create_trusted_user("grp_rem_a")
+      bob = create_trusted_user("grp_rem_b")
+      opt_into_group_dms(bob)
+
+      remote =
+        create_trusted_user("grp_rem_c")
+        |> Ecto.Changeset.change(is_local: false)
+        |> Hybridsocial.Repo.update!()
+
+      opt_into_group_dms(remote)
+
+      assert {:error, :group_dm_remote_not_supported, [remote_id]} =
+               Messaging.create_group_dm(alice.id, [bob.id, remote.id])
+
+      assert remote_id == remote.id
+    end
+
+    test "refuses unknown participant ids" do
+      alice = create_trusted_user("grp_unk_a")
+      bob = create_trusted_user("grp_unk_b")
+      opt_into_group_dms(bob)
+
+      for bad <- [Ecto.UUID.generate(), "not-a-uuid"] do
+        assert {:error, :recipient_not_found} = Messaging.create_group_dm(alice.id, [bob.id, bad])
+      end
+    end
+
+    test "caps the participant count" do
+      alice = create_trusted_user("grp_cap_a")
+      max = Messaging.group_dm_max_participants()
+      ids = for _ <- 1..max, do: Ecto.UUID.generate()
+
+      assert {:error, :group_dm_too_large, ^max} = Messaging.create_group_dm(alice.id, ids)
     end
 
     test "requires at least 2 participants" do
@@ -126,6 +219,8 @@ defmodule Hybridsocial.MessagingTest do
       alice = create_trusted_user("lv_alice", "lv_alice@example.com")
       bob = create_trusted_user("lv_bob", "lv_bob@example.com")
       carol = create_trusted_user("lv_carol", "lv_carol@example.com")
+      opt_into_group_dms(bob)
+      opt_into_group_dms(carol)
 
       {:ok, conv} = Messaging.create_group_dm(alice.id, [bob.id, carol.id])
       assert {:ok, _} = Messaging.leave_conversation(conv.id, bob.id)
@@ -498,5 +593,10 @@ defmodule Hybridsocial.MessagingTest do
 
       assert {:error, :forbidden} = Messaging.edit_message(msg.id, bob.id, "stolen")
     end
+  end
+
+  defp opt_into_group_dms(identity, extra \\ %{}) do
+    {:ok, _} =
+      Messaging.update_dm_preferences(identity.id, Map.put(extra, "allow_group_dms", true))
   end
 end

@@ -237,7 +237,7 @@
       <select id="dm-pref" class="input" bind:value={dmPreference}>
         <option value="everyone">Everyone</option>
         <option value="followers">Followers only</option>
-        <option value="mutual">Mutual followers only</option>
+        <option value="mutual_followers">Mutual followers only</option>
         <option value="nobody">Nobody</option>
       </select>
     </div>

@@ -213,8 +213,16 @@ defmodule Hybridsocial.Accounts.TrustTest do
     test "a new account can't start a group DM with strangers" do
       sender = create_user("groupnew")
 
+      # Both accept group DMs, so the trust gate is what refuses.
+      [g1, g2] =
+        for handle <- ["g1", "g2"] do
+          identity = create_user(handle)
+          {:ok, _} = Messaging.update_dm_preferences(identity.id, %{"allow_group_dms" => true})
+          identity
+        end
+
       assert {:error, :trust_dm_not_allowed} =
-               Messaging.create_group_dm(sender.id, [create_user("g1").id, create_user("g2").id])
+               Messaging.create_group_dm(sender.id, [g1.id, g2.id])
     end
   end
 
