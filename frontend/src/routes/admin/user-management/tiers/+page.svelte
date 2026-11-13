@@ -51,6 +51,7 @@
     { key: 'pinned_posts', label: 'Pinned posts', type: 'integer' },
     { key: 'profile_fields', label: 'Profile fields', type: 'integer' },
     { key: 'scheduled_posts', label: 'Scheduled posts', type: 'boolean' },
+    { key: 'post_expiry', label: 'Timed (self-deleting) posts', type: 'boolean' },
     { key: 'custom_emoji', label: 'Custom emoji', type: 'boolean' },
     { key: 'follows_limit', label: 'Follows limit', type: 'integer', hint: '0 = unlimited' }
   ];

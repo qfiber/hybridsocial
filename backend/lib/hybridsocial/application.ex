@@ -53,6 +53,8 @@ defmodule Hybridsocial.Application do
             Hybridsocial.Federation.DeadActorWorker,
             # Story expiry (hard-deletes expired ephemeral stories)
             Hybridsocial.Social.StoryExpiryWorker,
+            # Timed posts (#261): deletes posts whose expires_at passed
+            Hybridsocial.Social.PostExpiryWorker,
             # Clears lapsed group sanctions (timed / partial bans). Cleanup
             # only — the authorization path already honours expiry at read
             # time, so a late tick can't keep anyone sanctioned.

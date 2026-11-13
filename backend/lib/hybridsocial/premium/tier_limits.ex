@@ -45,6 +45,7 @@ defmodule Hybridsocial.Premium.TierLimits do
       pinned_posts: 1,
       profile_fields: 0,
       scheduled_posts: false,
+      post_expiry: true,
       custom_emoji: false,
       follows_limit: 100,
       stories_max_active: 1
@@ -65,6 +66,7 @@ defmodule Hybridsocial.Premium.TierLimits do
       pinned_posts: 2,
       profile_fields: 2,
       scheduled_posts: false,
+      post_expiry: true,
       custom_emoji: false,
       follows_limit: 0,
       stories_max_active: 3
@@ -85,6 +87,7 @@ defmodule Hybridsocial.Premium.TierLimits do
       pinned_posts: 5,
       profile_fields: 5,
       scheduled_posts: true,
+      post_expiry: true,
       custom_emoji: true,
       follows_limit: 0,
       stories_max_active: 10
@@ -105,6 +108,7 @@ defmodule Hybridsocial.Premium.TierLimits do
       pinned_posts: 10,
       profile_fields: 10,
       scheduled_posts: true,
+      post_expiry: true,
       custom_emoji: true,
       follows_limit: 0,
       stories_max_active: 30

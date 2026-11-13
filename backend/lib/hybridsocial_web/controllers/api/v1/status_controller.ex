@@ -40,6 +40,11 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
           |> put_status(:forbidden)
           |> json(%{error: "premium_emojis_required", shortcodes: shortcodes})
 
+        {:error, :invalid_expires_in, %{min: min, max: max}} ->
+          conn
+          |> put_status(:unprocessable_entity)
+          |> json(%{error: "post.expires_in_invalid", min: min, max: max})
+
         {:error, :audio_not_allowed} ->
           conn
           |> put_status(:forbidden)
@@ -869,6 +874,9 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
 
       params["scheduled_at"] && !limits[:scheduled_posts] ->
         {:error, "limits.scheduled_posts_not_allowed", nil}
+
+      params["expires_in"] not in [nil, ""] && !limits[:post_expiry] ->
+        {:error, "limits.post_expiry_not_allowed", nil}
 
       true ->
         :ok

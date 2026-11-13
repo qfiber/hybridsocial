@@ -115,6 +115,7 @@
   let maxMedia = $derived($currentUser?.limits?.media_per_post ?? 4);
   let maxPollOptions = $derived($currentUser?.limits?.poll_options ?? 4);
   let canSchedule = $derived($currentUser?.limits?.scheduled_posts ?? false);
+  let canExpire = $derived($currentUser?.limits?.post_expiry ?? false);
   // Markdown is tier-gated. Only expose the toggle when the user's
   // tier actually allows something beyond plaintext — otherwise the
   // button would be a no-op. Default to on; server caps at tier level.
@@ -137,6 +138,10 @@
   let showSchedule = $state(false);
   let scheduledAt = $state('');
 
+  // Self-delete timer (#261). `expiresIn` is seconds after publish.
+  let showExpiry = $state(false);
+  let expiresIn = $state('86400');
+
 
   // Poll state
   let showPoll = $state(false);
@@ -151,6 +156,25 @@
     { value: '259200', label: $t('composer.duration_3_days') },
     { value: '604800', label: $t('composer.duration_7_days') },
   ]);
+
+  // Timer presets, trimmed to what the instance allows.
+  let expiryDurations = $derived(
+    [
+      ...pollDurations,
+      { value: '2592000', label: $t('composer.duration_30_days') },
+    ].filter((d) => {
+      const bounds = $currentUser?.post_expiry_bounds;
+      const secs = Number(d.value);
+      return !bounds || (secs >= bounds.min && secs <= bounds.max);
+    }),
+  );
+
+  function toggleExpiry() {
+    showExpiry = !showExpiry;
+    if (showExpiry && !expiryDurations.some((d) => d.value === expiresIn)) {
+      expiresIn = expiryDurations[0]?.value ?? expiresIn;
+    }
+  }
 
   let charCount = $derived(content.length);
   let charsRemaining = $derived(charLimit - charCount);
@@ -435,6 +459,7 @@
       uploadedMedia.length > 0 ||
       showPoll ||
       showSchedule ||
+      showExpiry ||
       (showCW && spoilerText.trim().length > 0);
 
     if (hasWork) {
@@ -496,6 +521,8 @@
     pollMultiple = false;
     showSchedule = false;
     scheduledAt = '';
+    showExpiry = false;
+    expiresIn = '86400';
     activeServerDraftId = null;
   }
 
@@ -1288,6 +1315,9 @@
       if (showSchedule && scheduledAt) {
         body.scheduled_at = new Date(scheduledAt).toISOString();
       }
+      if (showExpiry && expiresIn) {
+        body.expires_in = Number(expiresIn);
+      }
 
       // Create optimistic post for immediate display
       const optimisticId = `pending-${Date.now()}`;
@@ -1342,6 +1372,9 @@
         current_user_reaction: null,
         created_at: new Date().toISOString(),
         edited_at: null,
+        expires_at: body.expires_in
+          ? new Date(Date.now() + Number(body.expires_in) * 1000).toISOString()
+          : null,
         account: auth.user,
         parent_id: body.parent_id || null,
         root_id: null,
@@ -1384,7 +1417,7 @@
         content, spoilerText, showCW, visibility, replyTo, parentEdited,
         targetMediaId, targetMediaIndex, quotePost, groupId, pageId, contextLabel,
         uploadedMedia, showPoll, pollOptions, pollDuration, pollMultiple,
-        showSchedule, scheduledAt,
+        showSchedule, scheduledAt, showExpiry, expiresIn,
       };
       restoreWritten = (message: string) => {
         window.dispatchEvent(new CustomEvent('post-deleted', { detail: { id: optimisticId } }));
@@ -1402,7 +1435,7 @@
           content, spoilerText, showCW, visibility, replyTo, parentEdited,
           targetMediaId, targetMediaIndex, quotePost, groupId, pageId, contextLabel,
           uploadedMedia, showPoll, pollOptions, pollDuration, pollMultiple,
-          showSchedule, scheduledAt,
+          showSchedule, scheduledAt, showExpiry, expiresIn,
         } = written);
         activeServerDraftId = draftToDelete;
         error = message;
@@ -1454,6 +1487,9 @@
   // again, rather than a generic failure they would just retry.
   function publishErrorMessage(err: unknown): string {
     const body = err instanceof ApiError ? (err.body as unknown as PostRateLimitBody) : null;
+    const code = (body as { error?: string } | null)?.error;
+    if (code === 'limits.post_expiry_not_allowed') return translate('composer.expiry_not_allowed');
+    if (code === 'post.expires_in_invalid') return translate('composer.expiry_invalid');
     if (body?.error !== 'limits.post_rate_limit') return translate('composer.publish_failed');
     return translate('composer.rate_limited', {
       limit: body.limit,
@@ -1846,6 +1882,21 @@
       </div>
     {/if}
 
+    {#if showExpiry}
+      <div class="schedule-picker">
+        <div class="schedule-header">
+          <span class="material-symbols-outlined schedule-icon" aria-hidden="true">auto_delete</span>
+          <label class="schedule-label" for="post-expiry">{$t('composer.expiry_label')}</label>
+        </div>
+        <select id="post-expiry" class="schedule-input" bind:value={expiresIn}>
+          {#each expiryDurations as dur (dur.value)}
+            <option value={dur.value}>{dur.label}</option>
+          {/each}
+        </select>
+        <p class="schedule-preview">{$t('composer.expiry_hint')}</p>
+      </div>
+    {/if}
+
     <!-- Hidden file input -->
     <input
       bind:this={fileInputEl}
@@ -1904,6 +1955,21 @@
             title={showSchedule ? $t('composer.cancel_schedule') : $t('composer.schedule_later')}
           >
             <span class="tool-icon-svg tool-icon-schedule" aria-hidden="true"></span>
+          </button>
+        {/if}
+
+        <!-- Self-delete timer toggle -->
+        {#if canExpire && expiryDurations.length > 0}
+          <button
+            type="button"
+            class="tool-btn"
+            class:tool-active={showExpiry}
+            onclick={toggleExpiry}
+            aria-label={$t('composer.expiry_label')}
+            aria-pressed={showExpiry}
+            title={showExpiry ? $t('composer.expiry_cancel') : $t('composer.expiry_add')}
+          >
+            <span class="material-symbols-outlined tool-icon" aria-hidden="true">auto_delete</span>
           </button>
         {/if}
 

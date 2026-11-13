@@ -6,6 +6,7 @@
   import { ApiError } from '$lib/api/client.js';
   import { solvePow, type PowChallenge, type PowSolution } from '$lib/utils/pow.js';
   import { tError } from '$lib/utils/i18n.js';
+  import { t } from '$lib/stores/i18n.js';
   import { browser } from '$app/environment';
   import { instanceName } from '$lib/stores/instance.js';
 
@@ -62,6 +63,7 @@
     pinned_posts: number;
     profile_fields: number;
     scheduled_posts: boolean;
+    post_expiry?: boolean;
     custom_emoji: boolean;
     follows_limit: number;
   }
@@ -518,6 +520,7 @@
                 <tr><td>Profile fields</td>{#each plans as p (p.id)}<td>{p.limits.profile_fields}</td>{/each}</tr>
                 <tr><td>Follows limit</td>{#each plans as p (p.id)}<td>{formatFollows(p.limits.follows_limit)}</td>{/each}</tr>
                 <tr><td>Scheduled posts</td>{#each plans as p (p.id)}<td>{p.limits.scheduled_posts ? '&#10003;' : '&#10007;'}</td>{/each}</tr>
+                <tr><td>{$t('register.plan_timed_posts')}</td>{#each plans as p (p.id)}<td>{p.limits.post_expiry ? '&#10003;' : '&#10007;'}</td>{/each}</tr>
                 <tr><td>Custom emoji</td>{#each plans as p (p.id)}<td>{p.limits.custom_emoji ? '&#10003;' : '&#10007;'}</td>{/each}</tr>
                 <tr><td>Markdown</td>{#each plans as p (p.id)}<td>{p.limits.markdown}</td>{/each}</tr>
                 <tr><td class="compare-price-row">Price</td>{#each plans as p (p.id)}<td class="compare-price-row">{formatPrice(p.price, p.currency)}{p.price > 0 ? '/mo' : ''}</td>{/each}</tr>

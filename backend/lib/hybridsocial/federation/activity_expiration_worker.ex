@@ -1,14 +1,10 @@
 defmodule Hybridsocial.Federation.ActivityExpirationWorker do
   @moduledoc """
-  GenServer that periodically deletes expired activities/posts.
+  GenServer that periodically expires promotions and ads.
 
-  Runs every hour and soft-deletes any posts whose `expires_at` has passed.
+  Runs every hour.
   """
   use GenServer
-
-  import Ecto.Query
-  alias Hybridsocial.Repo
-  alias Hybridsocial.Social.Post
 
   require Logger
 
@@ -35,19 +31,10 @@ defmodule Hybridsocial.Federation.ActivityExpirationWorker do
     Process.send_after(self(), :check_expired, @check_interval)
   end
 
+  # Timed posts (`posts.expires_at`) are deleted by
+  # `Social.PostExpiryWorker`, which goes through `Posts.delete_post/2` so
+  # the federated Delete and reply-count bookkeeping happen.
   defp delete_expired_activities do
-    now = DateTime.utc_now()
-
-    {count, _} =
-      Post
-      |> where([p], not is_nil(p.expires_at) and p.expires_at < ^now and is_nil(p.deleted_at))
-      |> Repo.update_all(set: [deleted_at: now])
-
-    if count > 0 do
-      Logger.info("ActivityExpirationWorker: soft-deleted #{count} expired posts")
-    end
-
-    # Also expire promotions
     case Hybridsocial.Promotions.expire_promotions() do
       {:ok, promo_count} when promo_count > 0 ->
         Logger.info("ActivityExpirationWorker: expired #{promo_count} promotions")
@@ -56,7 +43,6 @@ defmodule Hybridsocial.Federation.ActivityExpirationWorker do
         :ok
     end
 
-    # Also expire ads
     case Hybridsocial.Ads.expire_ads() do
       {:ok, ad_count} when ad_count > 0 ->
         Logger.info("ActivityExpirationWorker: expired #{ad_count} ads")

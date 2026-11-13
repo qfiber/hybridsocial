@@ -478,6 +478,7 @@
   "post.pinned_on_named": "Pinned on {name}",
   "post.pinned_badge": "Pinned",
   "post.edited_marker": "(edited)",
+  "post.expires_at_title": "Deletes itself on {date}",
   "post.edited_at_title": "Edited {date}",
   "post.posting": "Posting…",
   "post.posted_in": "Posted in",
@@ -531,6 +532,7 @@
   "composer.duration_1_day": "1 day",
   "composer.duration_3_days": "3 days",
   "composer.duration_7_days": "7 days",
+  "composer.duration_30_days": "30 days",
   "composer.posting_to_group": "Posting to group",
   "composer.posting_to_page": "Posting to page",
   "composer.posting_to_named": "Posting to {name}",
@@ -601,6 +603,12 @@
   "composer.add_poll_title": "Add a poll",
   "composer.cancel_schedule": "Cancel scheduling — post immediately",
   "composer.schedule_later": "Schedule for later",
+  "composer.expiry_label": "Delete automatically",
+  "composer.expiry_add": "Set a timer to delete this post",
+  "composer.expiry_cancel": "Remove the delete timer",
+  "composer.expiry_hint": "The post deletes itself this long after it's published.",
+  "composer.expiry_not_allowed": "Your plan doesn't include timed posts.",
+  "composer.expiry_invalid": "That delete timer isn't allowed on this server. Pick a different duration.",
   "composer.insert_emoji": "Insert emoji",
   "composer.close_emoji": "Close emoji picker",
   "composer.markdown_on": "Markdown on — click to post as plain text",
@@ -792,5 +800,6 @@
   "verification.vouch_intro": "Ask people who know you to vouch for your identity:",
   "verification.vouch_step_review": "Our team reviews your request, along with the vouches you've received",
   "admin.verification_vouches": "Vouches: {count}",
-  "admin.verification_not_pending": "This request was already decided. Reload to see it."
+  "admin.verification_not_pending": "This request was already decided. Reload to see it.",
+  "register.plan_timed_posts": "Timed posts"
 }
