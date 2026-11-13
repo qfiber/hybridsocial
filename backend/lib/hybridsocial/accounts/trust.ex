@@ -1,139 +1,236 @@
 defmodule Hybridsocial.Accounts.Trust do
   @moduledoc """
-  Computes and manages trust levels for identities.
+  Trust levels for local accounts, and the new-account gates they drive (#67).
 
-  Trust levels:
-    0 (new)         — account < 24h old
-    1 (basic)       — account > 24h, has at least 1 post
-    2 (established) — account > 7 days, 5+ posts, 2+ followers, no active warnings
-    3 (trusted)     — account > 30 days, 20+ posts, 10+ followers, no warnings ever
+  Levels, computed from account age, post count and accepted followers:
+
+    * 0 (new)         - under the level 1 thresholds
+    * 1 (basic)       - `trust_level_1_hours` old with `trust_level_1_posts` posts
+    * 2 (established) - `trust_level_2_*` age, posts and followers
+    * 3 (trusted)     - `trust_level_3_*` age, posts and followers
+    * 4 (vouched)     - staff only; never computed
+
+  Every threshold is an admin setting (defaults: 24h/1 post, 7d/5 posts/2
+  followers, 30d/20 posts/10 followers).
+
+  A level staff set by hand is pinned (`trust_level_locked`) and the
+  recompute leaves it alone; staff can hand it back to the computation.
+
+  ## Gates
+
+  A level 0 account can't post links (`trust_gate_links`) or start a DM with
+  someone who doesn't follow it (`trust_gate_dms`). Both settings default on.
+  Level 1 lifts both, so a real user is clear after a day and a first post.
+  The gates never apply to staff, to an account on a paid tier, or to remote
+  accounts. A subaccount (page, bot, group) is judged by its owner.
+
+  The level is recomputed by `Accounts.TrustLevelWorker` on a sweep, and
+  on the spot when a level 0 account hits a gate, so nobody waits for the
+  sweep to be let through.
   """
 
   import Ecto.Query
-  alias Hybridsocial.Repo
+
   alias Hybridsocial.Accounts.Identity
+  alias Hybridsocial.Auth.RBAC
+  alias Hybridsocial.Config
+  alias Hybridsocial.Premium.TierLimits
+  alias Hybridsocial.Repo
+  alias Hybridsocial.Social.Follow
 
-  @doc "Compute trust level based on account age, activity, and moderation history."
-  def compute_trust_level(identity) do
-    identity = Repo.preload(identity, [], force: true)
+  @max_computed_level 3
+  @max_level 4
 
-    age_hours = age_in_hours(identity)
-    post_count = count_posts(identity.id)
-    follower_count = count_followers(identity.id)
-    active_warnings = count_active_warnings(identity.id)
-    total_warnings = count_total_warnings(identity.id)
+  @thresholds %{
+    1 => %{hours: 24, posts: 1, followers: 0},
+    2 => %{hours: 168, posts: 5, followers: 2},
+    3 => %{hours: 720, posts: 20, followers: 10}
+  }
 
-    cond do
-      age_hours >= 30 * 24 and post_count >= 20 and follower_count >= 10 and total_warnings == 0 ->
-        3
+  # Anything a browser would follow: a scheme, or a bare `www.` host.
+  @link_regex ~r{https?://|\bwww\.[a-z0-9-]+\.[a-z]}i
 
-      age_hours >= 7 * 24 and post_count >= 5 and follower_count >= 2 and active_warnings == 0 ->
-        2
+  @doc "The highest level staff can set."
+  def max_level, do: @max_level
 
-      age_hours >= 24 and post_count >= 1 ->
-        1
+  @doc "The highest level the computation produces; above it is staff-only."
+  def max_computed_level, do: @max_computed_level
 
-      true ->
-        0
-    end
+  @doc "The thresholds in force, per level: `%{1 => %{hours:, posts:, followers:}, ...}`."
+  def thresholds do
+    Map.new(@thresholds, fn {level, defaults} ->
+      {level,
+       Map.new(defaults, fn {key, default} ->
+         {key, config_int("trust_level_#{level}_#{key}", default)}
+       end)}
+    end)
   end
 
-  @doc "Recompute and persist the trust level on the identity."
-  def refresh_trust_level(identity) do
-    level = compute_trust_level(identity)
+  @doc "Compute the level an identity has earned (0..3)."
+  def compute_trust_level(%Identity{} = identity) do
+    age_hours = DateTime.diff(DateTime.utc_now(), identity.inserted_at, :second) / 3600
+    posts = count_posts(identity.id)
+    followers = count_followers(identity.id)
+    thresholds = thresholds()
 
-    identity
-    |> Ecto.Changeset.change(trust_level: level)
-    |> Repo.update()
+    @max_computed_level..1//-1
+    |> Enum.find(0, fn level ->
+      %{hours: hours, posts: min_posts, followers: min_followers} = thresholds[level]
+      age_hours >= hours and posts >= min_posts and followers >= min_followers
+    end)
   end
 
   @doc """
-  Returns a map of restrictions for the given trust level.
-
-  Keys:
-    - :posts_per_day     — max posts allowed per day (nil = unlimited)
-    - :dm_non_followers  — whether DMs to non-followers are allowed
-    - :link_posting      — whether posting links is allowed
-    - :auto_approve_reports — whether reports by this user are auto-approved
+  Recompute and persist the level. A pinned level is returned unchanged, and
+  nothing is written when the level hasn't moved.
   """
-  def trust_restrictions(trust_level) when is_integer(trust_level) do
-    case trust_level do
-      0 ->
-        %{
-          posts_per_day: 5,
-          dm_non_followers: false,
-          link_posting: false,
-          auto_approve_reports: false
-        }
+  def refresh_trust_level(%Identity{trust_level_locked: true} = identity), do: {:ok, identity}
 
-      1 ->
-        %{
-          posts_per_day: 20,
-          dm_non_followers: true,
-          link_posting: true,
-          auto_approve_reports: false
-        }
+  def refresh_trust_level(%Identity{} = identity) do
+    case compute_trust_level(identity) do
+      level when level == identity.trust_level ->
+        {:ok, identity}
 
-      2 ->
-        %{
-          posts_per_day: 50,
-          dm_non_followers: true,
-          link_posting: true,
-          auto_approve_reports: false
-        }
-
-      _ ->
-        %{
-          posts_per_day: nil,
-          dm_non_followers: true,
-          link_posting: true,
-          auto_approve_reports: true
-        }
+      level ->
+        identity
+        |> Ecto.Changeset.change(trust_level: level)
+        |> Repo.update()
     end
   end
 
-  def trust_restrictions(%Identity{trust_level: level}), do: trust_restrictions(level || 0)
+  @doc """
+  What the account may do right now, as the client sees it in `/me`.
+  Reads the stored level; doesn't recompute.
+  """
+  def trust_restrictions(%Identity{} = identity) do
+    restricted = gated?(identity, refresh: false)
 
-  # --- Private helpers ---
-
-  defp age_in_hours(%{inserted_at: inserted_at}) do
-    DateTime.diff(DateTime.utc_now(), inserted_at, :second) / 3600
+    %{
+      link_posting: not (restricted and gate_enabled?("trust_gate_links")),
+      dm_non_followers: not (restricted and gate_enabled?("trust_gate_dms"))
+    }
   end
+
+  @doc """
+  `:ok`, or `{:error, :trust_links_not_allowed}` when a gated account's text
+  contains a link. `texts` is every user-written field of the post.
+  """
+  def check_links(identity, texts) do
+    if gate_enabled?("trust_gate_links") and contains_link?(texts) and gated?(identity) do
+      {:error, :trust_links_not_allowed}
+    else
+      :ok
+    end
+  end
+
+  @doc """
+  `:ok`, or `{:error, :trust_dm_not_allowed}` when a gated account tries to
+  reach anyone in `recipient_ids` who doesn't follow it.
+  """
+  def check_dm(_sender, []), do: :ok
+
+  def check_dm(sender, recipient_ids) do
+    sender_id = sender && sender.id
+
+    if gate_enabled?("trust_gate_dms") and
+         Enum.any?(recipient_ids, &(&1 != sender_id and not follows?(&1, sender_id))) and
+         gated?(sender) do
+      {:error, :trust_dm_not_allowed}
+    else
+      :ok
+    end
+  end
+
+  @doc "Whether any of `texts` contains a link."
+  def contains_link?(texts) do
+    texts
+    |> List.wrap()
+    |> List.flatten()
+    |> Enum.any?(&(is_binary(&1) and Regex.match?(@link_regex, &1)))
+  end
+
+  # --- Gate subject ---
+
+  # Whether the new-account gates apply. Cheapest checks first: most callers
+  # are already past level 0 and never touch the database.
+  defp gated?(identity, opts \\ [])
+  defp gated?(nil, _opts), do: false
+
+  defp gated?(%Identity{parent_identity_id: parent_id}, opts) when is_binary(parent_id) do
+    case Repo.get(Identity, parent_id) do
+      # A subaccount whose owner is gone is judged on its own.
+      nil -> false
+      parent -> gated?(parent, opts)
+    end
+  end
+
+  defp gated?(%Identity{} = identity, opts) do
+    cond do
+      identity.is_local == false -> false
+      (identity.trust_level || 0) >= 1 -> false
+      paid_tier?(identity) -> false
+      RBAC.staff?(identity.id) -> false
+      identity.trust_level_locked -> true
+      Keyword.get(opts, :refresh, true) -> still_new_after_refresh?(identity)
+      true -> true
+    end
+  end
+
+  defp still_new_after_refresh?(identity) do
+    case refresh_trust_level(identity) do
+      {:ok, %Identity{trust_level: level}} -> level < 1
+      _ -> true
+    end
+  end
+
+  # Only a tier someone chose counts. With tiers off, `TierLimits` hands
+  # everyone Pro limits, which says nothing about the account.
+  defp paid_tier?(identity) do
+    TierLimits.enabled?() and identity.verification_tier not in [nil, "free"]
+  end
+
+  defp follows?(follower_id, target_id) do
+    Follow
+    |> where(
+      [f],
+      f.follower_id == ^follower_id and f.followee_id == ^target_id and f.status == :accepted
+    )
+    |> Repo.exists?()
+  end
+
+  # --- Counts ---
 
   defp count_posts(identity_id) do
     from(p in "posts",
-      where: p.identity_id == ^identity_id and is_nil(p.deleted_at),
+      where: p.identity_id == type(^identity_id, Ecto.UUID) and is_nil(p.deleted_at),
       select: count(p.id)
     )
     |> Repo.one() || 0
   end
 
   defp count_followers(identity_id) do
-    from(f in "follows",
-      where: f.target_id == ^identity_id,
-      select: count(f.id)
-    )
-    |> Repo.one() || 0
+    Follow
+    |> where([f], f.followee_id == ^identity_id and f.status == :accepted)
+    |> Repo.aggregate(:count)
   end
 
-  defp count_active_warnings(identity_id) do
-    from(w in "moderation_warnings",
-      where: w.target_id == ^identity_id and w.acknowledged == false,
-      select: count(w.id)
-    )
-    |> Repo.one() || 0
-  rescue
-    # Table may not exist yet
-    _ -> 0
-  end
+  # --- Config ---
 
-  defp count_total_warnings(identity_id) do
-    from(w in "moderation_warnings",
-      where: w.target_id == ^identity_id,
-      select: count(w.id)
-    )
-    |> Repo.one() || 0
-  rescue
-    _ -> 0
+  defp gate_enabled?(key), do: Config.get(key, true) not in [false, "false"]
+
+  defp config_int(key, default) do
+    case Config.get(key, default) do
+      n when is_integer(n) and n >= 0 ->
+        n
+
+      n when is_binary(n) ->
+        case Integer.parse(n) do
+          {int, ""} when int >= 0 -> int
+          _ -> default
+        end
+
+      _ ->
+        default
+    end
   end
 end

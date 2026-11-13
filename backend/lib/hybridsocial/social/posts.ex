@@ -59,6 +59,7 @@ defmodule Hybridsocial.Social.Posts do
 
     with {:ok, expires_at} <- resolve_expires_at(attrs, published_at || scheduled_at),
          :ok <- validate_premium_emojis(attrs["content"], identity),
+         :ok <- check_trust_gates(identity, attrs),
          :ok <- Hybridsocial.Groups.authorize_group_post(post_attrs, identity_id),
          :ok <- check_thread_not_locked(post_attrs),
          :ok <- check_audio_allowed(attrs, limits),
@@ -581,6 +582,42 @@ defmodule Hybridsocial.Social.Posts do
 
   defp extract_handles(content), do: Hybridsocial.Federation.LocalUrl.parse_mentions(content)
 
+  @doc """
+  The new-account gates (#67) for a post written by `identity`, the person
+  acting: no links, and a direct post may only reach people who follow them.
+  `:ok`, `{:error, :trust_links_not_allowed}` or `{:error, :trust_dm_not_allowed}`.
+  `nil` (an internal caller with no acting person) is never gated.
+  """
+  def check_trust_gates(nil, _attrs), do: :ok
+
+  def check_trust_gates(identity, attrs) do
+    texts = [attr(attrs, "content"), attr(attrs, "spoiler_text"), attr(attrs, "options")]
+
+    with :ok <- Hybridsocial.Accounts.Trust.check_links(identity, texts) do
+      if attr(attrs, "visibility") == "direct" do
+        Hybridsocial.Accounts.Trust.check_dm(identity, direct_recipient_ids(attrs))
+      else
+        :ok
+      end
+    end
+  end
+
+  defp attr(attrs, key), do: Map.get(attrs, key)
+
+  # The same recipients `persist_local_mentions/2` will record.
+  defp direct_recipient_ids(attrs) do
+    explicit = attrs |> attr("mentioned_identity_ids") |> List.wrap()
+
+    parsed =
+      attrs
+      |> attr("content")
+      |> extract_handles()
+      |> Enum.map(&resolve_handle_to_identity_id/1)
+      |> Enum.reject(&is_nil/1)
+
+    Enum.uniq(explicit ++ parsed)
+  end
+
   # Resolve `@handle` with no explicit domain: must be a local identity.
   defp resolve_handle_to_identity_id({handle, domain}) do
     case Hybridsocial.Federation.LocalUrl.resolve_mention(handle, domain) do
@@ -698,7 +735,8 @@ defmodule Hybridsocial.Social.Posts do
 
   def edit_post(post_id, identity_id, attrs, identity \\ nil) do
     with {:ok, post} <- get_owned_post(post_id, identity_id),
-         :ok <- validate_premium_emojis(attrs["content"], identity) do
+         :ok <- validate_premium_emojis(attrs["content"], identity),
+         :ok <- check_trust_gates(identity, Map.put(attrs, "visibility", post.visibility)) do
       limits =
         if identity do
           TierLimits.limits_for(identity)

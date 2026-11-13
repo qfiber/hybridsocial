@@ -14,7 +14,7 @@
   import { markSeen } from '$lib/utils/seen-posts.js';
   import { locale, t } from '$lib/stores/i18n.js';
   import { ApiError } from '$lib/api/client.js';
-  import { t as translate } from '$lib/utils/i18n.js';
+  import { t as translate, tError } from '$lib/utils/i18n.js';
 
   type ComposerVisibility = 'public' | 'followers' | 'direct';
 
@@ -1490,6 +1490,8 @@
     const code = (body as { error?: string } | null)?.error;
     if (code === 'limits.post_expiry_not_allowed') return translate('composer.expiry_not_allowed');
     if (code === 'post.expires_in_invalid') return translate('composer.expiry_invalid');
+    // New-account gates (#67): say what's blocked and when it lifts.
+    if (body?.error?.startsWith('trust.')) return tError(body.error);
     if (body?.error !== 'limits.post_rate_limit') return translate('composer.publish_failed');
     return translate('composer.rate_limited', {
       limit: body.limit,

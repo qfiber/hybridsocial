@@ -3597,6 +3597,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       is_bot: identity.is_bot,
       force_bot: Map.get(identity, :force_bot, false),
       trust_level: identity.trust_level,
+      trust_level_locked: identity.trust_level_locked,
       email: user && user.email,
       email_confirmed: user != nil and not is_nil(user.confirmed_at),
       confirmed_at: user && user.confirmed_at,
@@ -3823,11 +3824,13 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
 
   # ── Trust Level ──────────────────────────────────────────────────
 
+  # Body: `{"level": 0..4}` pins that level, so the automatic recompute
+  # leaves it alone. `{"level": "auto"}` unpins it and recomputes now.
   def set_trust_level(conn, %{"id" => id} = params) do
     level = params["trust_level"] || params["level"]
-    _ = level
 
-    with :ok <- require_permission(conn, "users.manage") do
+    with :ok <- require_permission(conn, "users.manage"),
+         {:ok, attrs} <- trust_level_attrs(level) do
       admin_id = conn.assigns.current_identity.id
 
       case Accounts.get_identity(id) do
@@ -3835,16 +3838,15 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
 
         identity ->
-          trust_level = if is_binary(level), do: String.to_integer(level), else: level
+          with {:ok, updated} <- Accounts.admin_update_identity(identity, attrs),
+               {:ok, updated} <- Hybridsocial.Accounts.Trust.refresh_trust_level(updated) do
+            Moderation.log(admin_id, "account.trust_level_set", "identity", id, %{
+              trust_level: updated.trust_level,
+              locked: updated.trust_level_locked
+            })
 
-          case Accounts.admin_update_identity(identity, %{"trust_level" => trust_level}) do
-            {:ok, updated} ->
-              Moderation.log(admin_id, "account.trust_level_set", "identity", id, %{
-                trust_level: trust_level
-              })
-
-              conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
-
+            conn |> put_status(:ok) |> json(%{data: serialize_account(updated)})
+          else
             {:error, _} ->
               conn
               |> put_status(:unprocessable_entity)
@@ -3852,9 +3854,37 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
           end
       end
     else
-      {:error, perm} -> deny(conn, perm)
+      {:error, :invalid_trust_level} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{
+          error: "account.trust_level_invalid",
+          max: Hybridsocial.Accounts.Trust.max_level()
+        })
+
+      {:error, perm} ->
+        deny(conn, perm)
     end
   end
+
+  defp trust_level_attrs("auto"), do: {:ok, %{"trust_level_locked" => false}}
+
+  defp trust_level_attrs(level) when is_binary(level) do
+    case Integer.parse(level) do
+      {int, ""} -> trust_level_attrs(int)
+      _ -> {:error, :invalid_trust_level}
+    end
+  end
+
+  defp trust_level_attrs(level) when is_integer(level) do
+    if level in 0..Hybridsocial.Accounts.Trust.max_level() do
+      {:ok, %{"trust_level" => level, "trust_level_locked" => true}}
+    else
+      {:error, :invalid_trust_level}
+    end
+  end
+
+  defp trust_level_attrs(_), do: {:error, :invalid_trust_level}
 
   # --- User action wrappers (map /users/:id/<action> to account_action) ---
 

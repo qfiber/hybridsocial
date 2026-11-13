@@ -55,6 +55,8 @@ defmodule Hybridsocial.Application do
             Hybridsocial.Social.StoryExpiryWorker,
             # Timed posts (#261): deletes posts whose expires_at passed
             Hybridsocial.Social.PostExpiryWorker,
+            # Recomputes account trust levels as accounts age (#67)
+            Hybridsocial.Accounts.TrustLevelWorker,
             # Clears lapsed group sanctions (timed / partial bans). Cleanup
             # only — the authorization path already honours expiry at read
             # time, so a late tick can't keep anyone sanctioned.

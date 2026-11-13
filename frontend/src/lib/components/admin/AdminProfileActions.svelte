@@ -103,7 +103,7 @@
 
   // Trust level
   let showTrustLevel = $state(false);
-  let newTrustLevel = $state(0);
+  let newTrustLevel = $state<number | 'auto'>('auto');
 
   // Moderation notes
   let showNotes = $state(false);
@@ -131,7 +131,7 @@
     loading = true;
     try {
       adminUser = await getAdminUser(account.id);
-      newTrustLevel = adminUser.trust_level;
+      newTrustLevel = adminUser.trust_level_locked ? adminUser.trust_level : 'auto';
     } catch {
       actionError = 'Failed to load admin data for this user.';
     } finally {
@@ -273,7 +273,7 @@
   // Trust level
   function openTrustLevel() {
     clearMessages();
-    newTrustLevel = adminUser?.trust_level ?? 0;
+    newTrustLevel = adminUser?.trust_level_locked ? (adminUser?.trust_level ?? 0) : 'auto';
     showTrustLevel = true;
   }
 
@@ -281,7 +281,10 @@
     actionLoading = true;
     clearMessages();
     try {
-      adminUser = await setTrustLevel(account.id, newTrustLevel);
+      adminUser = await setTrustLevel(
+        account.id,
+        newTrustLevel === 'auto' ? 'auto' : Number(newTrustLevel),
+      );
       showSuccess(`Trust level set to ${newTrustLevel}.`);
       showTrustLevel = false;
     } catch {
@@ -689,11 +692,14 @@
       <div class="admin-dialog-form">
         <label class="admin-dialog-label" for="trust-level">Trust Level</label>
         <select id="trust-level" class="admin-dialog-select" bind:value={newTrustLevel}>
+          <option value="auto">{$t('admin.trust_level_auto')}</option>
           <option value={0}>0 - New User</option>
           <option value={1}>1 - Basic</option>
           <option value={2}>2 - Member</option>
           <option value={3}>3 - Trusted</option>
+          <option value={4}>{$t('admin.trust_level_vouched')}</option>
         </select>
+        <p class="admin-dialog-message">{$t('admin.trust_level_pin_hint')}</p>
       </div>
 
       <div class="admin-dialog-actions">

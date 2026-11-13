@@ -17,6 +17,7 @@ defmodule HybridsocialWeb.Api.V1.ScheduledStatusController do
          # Counted when scheduled, not when published: otherwise a queue could
          # release any number of posts at once, past every limit.
          :ok <- PostRateLimit.check_post(identity, params),
+         :ok <- Hybridsocial.Social.Posts.check_trust_gates(identity, params),
          {:ok, post} <- ScheduledPosts.schedule_post(author_id, params) do
       conn
       |> put_status(:created)
@@ -29,6 +30,12 @@ defmodule HybridsocialWeb.Api.V1.ScheduledStatusController do
 
       {:error, %{window: _} = refused} ->
         PostRateLimitResponse.refuse(conn, refused)
+
+      {:error, :trust_links_not_allowed} ->
+        conn |> put_status(:forbidden) |> json(%{error: "trust.links_not_allowed"})
+
+      {:error, :trust_dm_not_allowed} ->
+        conn |> put_status(:forbidden) |> json(%{error: "trust.dm_not_allowed"})
 
       {:error, %Ecto.Changeset{} = changeset} ->
         conn

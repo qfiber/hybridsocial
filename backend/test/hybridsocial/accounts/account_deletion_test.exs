@@ -74,8 +74,8 @@ defmodule Hybridsocial.Accounts.AccountDeletionTest do
     end
 
     test "keeps a DM when the other participant survives" do
-      alice = create_user("dm_alice")
-      bob = create_user("dm_bob")
+      alice = create_trusted_user("dm_alice")
+      bob = create_trusted_user("dm_bob")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, _msg} = Messaging.send_message(conv.id, alice.id, %{"content" => "hi bob"})
@@ -89,8 +89,8 @@ defmodule Hybridsocial.Accounts.AccountDeletionTest do
     end
 
     test "drops a DM once both participants are deleted" do
-      alice = create_user("dead_alice")
-      bob = create_user("dead_bob")
+      alice = create_trusted_user("dead_alice")
+      bob = create_trusted_user("dead_bob")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, _msg} = Messaging.send_message(conv.id, alice.id, %{"content" => "hi"})

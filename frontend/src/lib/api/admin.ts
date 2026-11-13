@@ -676,7 +676,8 @@ export function revokeAllSessions(id: string): Promise<void> {
   return api.post(`/api/v1/admin/users/${id}/revoke_sessions`);
 }
 
-export function setTrustLevel(id: string, level: number): Promise<AdminUser> {
+/** A number pins that level; 'auto' hands it back to the computation. */
+export function setTrustLevel(id: string, level: number | 'auto'): Promise<AdminUser> {
   return api.post(`/api/v1/admin/users/${id}/trust_level`, { level });
 }
 

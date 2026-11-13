@@ -14,6 +14,8 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
   # of favourites; a client that only knows about stars gets the plain one.
   @favourite_reaction "like"
 
+  @trust_errors [:trust_links_not_allowed, :trust_dm_not_allowed]
+
   # POST /api/v1/statuses
   def create(conn, params) do
     identity = conn.assigns.current_identity
@@ -44,6 +46,9 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
           conn
           |> put_status(:unprocessable_entity)
           |> json(%{error: "post.expires_in_invalid", min: min, max: max})
+
+        {:error, trust_error} when trust_error in @trust_errors ->
+          refuse_trust(conn, trust_error)
 
         {:error, :audio_not_allowed} ->
           conn
@@ -178,6 +183,9 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
         conn
         |> put_status(:forbidden)
         |> json(%{error: "premium_emojis_required", shortcodes: shortcodes})
+
+      {:error, trust_error} when trust_error in @trust_errors ->
+        refuse_trust(conn, trust_error)
 
       {:error, changeset} ->
         conn
@@ -860,6 +868,14 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
       revision_number: revision.revision_number
     }
   end
+
+  # New-account gates (#67): a level 0 account can't post links or send a
+  # direct post to someone who doesn't follow it.
+  defp refuse_trust(conn, :trust_links_not_allowed),
+    do: conn |> put_status(:forbidden) |> json(%{error: "trust.links_not_allowed"})
+
+  defp refuse_trust(conn, :trust_dm_not_allowed),
+    do: conn |> put_status(:forbidden) |> json(%{error: "trust.dm_not_allowed"})
 
   defp validate_tier_limits(params, limits) do
     media_ids = params["media_ids"] || []
