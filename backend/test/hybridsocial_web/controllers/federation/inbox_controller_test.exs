@@ -270,13 +270,14 @@ defmodule HybridsocialWeb.Federation.InboxControllerTest do
             "signature-input",
             ~s|sig1=("@method");keyid="https://rfc9421.example/users/a#main-key"|
           )
-          |> put_req_header("content-digest", "sha-256=:abc=:")
           |> post("/inbox", %{"type" => "Follow"})
         end)
 
       assert log =~ "missing Digest header"
       assert log =~ "from=rfc9421.example"
-      assert log =~ "content_digest=true"
+      # No digest header of either kind (a Content-Digest is now verified
+      # as RFC 9530 instead of being logged as missing).
+      assert log =~ "content_digest=false"
       assert log =~ "signature_input=true"
       assert log =~ "signature=false"
     end

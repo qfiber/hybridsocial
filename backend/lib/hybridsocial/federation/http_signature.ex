@@ -4,6 +4,8 @@ defmodule Hybridsocial.Federation.HTTPSignature do
   Implements draft-cavage-http-signatures with RSA-SHA256.
   """
 
+  alias Hybridsocial.Federation.HTTPMessageSignature
+
   @signed_headers ["(request-target)", "host", "date", "digest"]
   # GETs have no body, so no Digest. Mastodon's "secure mode" / authorized-fetch
   # gates actor + object dereferences behind a signed GET — without it, those
@@ -94,11 +96,28 @@ defmodule Hybridsocial.Federation.HTTPSignature do
   Returns {:ok, key_id} or {:error, reason}.
   """
   def verify(conn) do
+    # RFC 9421 (`Signature-Input`) or draft-cavage (`Signature` alone).
+    if HTTPMessageSignature.signed?(conn) do
+      verify_rfc9421(conn)
+    else
+      verify_cavage(conn)
+    end
+  end
+
+  defp verify_cavage(conn) do
     with {:ok, sig_params} <- parse_signature_header(conn),
          {:ok, key_id} <- fetch_key_id(sig_params),
          :ok <- verify_date_freshness(conn),
-         {:ok, _} <- verify_with_key(conn, sig_params, key_id) do
+         {:ok, _} <- verify_with_key(key_id, &verify_signature(conn, sig_params, &1)) do
       {:ok, key_id}
+    end
+  end
+
+  defp verify_rfc9421(conn) do
+    with {:ok, sig} <- HTTPMessageSignature.parse_and_check(conn, @signature_max_skew_seconds),
+         {:ok, _} <-
+           verify_with_key(sig.key_id, &HTTPMessageSignature.verify_with_pem(conn, sig, &1)) do
+      {:ok, sig.key_id}
     end
   end
 
@@ -111,21 +130,22 @@ defmodule Hybridsocial.Federation.HTTPSignature do
   # longer verifies (the actor rotated it), fetch the current key once and
   # try again. A forged signature costs at most one fetch per keyId per
   # cache window, never one per request.
-  defp verify_with_key(conn, sig_params, key_id) do
+  # `verify` checks the signature against a PEM; shared by both schemes.
+  defp verify_with_key(key_id, verify) do
     case cached_public_key(key_id) do
       nil ->
         with {:ok, pem} <- fetch_and_cache_public_key(key_id) do
-          verify_signature(conn, sig_params, pem)
+          verify.(pem)
         end
 
       cached_pem ->
-        case verify_signature(conn, sig_params, cached_pem) do
+        case verify.(cached_pem) do
           {:ok, _} = ok ->
             ok
 
           {:error, :invalid_signature} ->
             with {:ok, pem} when pem != cached_pem <- fetch_and_cache_public_key(key_id) do
-              verify_signature(conn, sig_params, pem)
+              verify.(pem)
             else
               {:ok, _same_pem} -> {:error, :invalid_signature}
               error -> error
