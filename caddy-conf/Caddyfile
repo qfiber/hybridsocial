@@ -80,7 +80,11 @@
 	handle {
 		import /etc/caddy/waf.caddy
 
-		@api path /api/* /.well-known/* /nodeinfo/* /inbox /users/* /actors/* /activities/* /oauth/* /media/* /proxy/* /robots.txt /sitemap.xml /sitemap/*
+		# /posts/* and /dm/* are the ActivityPub object ids of our posts and DMs
+		# (`ap_id`). Peers dereference them to verify a Create, walk reply
+		# chains and resolve quotes; sent to the frontend they 404'd. The
+		# backend redirects browsers on to the /post/:id page.
+		@api path /api/* /.well-known/* /nodeinfo/* /inbox /users/* /actors/* /activities/* /posts/* /dm/* /oauth/* /media/* /proxy/* /robots.txt /sitemap.xml /sitemap/*
 		handle @api {
 			reverse_proxy backend:4000
 		}
