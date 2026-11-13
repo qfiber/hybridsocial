@@ -1080,8 +1080,8 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: var(--color-success, #22c55e);
-    background: rgba(34, 197, 94, 0.1);
+    color: var(--color-success);
+    background: var(--color-success-tint);
     padding: 1px 6px;
     border-radius: 4px;
     width: fit-content;
@@ -1093,7 +1093,7 @@
      a top-level local account. */
   .user-subaccount-badge {
     color: var(--color-primary);
-    background: var(--color-primary-soft, rgba(20, 184, 166, 0.1));
+    background: var(--color-primary-soft);
   }
 
   .email-cell {
@@ -1108,7 +1108,7 @@
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--color-on-warning-soft);
-    background: rgba(234, 179, 8, 0.18);
+    background: rgba(var(--color-warning-rgb), 0.18);
     padding: 1px 6px;
     border-radius: 4px;
   }
@@ -1117,15 +1117,15 @@
      applied to the <tr> via DataTable's rowClass hook so it overrides
      both the zebra striping and the row hover background. */
   :global(.data-table tbody tr.row-email-unverified) {
-    background: rgba(234, 179, 8, 0.10);
+    background: rgba(var(--color-warning-rgb), 0.1);
   }
 
   :global(.data-table tbody tr.row-email-unverified:hover) {
-    background: rgba(234, 179, 8, 0.18);
+    background: rgba(var(--color-warning-rgb), 0.18);
   }
 
   :global(.data-table tbody tr.row-email-unverified:nth-child(even)) {
-    background: rgba(234, 179, 8, 0.13);
+    background: rgba(var(--color-warning-rgb), 0.13);
   }
 
   /* Pagination footer below the user table. */

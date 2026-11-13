@@ -21,8 +21,12 @@ export interface AdminItem {
   badge?: 'approvals' | 'appeals';
 }
 
+export type AdminCluster = 'operate' | 'configure';
+
 export interface AdminSection {
   title: string;
+  /** Which half of the rail it sits in: daily work, or configuration. */
+  cluster: AdminCluster;
   /** One-line description shown under the section on the card hub. */
   blurb: string;
   /** SVG path data for the section's 24x24 stroked icon. */
@@ -33,6 +37,7 @@ export interface AdminSection {
 export const adminSections: AdminSection[] = [
   {
     title: 'Overview',
+    cluster: 'operate',
     blurb: 'Land here — health and activity at a glance',
     icon: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
     items: [
@@ -42,6 +47,7 @@ export const adminSections: AdminSection[] = [
   },
   {
     title: 'Moderation',
+    cluster: 'operate',
     blurb: 'The daily action queue',
     icon: 'M12 3l8 4v5c0 4.5-3.4 7.9-8 9-4.6-1.1-8-4.5-8-9V7zM9.5 12l1.8 1.8 3.5-3.6',
     items: [
@@ -52,6 +58,7 @@ export const adminSections: AdminSection[] = [
   },
   {
     title: 'People',
+    cluster: 'operate',
     blurb: 'Accounts and who can do what',
     icon: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
     items: [
@@ -62,6 +69,7 @@ export const adminSections: AdminSection[] = [
   },
   {
     title: 'Federation',
+    cluster: 'operate',
     blurb: 'How this server talks to the fediverse',
     icon: 'M3.05 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.95M8 3.94V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.06M15 20.49V18a2 2 0 012-2h3.06M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
     items: [
@@ -70,6 +78,7 @@ export const adminSections: AdminSection[] = [
   },
   {
     title: 'Instance',
+    cluster: 'configure',
     blurb: "Your server's identity and public rules",
     icon: 'M3 21h18M5 21V7l8-4v18M19 21V11l-6-4M9 9v.01M9 13v.01M9 17v.01',
     items: [
@@ -83,6 +92,7 @@ export const adminSections: AdminSection[] = [
   },
   {
     title: 'Content',
+    cluster: 'configure',
     blurb: 'Catalogs your members use',
     icon: 'M12 21a9 9 0 100-18 9 9 0 000 18zM8.5 14.5a4 4 0 007 0M9 9.5h.01M15 9.5h.01',
     items: [
@@ -95,6 +105,7 @@ export const adminSections: AdminSection[] = [
   },
   {
     title: 'System',
+    cluster: 'configure',
     blurb: 'Infrastructure and records',
     icon: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
     items: [
@@ -109,6 +120,11 @@ export const adminSections: AdminSection[] = [
 
 const byHref = new Map<string, AdminItem>();
 for (const s of adminSections) for (const it of s.items) byHref.set(it.href, it);
+
+/** The section that owns an item, for the breadcrumb. */
+export function adminSectionForItem(item: AdminItem): AdminSection | null {
+  return adminSections.find((s) => s.items.includes(item)) ?? null;
+}
 
 /** Resolve the admin item for a pathname (longest-prefix match), or null. */
 export function adminItemForPath(pathname: string): AdminItem | null {

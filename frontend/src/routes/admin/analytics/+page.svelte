@@ -310,11 +310,11 @@
     transition: height 0.3s ease, opacity 0.15s ease;
   }
   .bar-primary { background: var(--color-primary); }
-  .bar-blue { background: #3b82f6; }
-  .bar-green { background: #22c55e; }
+  .bar-blue { background: var(--color-info); }
+  .bar-green { background: var(--color-success); }
   /* Inbound federation — deliberately a different hue from the local
      series so the two post charts don't read as the same measure. */
-  .bar-amber { background: #f59e0b; }
+  .bar-amber { background: var(--color-warning); }
   .bar-col:hover .bar,
   .bar-col:focus-visible .bar { opacity: 0.75; outline: 2px solid var(--color-primary); outline-offset: 2px; }
 
@@ -331,8 +331,8 @@
     position: absolute;
     transform: translate(-50%, calc(-100% - 8px));
     pointer-events: none;
-    background: var(--color-text, #111);
-    color: var(--color-surface-raised, #fff);
+    background: var(--color-text);
+    color: var(--color-surface-raised);
     padding: 6px 10px;
     border-radius: 6px;
     font-size: 0.75rem;
@@ -356,14 +356,14 @@
   .sys-label { display: block; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-tertiary); }
   .sys-value { font-size: 0.875rem; font-weight: 600; color: var(--color-text); }
 
-  .text-up { color: var(--color-success, #22c55e); }
-  .text-down { color: var(--color-danger, #ef4444); }
+  .text-up { color: var(--color-success); }
+  .text-down { color: var(--color-danger); }
 
   .workers-list { display: flex; flex-direction: column; gap: 6px; }
   .worker-row { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--color-surface); border-radius: 8px; }
   .worker-dot { width: 8px; height: 8px; border-radius: 50%; }
-  .dot-up { background: var(--color-success, #22c55e); box-shadow: 0 0 4px var(--color-success, #22c55e); }
-  .dot-down { background: var(--color-danger, #ef4444); box-shadow: 0 0 4px var(--color-danger, #ef4444); }
+  .dot-up { background: var(--color-success); box-shadow: 0 0 4px var(--color-success); }
+  .dot-down { background: var(--color-danger); box-shadow: 0 0 4px var(--color-danger); }
   .worker-name { font-size: 0.8125rem; font-weight: 500; flex: 1; }
   .worker-status { font-size: 0.75rem; color: var(--color-text-secondary); }
 </style>

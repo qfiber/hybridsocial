@@ -179,7 +179,7 @@
     transition: background 0.15s ease;
   }
 
-  .rule-item:hover { background: var(--color-surface-container-low, #f5f5f5); }
+  .rule-item:hover { background: var(--color-surface-container-low); }
 
   .rule-number {
     width: 28px;
@@ -220,7 +220,7 @@
   }
 
   .action-btn:hover { color: var(--color-text); background: var(--color-surface-container); }
-  .action-danger:hover { color: var(--color-danger); background: var(--color-danger-soft, rgba(239,68,68,0.1)); }
+  .action-danger:hover { color: var(--color-danger); background: var(--color-danger-soft); }
 
   .rule-edit { flex: 1; display: flex; flex-direction: column; gap: var(--space-2); }
   .rule-edit-actions { display: flex; gap: var(--space-2); }

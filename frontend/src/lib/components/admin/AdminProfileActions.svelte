@@ -732,23 +732,23 @@
     width: 36px;
     height: 36px;
     padding: 0;
-    background: rgba(15, 23, 42, 0.55);
-    border: 1px solid rgba(245, 158, 11, 0.45);
+    background: var(--scrim-medium);
+    border: 1px solid rgba(var(--color-warning-rgb), 0.45);
     border-radius: var(--radius-full, 999px);
-    color: #fbbf24;
+    color: var(--color-warning);
     cursor: pointer;
     backdrop-filter: blur(6px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--shadow-md);
     transition: background-color var(--transition-fast), transform var(--transition-fast);
   }
 
   .admin-profile-toggle:hover {
-    background: rgba(245, 158, 11, 0.85);
-    color: #0f172a;
+    background: rgba(var(--color-warning-rgb), 0.85);
+    color: var(--color-on-warning-soft);
   }
 
   .admin-profile-toggle:focus-visible {
-    outline: 2px solid var(--color-warning, #f59e0b);
+    outline: 2px solid var(--color-warning);
     outline-offset: 2px;
   }
 
@@ -761,7 +761,7 @@
     max-height: 70dvh;
     overflow-y: auto;
     background: var(--color-surface-raised);
-    border: 1px solid var(--color-warning, #f59e0b);
+    border: 1px solid var(--color-warning);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
     padding: var(--space-4);
@@ -802,8 +802,8 @@
   }
 
   .admin-badge-active {
-    background: var(--color-success-light, rgba(34, 197, 94, 0.1));
-    color: var(--color-success, #22c55e);
+    background: var(--color-success-light);
+    color: var(--color-success);
   }
 
   .admin-badge-status {
@@ -812,17 +812,17 @@
   }
 
   .admin-badge-warn {
-    background: var(--color-warning-light, rgba(245, 158, 11, 0.1));
-    color: var(--color-warning, #f59e0b);
+    background: var(--color-warning-light);
+    color: var(--color-warning);
   }
 
   .admin-badge-danger {
-    background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
-    color: var(--color-danger, #ef4444);
+    background: var(--color-danger-light);
+    color: var(--color-danger);
   }
 
   .admin-badge-info {
-    background: var(--color-primary-light, rgba(99, 102, 241, 0.1));
+    background: var(--color-primary-light);
     color: var(--color-primary);
   }
 
@@ -833,13 +833,13 @@
   }
 
   .admin-message-error {
-    background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
-    color: var(--color-danger, #ef4444);
+    background: var(--color-danger-light);
+    color: var(--color-danger);
   }
 
   .admin-message-success {
-    background: var(--color-success-light, rgba(34, 197, 94, 0.1));
-    color: var(--color-success, #22c55e);
+    background: var(--color-success-light);
+    color: var(--color-success);
   }
 
   .admin-action-grid {
@@ -873,25 +873,25 @@
   }
 
   .admin-action-active {
-    background: var(--color-warning-light, rgba(245, 158, 11, 0.1));
-    border-color: var(--color-warning, #f59e0b);
-    color: var(--color-warning, #f59e0b);
+    background: var(--color-warning-light);
+    border-color: var(--color-warning);
+    color: var(--color-warning);
   }
 
   .admin-action-danger {
-    color: var(--color-danger, #ef4444);
-    border-color: var(--color-danger-light, rgba(239, 68, 68, 0.2));
+    color: var(--color-danger);
+    border-color: var(--color-danger-light);
   }
 
   .admin-action-danger:hover:not(:disabled) {
-    background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
-    border-color: var(--color-danger, #ef4444);
+    background: var(--color-danger-light);
+    border-color: var(--color-danger);
   }
 
   .admin-action-danger.admin-action-active {
-    background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
-    border-color: var(--color-danger, #ef4444);
-    color: var(--color-danger, #ef4444);
+    background: var(--color-danger-light);
+    border-color: var(--color-danger);
+    color: var(--color-danger);
   }
 
   .admin-notes-toggle {
@@ -1047,7 +1047,7 @@
   }
 
   .admin-dialog {
-    background: var(--color-surface-raised, #fff);
+    background: var(--color-surface-raised);
     border-radius: var(--radius-xl, 1rem);
     padding: var(--space-6, 1.5rem);
     max-width: 420px;
@@ -1064,7 +1064,7 @@
 
   .admin-dialog-message {
     font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text-secondary, #64748b);
+    color: var(--color-text-secondary);
     margin-block-end: var(--space-4, 1rem);
   }
 
@@ -1078,25 +1078,25 @@
   .admin-dialog-label {
     font-size: var(--text-sm, 0.875rem);
     font-weight: 500;
-    color: var(--color-text, #0f172a);
+    color: var(--color-text);
   }
 
   .admin-dialog-select {
     padding: var(--space-2, 0.5rem);
-    border: 1px solid var(--color-border, #e2e8f0);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md, 0.5rem);
     font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text, #0f172a);
-    background: var(--color-bg, #fff);
+    color: var(--color-text);
+    background: var(--color-bg);
   }
 
   .admin-dialog-textarea {
     padding: var(--space-2, 0.5rem);
-    border: 1px solid var(--color-border, #e2e8f0);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md, 0.5rem);
     font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text, #0f172a);
-    background: var(--color-bg, #fff);
+    color: var(--color-text);
+    background: var(--color-bg);
     resize: vertical;
     font-family: inherit;
   }
@@ -1115,10 +1115,10 @@
 
   .admin-dialog-cancel {
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
-    border: 1px solid var(--color-border, #e2e8f0);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md, 0.5rem);
     background: transparent;
-    color: var(--color-text, #0f172a);
+    color: var(--color-text);
     font-size: var(--text-sm, 0.875rem);
     cursor: pointer;
   }
@@ -1151,7 +1151,7 @@
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     border: none;
     border-radius: var(--radius-md, 0.5rem);
-    background: var(--color-warning, #f59e0b);
+    background: var(--color-warning);
     color: white;
     font-size: var(--text-sm, 0.875rem);
     font-weight: 600;
@@ -1171,7 +1171,7 @@
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     border: none;
     border-radius: var(--radius-md, 0.5rem);
-    background: var(--color-danger, #ef4444);
+    background: var(--color-danger);
     color: white;
     font-size: var(--text-sm, 0.875rem);
     font-weight: 600;

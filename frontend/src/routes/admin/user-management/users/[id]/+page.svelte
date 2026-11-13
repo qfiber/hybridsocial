@@ -1065,7 +1065,7 @@
     font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 9999px;
     text-transform: uppercase; letter-spacing: 0.03em;
   }
-  .pill-neutral { background: var(--color-surface-container-high, rgba(0,0,0,0.06)); color: var(--color-text-secondary); }
+  .pill-neutral { background: var(--color-surface-container-high); color: var(--color-text-secondary); }
   .pill-info { background: var(--color-primary-soft); color: var(--color-primary); }
   .pill-ok { background: var(--color-success-soft); color: var(--color-success); }
   .pill-warn { background: var(--color-warning-soft); color: var(--color-on-warning-soft, var(--color-warning)); }
@@ -1093,7 +1093,7 @@
 
   .pw-box {
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-    background: var(--color-surface-container-low, rgba(0,0,0,0.03));
+    background: var(--color-surface-container-low);
     border: 1px dashed var(--color-border); border-radius: 10px; padding: 12px;
   }
   .pw-code { font-family: ui-monospace, Menlo, monospace; font-size: var(--text-sm); word-break: break-all; }
@@ -1115,7 +1115,7 @@
   .notes-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
   .note {
     display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-    padding: 10px 12px; background: var(--color-surface-container-low, rgba(0,0,0,0.03)); border-radius: 10px;
+    padding: 10px 12px; background: var(--color-surface-container-low); border-radius: 10px;
   }
   .note-body { display: flex; flex-direction: column; gap: 2px; }
   .note-content { font-size: var(--text-sm); }
@@ -1140,12 +1140,12 @@
   /* Confirm modal */
   .modal-backdrop {
     position: fixed; inset: 0; z-index: 1000;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--scrim-medium);
     display: flex; align-items: center; justify-content: center; padding: 16px;
   }
   .modal {
-    background: var(--color-surface, #fff); border-radius: 14px; padding: 22px;
-    max-width: 440px; width: 100%; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+    background: var(--color-surface); border-radius: 14px; padding: 22px;
+    max-width: 440px; width: 100%; box-shadow: var(--shadow-xl);
   }
   .modal-title { margin: 0 0 10px; font-size: var(--text-lg); font-weight: 700; }
   .modal-text { margin: 0 0 10px; font-size: var(--text-sm); color: var(--color-text-secondary); }
@@ -1189,7 +1189,7 @@
   .content-tab.on {
     background: var(--color-primary);
     border-color: var(--color-primary);
-    color: var(--color-on-primary, #fff);
+    color: var(--color-on-primary);
   }
 
   .content-tab-n {

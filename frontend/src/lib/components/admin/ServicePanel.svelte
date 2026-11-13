@@ -397,7 +397,7 @@
   }
 
   .service-panel-row:hover:not(:disabled) {
-    background: var(--color-surface-hover, rgba(0, 0, 0, 0.03));
+    background: var(--color-surface-hover);
     border-color: var(--color-border);
   }
 
@@ -480,7 +480,7 @@
   }
 
   .metric-modal-close:hover {
-    background: var(--color-surface-hover, rgba(0, 0, 0, 0.04));
+    background: var(--color-surface-hover);
     color: var(--color-text);
   }
 

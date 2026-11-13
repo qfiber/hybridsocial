@@ -332,7 +332,7 @@
     flex-direction: column;
     gap: var(--space-4);
     padding: var(--space-5);
-    background: var(--color-surface-container-lowest, #fff);
+    background: var(--color-surface-container-lowest);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
   }
@@ -434,7 +434,7 @@
     flex-direction: column;
     gap: var(--space-2);
     padding: var(--space-4);
-    background: var(--color-surface-container-lowest, #fff);
+    background: var(--color-surface-container-lowest);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     position: sticky;

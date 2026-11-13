@@ -264,7 +264,7 @@
     padding: var(--space-8);
     max-width: 460px;
     width: 100%;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-md);
   }
 
   .sudo-icon {

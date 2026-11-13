@@ -442,7 +442,7 @@
 
   .btn-mini-danger {
     color: var(--color-danger);
-    border-color: rgba(220, 38, 38, 0.3);
+    border-color: var(--color-danger-border);
   }
 
   .btn-mini-danger:hover {

@@ -7,6 +7,8 @@
   import { sudoExpiresAt, isSudoValid } from '$lib/stores/admin-sudo.js';
   import { api } from '$lib/api/client.js';
   import AdminSidebar from '$lib/components/admin/AdminSidebar.svelte';
+  import AdminTopBar from '$lib/components/admin/AdminTopBar.svelte';
+  import { page } from '$app/state';
   import SudoGate from '$lib/components/admin/SudoGate.svelte';
   import Toast from '$lib/components/ui/Toast.svelte';
 
@@ -29,6 +31,17 @@
   let sudoOk = $derived(isSudoValid($sudoExpiresAt));
 
   let expiryTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Drawer state for narrow screens; any navigation closes it.
+  let navOpen = $state(false);
+  $effect(() => {
+    void page.url.pathname;
+    navOpen = false;
+  });
+
+  function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && navOpen) navOpen = false;
+  }
 
   function onSudoRequired() {
     sudoExpiresAt.set(null);
@@ -115,43 +128,48 @@
   });
 </script>
 
+<svelte:window onkeydown={onKeydown} />
+
 {#if authorized}
   <div class="admin-layout">
-    <AdminSidebar />
-    <main class="admin-content">
-      {#if needsOtp}
-        <div class="otp-gate" role="alert">
-          <div class="otp-gate-card">
-            <div class="otp-gate-icon" aria-hidden="true">
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+    <AdminSidebar open={navOpen} onclose={() => (navOpen = false)} />
+    <div class="admin-main">
+      <AdminTopBar menuOpen={navOpen} onmenu={() => (navOpen = !navOpen)} />
+      <main class="admin-content">
+        {#if needsOtp}
+          <div class="otp-gate" role="alert">
+            <div class="otp-gate-card">
+              <div class="otp-gate-icon" aria-hidden="true">
+                <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <h2 class="otp-gate-title">Enable two-factor authentication</h2>
+              <p class="otp-gate-text">
+                Admin accounts must have 2FA enabled before they can access
+                the admin panel. This protects the instance from a
+                compromised staff password.
+              </p>
+              <a class="otp-gate-btn" href="/settings/security">
+                Set up two-factor authentication
+              </a>
+              <p class="otp-gate-hint">
+                You'll be brought back here after you finish setup.
+              </p>
             </div>
-            <h2 class="otp-gate-title">Enable two-factor authentication</h2>
-            <p class="otp-gate-text">
-              Admin accounts must have 2FA enabled before they can access
-              the admin panel. This protects the instance from a
-              compromised staff password.
-            </p>
-            <a class="otp-gate-btn" href="/settings/security">
-              Set up two-factor authentication
-            </a>
-            <p class="otp-gate-hint">
-              You'll be brought back here after you finish setup.
-            </p>
           </div>
-        </div>
-      {:else if checkingSudo}
-        <div class="admin-loading">
-          <div class="admin-loading-spinner"></div>
-        </div>
-      {:else if !sudoOk}
-        <SudoGate onUnlocked={handleUnlocked} />
-      {:else}
-        {@render children()}
-      {/if}
-    </main>
+        {:else if checkingSudo}
+          <div class="admin-loading">
+            <div class="admin-loading-spinner"></div>
+          </div>
+        {:else if !sudoOk}
+          <SudoGate onUnlocked={handleUnlocked} />
+        {:else}
+          {@render children()}
+        {/if}
+      </main>
+    </div>
   </div>
   <Toast />
 {:else}
@@ -166,12 +184,18 @@
     min-height: 100vh;
   }
 
+  .admin-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg);
+  }
+
   .admin-content {
     flex: 1;
     min-width: 0;
     padding: var(--space-6) var(--space-8);
-    background: var(--color-bg);
-    overflow-y: auto;
   }
 
   .admin-loading {
