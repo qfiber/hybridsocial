@@ -20,14 +20,15 @@ defmodule Hybridsocial.Federation.Publisher do
   Queues delivery tasks for each inbox URL.
   """
   def publish(activity, identity) do
-    # Drop peers an admin has switched off *before* we write queue rows.
-    # Letting them through would create a delivery row per activity that
-    # can only ever fail, which is exactly the dead-letter flood the
-    # kill switch exists to stop.
+    # Drop peers we won't attempt *before* we write queue rows: switched off
+    # by an admin, or with an open circuit not yet due for a probe. Either
+    # way the row could only end "Skipped" (failed rows aren't replayed),
+    # one dead letter per activity per follower on a dead peer. Once a
+    # circuit is due, its next activity goes out as the half-open probe.
     inbox_urls =
       activity
       |> determine_recipients(identity)
-      |> reject_disabled_inboxes()
+      |> reject_blocked_inboxes()
 
     Enum.each(inbox_urls, fn inbox_url ->
       {:ok, delivery} =
@@ -306,20 +307,20 @@ defmodule Hybridsocial.Federation.Publisher do
 
   # --- Private helpers ---
 
-  # Filters a list of inbox URLs down to peers we're still delivering to.
-  # One query per fan-out, and the disabled set is normally empty.
-  defp reject_disabled_inboxes([]), do: []
+  # Filters a list of inbox URLs down to peers we'll attempt right now.
+  # One query per fan-out, and the blocked set is normally small.
+  defp reject_blocked_inboxes([]), do: []
 
-  defp reject_disabled_inboxes(inbox_urls) do
-    disabled = CircuitBreaker.disabled_domains()
+  defp reject_blocked_inboxes(inbox_urls) do
+    blocked = CircuitBreaker.blocked_domains()
 
-    if MapSet.size(disabled) == 0 do
+    if MapSet.size(blocked) == 0 do
       inbox_urls
     else
       Enum.reject(inbox_urls, fn url ->
         case Hybridsocial.Federation.ActivityMapper.extract_domain(url) do
           nil -> false
-          domain -> MapSet.member?(disabled, domain)
+          domain -> MapSet.member?(blocked, domain)
         end
       end)
     end

@@ -114,8 +114,27 @@ defmodule Hybridsocial.Federation.CircuitBreaker do
   end
 
   @doc """
-  The set of domains with delivery disabled. Read once per fan-out so
-  the publisher can drop those inboxes before it writes queue rows.
+  Domains we won't attempt right now: disabled by an admin, or with an
+  open circuit whose next probe isn't due yet. The same answer `allow?/1`
+  gives per inbox, for a whole fan-out in one query.
+  """
+  @spec blocked_domains() :: MapSet.t()
+  def blocked_domains do
+    now = now()
+
+    from(r in RemoteInstance,
+      where:
+        not is_nil(r.delivery_disabled_at) or
+          (not is_nil(r.circuit_reopen_at) and r.circuit_reopen_at > ^now),
+      select: r.domain
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @doc """
+  The set of domains with delivery disabled. The retry sweep reads it
+  to leave their parked rows alone.
   """
   @spec disabled_domains() :: MapSet.t()
   def disabled_domains do
