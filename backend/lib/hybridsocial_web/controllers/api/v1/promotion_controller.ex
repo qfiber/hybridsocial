@@ -27,7 +27,7 @@ defmodule HybridsocialWeb.Api.V1.PromotionController do
           id: identity.id,
           handle: identity.handle,
           display_name: identity.display_name || identity.handle,
-          avatar_url: identity.avatar_url,
+          avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
           promoted: true
         }
       end)

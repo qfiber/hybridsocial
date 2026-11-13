@@ -196,7 +196,7 @@ defmodule HybridsocialWeb.Api.V1.SubscriptionController do
                   id: v.voucher.id,
                   handle: v.voucher.handle,
                   display_name: v.voucher.display_name,
-                  avatar_url: v.voucher.avatar_url
+                  avatar_url: HybridsocialWeb.Helpers.Account.remote_image(v.voucher.avatar_url)
                 },
                 created_at: v.inserted_at
               }

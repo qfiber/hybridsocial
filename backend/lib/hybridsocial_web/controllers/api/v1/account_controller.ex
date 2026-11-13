@@ -503,11 +503,11 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
       display_name: identity.display_name,
       bio: identity.bio,
       bio_html: Hybridsocial.Accounts.bio_html(identity),
-      avatar_url: identity.avatar_url,
-      header_url: identity.header_url,
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
+      header_url: HybridsocialWeb.Helpers.Account.remote_image(identity.header_url),
       # Custom emojis (from the remote actor's tag) for the name/bio, and the
       # remote origin + link for "view on original instance".
-      emojis: identity.emojis || [],
+      emojis: HybridsocialWeb.Helpers.Account.remote_emojis(identity.emojis || []),
       domain: HybridsocialWeb.Helpers.Account.remote_domain(identity),
       url: HybridsocialWeb.Helpers.Account.profile_url(identity),
       is_local: identity.is_local,

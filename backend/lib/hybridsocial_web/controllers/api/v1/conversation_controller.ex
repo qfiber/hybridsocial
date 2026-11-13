@@ -407,7 +407,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
       handle: Map.get(summary, :handle),
       acct: Map.get(summary, :acct),
       display_name: Map.get(summary, :display_name),
-      avatar_url: Map.get(summary, :avatar_url),
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(Map.get(summary, :avatar_url)),
       joined_at: participant.joined_at,
       notifications_enabled: participant.notifications_enabled,
       left_at: participant.left_at

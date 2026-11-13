@@ -542,7 +542,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
             id: identity.id,
             handle: identity.handle,
             display_name: identity.display_name,
-            avatar_url: identity.avatar_url
+            avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
           }
         )
     }
@@ -3393,7 +3393,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       id: actor.id,
       handle: actor.handle,
       display_name: actor.display_name,
-      avatar_url: actor.avatar_url
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(actor.avatar_url)
     }
   end
 
@@ -3580,8 +3580,8 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       acct: acct,
       display_name: identity.display_name,
       bio: identity.bio,
-      avatar_url: identity.avatar_url,
-      header_url: identity.header_url,
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
+      header_url: HybridsocialWeb.Helpers.Account.remote_image(identity.header_url),
       type: HybridsocialWeb.Helpers.Account.api_type(identity.type),
       domain: domain,
       is_local: is_local,
@@ -4497,7 +4497,12 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
       account:
         case promo.identity do
           %Hybridsocial.Accounts.Identity{} = i ->
-            %{id: i.id, handle: i.handle, display_name: i.display_name, avatar_url: i.avatar_url}
+            %{
+              id: i.id,
+              handle: i.handle,
+              display_name: i.display_name,
+              avatar_url: HybridsocialWeb.Helpers.Account.remote_image(i.avatar_url)
+            }
 
           _ ->
             nil

@@ -35,6 +35,7 @@ defmodule HybridsocialWeb.Api.V1.DirectoryController do
         id: i.id,
         handle: i.handle,
         display_name: i.display_name,
+        # Local users only (joined to `users`), so the avatar is never remote.
         avatar_url: i.avatar_url,
         bio: i.bio,
         joined_at: u.confirmed_at

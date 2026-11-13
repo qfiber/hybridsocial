@@ -99,8 +99,16 @@ defmodule HybridsocialWeb.Api.V1.DraftController do
 
   defp group_summary_for(id) when is_binary(id) do
     case Hybridsocial.Repo.get(Hybridsocial.Groups.Group, id) do
-      nil -> nil
-      g -> %{id: g.id, name: g.name, avatar_url: g.avatar_url, visibility: g.visibility}
+      nil ->
+        nil
+
+      g ->
+        %{
+          id: g.id,
+          name: g.name,
+          avatar_url: HybridsocialWeb.Helpers.Account.remote_image(g.avatar_url),
+          visibility: g.visibility
+        }
     end
   rescue
     _ -> nil
@@ -120,7 +128,11 @@ defmodule HybridsocialWeb.Api.V1.DraftController do
             _ -> identity.display_name || identity.handle
           end
 
-        %{id: identity.id, name: name, avatar_url: identity.avatar_url}
+        %{
+          id: identity.id,
+          name: name,
+          avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
+        }
     end
   rescue
     _ -> nil
