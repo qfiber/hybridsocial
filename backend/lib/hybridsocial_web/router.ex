@@ -42,6 +42,12 @@ defmodule HybridsocialWeb.Router do
   # page; the plain federation pipeline 406'd it before they could.
   pipeline :federation_object do
     plug :accepts, ["json", "activity+json", "ld+json", "html"]
+    # It answers browsers only with a redirect (and peers with JSON), so
+    # send the browser security headers with a CSP that allows nothing,
+    # like the other redirect-only html pipeline below.
+    plug :put_secure_browser_headers,
+         %{"content-security-policy" => "default-src 'none'; frame-ancestors 'none'"}
+
     plug HybridsocialWeb.Plugs.IpBan
     plug HybridsocialWeb.Plugs.FederationRateLimiter
   end
