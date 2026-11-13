@@ -63,7 +63,7 @@ defmodule HybridsocialWeb.Api.V1.PollController do
                 handle: i.handle,
                 acct: HybridsocialWeb.Helpers.Account.build_acct(i),
                 display_name: i.display_name,
-                avatar_url: i.avatar_url,
+                avatar_url: HybridsocialWeb.Helpers.Account.remote_image(i.avatar_url),
                 url: Map.get(i, :url)
               }
             end),

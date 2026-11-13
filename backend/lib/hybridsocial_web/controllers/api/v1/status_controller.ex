@@ -301,7 +301,8 @@ defmodule HybridsocialWeb.Api.V1.StatusController do
                     id: r.identity.id,
                     handle: r.identity.handle,
                     display_name: r.identity.display_name,
-                    avatar_url: r.identity.avatar_url
+                    avatar_url:
+                      HybridsocialWeb.Helpers.Account.remote_image(r.identity.avatar_url)
                   }
                 end)
             }

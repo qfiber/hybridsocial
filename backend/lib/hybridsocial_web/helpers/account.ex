@@ -11,6 +11,40 @@ defmodule HybridsocialWeb.Helpers.Account do
   """
 
   @doc """
+  The URL to serve for an account/group/page image (avatar, header).
+
+  A remote server's image goes through the signed media proxy, like post
+  media: loading it straight from the origin would hand every viewer's IP
+  to that server (e.g. pbs.twimg.com for bird.makeup accounts). Local and
+  media-host URLs, relative paths and nil come back unchanged; with the
+  proxy disabled `MediaProxy.url/1` returns the URL as is.
+  """
+  def remote_image("http://" <> _ = url), do: Hybridsocial.Media.MediaProxy.url(url)
+  def remote_image("https://" <> _ = url), do: Hybridsocial.Media.MediaProxy.url(url)
+  def remote_image(other), do: other
+
+  @doc """
+  An account's custom emoji (display name / bio) with each image routed
+  through `remote_image/1`. Entries keep their shape and key type.
+  """
+  def remote_emojis(emojis) when is_list(emojis) do
+    Enum.map(emojis, fn
+      %{} = emoji ->
+        Enum.reduce(["url", "static_url", :url, :static_url], emoji, fn key, acc ->
+          case acc do
+            %{^key => value} -> Map.put(acc, key, remote_image(value))
+            _ -> acc
+          end
+        end)
+
+      other ->
+        other
+    end)
+  end
+
+  def remote_emojis(_), do: []
+
+  @doc """
   Returns the acct string for an identity.
   For local identities: just the handle.
   For remote identities: username@domain extracted from ap_actor_url.
@@ -116,10 +150,10 @@ defmodule HybridsocialWeb.Helpers.Account do
       handle: identity.handle,
       acct: build_acct(identity),
       display_name: identity.display_name,
-      avatar_url: identity.avatar_url,
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
       # Custom emojis so `:shortcode:` in the display_name renders wherever
       # an account appears in a list (post author, notifications, etc.).
-      emojis: identity.emojis || [],
+      emojis: remote_emojis(identity.emojis || []),
       domain: remote_domain(identity),
       url: profile_url(identity),
       # Mastodon's Account.created_at is non-null; a client that gets a null

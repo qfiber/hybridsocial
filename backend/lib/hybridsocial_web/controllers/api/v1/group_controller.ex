@@ -625,8 +625,8 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
       visibility: group.visibility,
       federation_mode: group.federation_mode,
       join_policy: group.join_policy,
-      avatar_url: group.avatar_url,
-      header_url: group.header_url,
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(group.avatar_url),
+      header_url: HybridsocialWeb.Helpers.Account.remote_image(group.header_url),
       member_count: group.member_count,
       post_count: group.post_count,
       created_by: group.created_by,
@@ -647,7 +647,7 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
       # See PageController.invite_identity/2 — webfinger form for the UI.
       acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
       display_name: identity.display_name,
-      avatar_url: identity.avatar_url
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
     }
   end
 
@@ -703,7 +703,7 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
       id: identity.id,
       handle: identity.handle,
       display_name: identity.display_name,
-      avatar_url: identity.avatar_url
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
     }
   end
 
@@ -733,7 +733,7 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
             handle: identity.handle,
             acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
             display_name: identity.display_name,
-            avatar_url: identity.avatar_url
+            avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
           }
         )
     }
@@ -762,7 +762,7 @@ defmodule HybridsocialWeb.Api.V1.GroupController do
             handle: identity.handle,
             acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
             display_name: identity.display_name,
-            avatar_url: identity.avatar_url
+            avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
           }
         )
     }

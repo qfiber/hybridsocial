@@ -484,9 +484,10 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
       display_name: identity.display_name,
       # Custom emojis so `:shortcode:` in a post author's display_name renders.
-      emojis: Map.get(identity, :emojis, []) || [],
-      avatar_url: identity.avatar_url,
-      header_url: Map.get(identity, :header_url, nil),
+      emojis: HybridsocialWeb.Helpers.Account.remote_emojis(Map.get(identity, :emojis, []) || []),
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
+      header_url:
+        HybridsocialWeb.Helpers.Account.remote_image(Map.get(identity, :header_url, nil)),
       bio: Map.get(identity, :bio, nil),
       bio_html:
         if is_struct(identity, Hybridsocial.Accounts.Identity) do
@@ -722,7 +723,8 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
             url: preview.url,
             title: preview.title,
             description: preview.description,
-            image: preview.image_url,
+            # The card image is a third-party site's; proxy it like post media.
+            image: HybridsocialWeb.Helpers.Account.remote_image(preview.image_url),
             provider_name: preview.site_name
           }
 
@@ -989,8 +991,16 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
   defp group_summary_for(%{group_id: id}) when is_binary(id) do
     try do
       case Repo.get(Hybridsocial.Groups.Group, id) do
-        nil -> nil
-        g -> %{id: g.id, name: g.name, avatar_url: g.avatar_url, visibility: g.visibility}
+        nil ->
+          nil
+
+        g ->
+          %{
+            id: g.id,
+            name: g.name,
+            avatar_url: HybridsocialWeb.Helpers.Account.remote_image(g.avatar_url),
+            visibility: g.visibility
+          }
       end
     rescue
       _ -> nil
@@ -1024,7 +1034,12 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
           # page path: anyone Pages.can_edit? can edit and delete its posts.
           can_edit = is_binary(viewer_id) and Hybridsocial.Pages.can_edit?(id, viewer_id)
 
-          %{id: identity.id, name: name, avatar_url: identity.avatar_url, can_edit: can_edit}
+          %{
+            id: identity.id,
+            name: name,
+            avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
+            can_edit: can_edit
+          }
       end
     rescue
       _ -> nil
@@ -1151,8 +1166,13 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       url = Map.get(entry, "url") || Map.get(entry, :url)
       static_url = Map.get(entry, "static_url") || Map.get(entry, :static_url) || url
 
+      # Remote emoji are served by their origin server; proxy them.
       if is_binary(shortcode) and is_binary(url) do
-        %{shortcode: shortcode, url: url, static_url: static_url}
+        %{
+          shortcode: shortcode,
+          url: HybridsocialWeb.Helpers.Account.remote_image(url),
+          static_url: HybridsocialWeb.Helpers.Account.remote_image(static_url)
+        }
       end
     end)
     |> Enum.reject(&is_nil/1)

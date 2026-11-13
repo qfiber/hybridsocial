@@ -485,7 +485,7 @@ defmodule HybridsocialWeb.Api.V1.PageController do
           # `alice_some_1dd0d2`.
           acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
           display_name: identity.display_name,
-          avatar_url: identity.avatar_url
+          avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
         }
 
       _ ->
@@ -504,8 +504,8 @@ defmodule HybridsocialWeb.Api.V1.PageController do
       handle: page.handle,
       display_name: page.display_name,
       bio: page.bio,
-      avatar_url: page.avatar_url,
-      header_url: page.header_url,
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(page.avatar_url),
+      header_url: HybridsocialWeb.Helpers.Account.remote_image(page.header_url),
       is_locked: page.is_locked,
       is_bot: page.is_bot,
       created_at: page.inserted_at,
@@ -630,7 +630,7 @@ defmodule HybridsocialWeb.Api.V1.PageController do
       handle: identity.handle,
       acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
       display_name: identity.display_name,
-      avatar_url: identity.avatar_url
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url)
     }
   end
 

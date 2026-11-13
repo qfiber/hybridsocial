@@ -287,8 +287,8 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
       handle: identity.handle,
       acct: HybridsocialWeb.Helpers.Account.build_acct(identity),
       display_name: identity.display_name,
-      avatar_url: identity.avatar_url,
-      header_url: identity.header_url,
+      avatar_url: HybridsocialWeb.Helpers.Account.remote_image(identity.avatar_url),
+      header_url: HybridsocialWeb.Helpers.Account.remote_image(identity.header_url),
       bio: identity.bio,
       url: identity.ap_actor_url
     }
