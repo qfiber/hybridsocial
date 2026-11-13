@@ -33,3 +33,6 @@ default, `0.1.0`.
 ### Media and privacy
 - The media proxy shows an "Image not available" placeholder when the source
   refuses (#277) and serves media with its cache disabled (#270).
+- Remote avatars, banners, link-card images and custom emoji load through the
+  media proxy instead of straight from their origin, so viewers' IP addresses
+  aren't exposed to third-party servers (#282).
