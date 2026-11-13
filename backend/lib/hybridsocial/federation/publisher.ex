@@ -14,6 +14,8 @@ defmodule Hybridsocial.Federation.Publisher do
   @content_type "application/activity+json"
   @max_attempts 6
   @backoff_schedule [60, 300, 1_800, 7_200, 43_200, 86_400]
+  # A "retrying" row older than this is assumed stuck (node restarted).
+  @stuck_retrying_seconds 600
 
   @doc """
   Publishes an activity to all relevant remote inboxes.
@@ -251,58 +253,136 @@ defmodule Hybridsocial.Federation.Publisher do
   end
 
   @doc """
-  Retries failed deliveries with exponential backoff.
-  Finds deliveries that are eligible for retry and processes them.
+  Re-sends failed deliveries that failed for a transient reason. Runs from
+  `DeliveryWorker` every few minutes.
+
+  Each row stores the signed-over activity (`activity_body`), so a retry
+  re-sends exactly what was first sent, freshly signed. A row is retried
+  when all of these hold:
+
+    * it failed on something a retry can fix: a connection error or
+      timeout, a skipped send behind an open circuit, or HTTP 5xx (not 501),
+      408 or 429. A peer that answered 4xx refused the activity itself.
+    * it's younger than `federation_retry_window_hours` (default 48), so a
+      peer coming back after a long outage doesn't get a flood of stale
+      activities.
+    * its backoff has elapsed (`@backoff_schedule`), under `@max_attempts`.
+    * its peer isn't admin-disabled or behind an open circuit not yet due
+      for a probe (it stays parked until then).
+
+  Before re-sending, an activity that history has overtaken is retired
+  instead: a Create/Update/Announce of a post since deleted (re-sending
+  would resurrect it on the peer), or anything a later Undo to the same
+  inbox cancelled.
   """
-  def retry_failed_deliveries do
-    now = DateTime.utc_now()
-    disabled = CircuitBreaker.disabled_domains()
+  def retry_failed_deliveries(now \\ DateTime.utc_now()) do
+    cutoff = DateTime.add(now, -retry_window_hours() * 3600, :second)
+    stuck_before = DateTime.add(now, -@stuck_retrying_seconds, :second)
+    blocked = CircuitBreaker.blocked_domains()
 
     Delivery
-    |> where([d], d.status in ["failed", "retrying"])
-    |> where([d], d.attempts < @max_attempts)
+    |> where([d], d.attempts < @max_attempts and d.inserted_at >= ^cutoff)
+    |> where([d], not is_nil(d.activity_body))
+    # A row marked "retrying" is in flight; only pick it up again if it has
+    # been stuck there (the node restarted mid-send).
+    |> where(
+      [d],
+      d.status == "failed" or (d.status == "retrying" and d.updated_at < ^stuck_before)
+    )
     |> Repo.all()
-    |> Enum.reject(fn delivery ->
-      # A disabled peer's rows stay parked in `failed`. Retrying them
-      # would only bump `attempts` and rewrite the error on a domain we
-      # have already decided to stop talking to.
-      case Hybridsocial.Federation.ActivityMapper.extract_domain(delivery.target_inbox) do
-        nil -> false
-        domain -> MapSet.member?(disabled, domain)
-      end
-    end)
-    |> Enum.filter(fn delivery ->
-      eligible_for_retry?(delivery, now)
-    end)
-    |> Enum.each(fn delivery ->
-      delivery
-      |> Delivery.changeset(%{status: "retrying"})
-      |> Repo.update()
+    |> Enum.reject(&blocked_inbox?(&1, blocked))
+    |> Enum.filter(&(transient_error?(&1.error) and eligible_for_retry?(&1, now)))
+    |> Enum.each(&retry_delivery/1)
+  end
 
-      # Look up the identity for signing
-      case Hybridsocial.Accounts.get_identity(delivery.actor_id) do
-        nil ->
-          delivery
-          |> Delivery.changeset(%{status: "failed", error: "Actor not found"})
-          |> Repo.update()
+  defp retry_delivery(%Delivery{} = delivery) do
+    case Hybridsocial.Accounts.get_identity(delivery.actor_id) do
+      nil ->
+        retire(delivery, "Actor not found")
 
-        identity ->
-          # We don't have the original activity stored, so we record a failure
-          # In production, the activity JSON would be stored or reconstructable
-          delivery
-          |> Delivery.changeset(%{
-            status: "failed",
-            error: "Retry not yet supported without stored activity",
-            attempts: delivery.attempts + 1,
-            last_attempt_at: DateTime.utc_now()
-          })
-          |> Repo.update()
+      identity ->
+        if obsolete?(delivery) do
+          retire(delivery, "Obsolete: overtaken by a later delete or undo")
+        else
+          # force: bump updated_at even for a stuck row already "retrying",
+          # so the next sweep sees it as in flight, not stuck again.
+          {:ok, delivery} =
+            delivery |> Delivery.changeset(%{status: "retrying"}) |> Repo.update(force: true)
 
-          Logger.warning(
-            "Retry for delivery #{delivery.id} to #{delivery.target_inbox} (attempt #{delivery.attempts + 1}) - actor: #{identity.id}"
-          )
-      end
-    end)
+          queue_delivery(delivery.activity_body, delivery, identity)
+        end
+    end
+  end
+
+  # Parked for good: attempts at the cap keeps the sweep from picking it up.
+  defp retire(delivery, reason) do
+    delivery
+    |> Delivery.changeset(%{status: "failed", error: reason, attempts: @max_attempts})
+    |> Repo.update()
+  end
+
+  defp blocked_inbox?(%Delivery{target_inbox: inbox}, blocked) do
+    case Hybridsocial.Federation.ActivityMapper.extract_domain(inbox) do
+      nil -> false
+      domain -> MapSet.member?(blocked, domain)
+    end
+  end
+
+  @doc false
+  def transient_error?("Connection error:" <> _), do: true
+  def transient_error?("Skipped:" <> _), do: true
+
+  def transient_error?("HTTP " <> rest) do
+    case Integer.parse(rest) do
+      {501, _} -> false
+      {status, _} -> status >= 500 or status in [408, 429]
+      :error -> false
+    end
+  end
+
+  def transient_error?(_), do: false
+
+  defp obsolete?(%Delivery{activity_body: body} = delivery) do
+    activity_id = body["id"]
+
+    object_deleted?(body) or
+      (is_binary(activity_id) and undone_later?(delivery, activity_id))
+  end
+
+  defp object_deleted?(%{"type" => type} = body) when type in ["Create", "Update", "Announce"] do
+    case object_id(body["object"]) do
+      nil ->
+        false
+
+      id ->
+        Hybridsocial.Social.Post
+        |> where([p], p.ap_id == ^id and not is_nil(p.deleted_at))
+        |> Repo.exists?()
+    end
+  end
+
+  defp object_deleted?(_), do: false
+
+  defp undone_later?(%Delivery{target_inbox: inbox, inserted_at: at}, activity_id) do
+    Delivery
+    |> where([d], d.target_inbox == ^inbox and d.activity_type == "Undo" and d.inserted_at > ^at)
+    |> where(
+      [d],
+      fragment("?->'object'->>'id' = ?", d.activity_body, ^activity_id) or
+        fragment("?->>'object' = ?", d.activity_body, ^activity_id)
+    )
+    |> Repo.exists?()
+  end
+
+  defp object_id(id) when is_binary(id), do: id
+  defp object_id(%{"id" => id}) when is_binary(id), do: id
+  defp object_id(_), do: nil
+
+  defp retry_window_hours do
+    case Hybridsocial.Config.get("federation_retry_window_hours", 48) do
+      n when is_integer(n) and n > 0 -> n
+      _ -> 48
+    end
   end
 
   # --- Private helpers ---
