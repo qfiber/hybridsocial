@@ -604,7 +604,7 @@
     background: transparent;
     border: none;
     border-radius: var(--radius-md);
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
     cursor: pointer;
     transition: color var(--transition-fast), background-color var(--transition-fast);
     line-height: 1;
@@ -612,12 +612,12 @@
   }
 
   .admin-action-btn:hover {
-    background: var(--color-warning-light, rgba(245, 158, 11, 0.1));
+    background: var(--color-warning-light);
     opacity: 1;
   }
 
   .admin-action-btn:focus-visible {
-    outline: 2px solid var(--color-warning, #f59e0b);
+    outline: 2px solid var(--color-warning);
     outline-offset: 1px;
   }
 
@@ -625,12 +625,12 @@
      this post — makes "there is something to do here" glanceable in
      a crowded timeline. */
   .admin-action-btn-hot {
-    color: var(--color-danger, #ef4444);
+    color: var(--color-danger);
     opacity: 1;
   }
 
   .admin-action-btn-hot:hover {
-    background: var(--color-danger-soft, rgba(239, 68, 68, 0.12));
+    background: var(--color-danger-soft);
   }
 
   .admin-action-badge {
@@ -641,14 +641,14 @@
     height: 16px;
     padding: 0 4px;
     border-radius: 9999px;
-    background: var(--color-danger, #ef4444);
-    color: #fff;
+    background: var(--color-danger);
+    color: var(--color-text-on-primary);
     font-size: 0.65rem;
     font-weight: 700;
     line-height: 16px;
     text-align: center;
     pointer-events: none;
-    box-shadow: 0 0 0 2px var(--color-surface, #fff);
+    box-shadow: 0 0 0 2px var(--color-surface);
   }
 
   .admin-post-actions {
@@ -712,11 +712,11 @@
   }
 
   .admin-dropdown-danger {
-    color: var(--color-danger, #ef4444);
+    color: var(--color-danger);
   }
 
   .admin-dropdown-danger:hover {
-    background: var(--color-danger-light, rgba(239, 68, 68, 0.1));
+    background: var(--color-danger-light);
   }
 
   .admin-dropdown-divider {
@@ -729,7 +729,7 @@
     position: fixed;
     inset-block-end: var(--space-4);
     inset-inline-end: var(--space-4);
-    background: var(--color-danger, #ef4444);
+    background: var(--color-danger);
     color: white;
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-md);
@@ -779,7 +779,7 @@
   }
 
   .admin-dialog {
-    background: var(--color-surface-raised, #fff);
+    background: var(--color-surface-raised);
     border-radius: var(--radius-xl, 1rem);
     padding: var(--space-6, 1.5rem);
     max-width: 420px;
@@ -799,7 +799,7 @@
 
   .admin-dialog-message {
     font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text-secondary, #64748b);
+    color: var(--color-text-secondary);
     margin-block-end: var(--space-4, 1rem);
   }
 
@@ -813,16 +813,16 @@
   .admin-dialog-label {
     font-size: var(--text-sm, 0.875rem);
     font-weight: 500;
-    color: var(--color-text, #0f172a);
+    color: var(--color-text);
   }
 
   .admin-dialog-textarea {
     padding: var(--space-2, 0.5rem);
-    border: 1px solid var(--color-border, #e2e8f0);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md, 0.5rem);
     font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text, #0f172a);
-    background: var(--color-bg, #fff);
+    color: var(--color-text);
+    background: var(--color-bg);
     resize: vertical;
     font-family: inherit;
   }
@@ -835,7 +835,7 @@
 
   .admin-dialog-error {
     font-size: var(--text-sm, 0.875rem);
-    color: var(--color-danger, #ef4444);
+    color: var(--color-danger);
   }
 
   .admin-dialog-actions {
@@ -846,10 +846,10 @@
 
   .admin-dialog-cancel {
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
-    border: 1px solid var(--color-border, #e2e8f0);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md, 0.5rem);
     background: transparent;
-    color: var(--color-text, #0f172a);
+    color: var(--color-text);
     font-size: var(--text-sm, 0.875rem);
     cursor: pointer;
   }
@@ -862,7 +862,7 @@
     padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
     border: none;
     border-radius: var(--radius-md, 0.5rem);
-    background: var(--color-danger, #ef4444);
+    background: var(--color-danger);
     color: white;
     font-size: var(--text-sm, 0.875rem);
     font-weight: 600;

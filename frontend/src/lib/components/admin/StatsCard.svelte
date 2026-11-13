@@ -75,7 +75,7 @@
   .stats-alert-dot {
     position: absolute;
     inset: 0;
-    background: var(--color-danger, #dc2626);
+    background: var(--color-danger);
     border-radius: 50%;
   }
 
@@ -85,7 +85,7 @@
   .stats-alert-pulse {
     position: absolute;
     inset: 0;
-    background: var(--color-danger, #dc2626);
+    background: var(--color-danger);
     border-radius: 50%;
     opacity: 0.6;
     animation: stats-alert-pulse 1.4s ease-out infinite;

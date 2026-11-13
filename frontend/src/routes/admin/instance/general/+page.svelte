@@ -1,172 +1,120 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { addToast } from '$lib/stores/toast.js';
+  import { t } from '$lib/stores/i18n.js';
+  import { t as ti } from '$lib/utils/i18n.js';
   import { getAdminSettings, updateAdminSettings } from '$lib/api/admin.js';
+  import AdminPage from '$lib/components/admin/AdminPage.svelte';
+  import SettingsSection from '$lib/components/admin/SettingsSection.svelte';
+  import SettingRow from '$lib/components/admin/SettingRow.svelte';
+  import SaveBar from '$lib/components/admin/SaveBar.svelte';
 
   // These identity fields live in the generic Config store (keys below),
-  // not the theme_* namespace. They used to be edited on the Theme page;
-  // this page owns them now and writes them through the settings API.
-  let instanceName = $state('');
-  let instanceDescription = $state('');
-  let contactEmail = $state('');
+  // not the theme_* namespace, and are written through the settings API.
+  type Form = { instance_name: string; instance_description: string; contact_email: string };
+  const empty: Form = { instance_name: '', instance_description: '', contact_email: '' };
 
+  let saved = $state<Form>({ ...empty });
+  let form = $state<Form>({ ...empty });
   let loading = $state(true);
   let saving = $state(false);
+
+  let dirty = $derived(
+    (Object.keys(form) as (keyof Form)[]).some((k) => form[k] !== saved[k]),
+  );
 
   async function load() {
     try {
       const settings = await getAdminSettings();
       const map = new Map(settings.map((s) => [s.key, s.value]));
-      instanceName = (map.get('instance_name') as string) ?? '';
-      instanceDescription = (map.get('instance_description') as string) ?? '';
-      contactEmail = (map.get('contact_email') as string) ?? '';
+      const str = (k: keyof Form) => {
+        const v = map.get(k);
+        return typeof v === 'string' ? v : '';
+      };
+      saved = {
+        instance_name: str('instance_name'),
+        instance_description: str('instance_description'),
+        contact_email: str('contact_email'),
+      };
+      form = { ...saved };
     } catch {
-      addToast('Failed to load instance settings', 'error');
+      addToast(ti('admin_general.load_error'), 'error');
     } finally {
       loading = false;
     }
   }
 
-  async function handleSave() {
+  async function save() {
     saving = true;
     try {
-      await updateAdminSettings([
-        { key: 'instance_name', value: instanceName },
-        { key: 'instance_description', value: instanceDescription },
-        { key: 'contact_email', value: contactEmail },
-      ]);
-      addToast('Instance settings saved', 'success');
+      await updateAdminSettings(
+        (Object.keys(form) as (keyof Form)[]).map((key) => ({ key, value: form[key] })),
+      );
+      saved = { ...form };
+      addToast(ti('admin_general.saved'), 'success');
     } catch {
-      addToast('Failed to save instance settings', 'error');
+      addToast(ti('admin_general.save_error'), 'error');
     } finally {
       saving = false;
     }
   }
 
+  function discard() {
+    form = { ...saved };
+  }
+
   onMount(load);
 </script>
 
-<svelte:head>
-  <title>General - Admin</title>
-</svelte:head>
-
-<div class="general-page">
-  <div class="general-header">
-    <div>
-      <h1 class="page-title">General</h1>
-      <p class="general-subtitle">
-        Your server's public identity. The name and description appear in the header,
-        page titles, federation profile, and outgoing emails.
-      </p>
-    </div>
-    <button class="btn btn-primary" onclick={handleSave} disabled={saving || loading}>
-      {saving ? 'Saving…' : 'Save changes'}
-    </button>
-  </div>
-
+<AdminPage title={$t('admin_general.title')} description={$t('admin_general.description')} width="narrow">
   {#if loading}
-    <div class="general-loading">Loading…</div>
+    <p class="general-loading">{$t('admin_shell.loading')}</p>
   {:else}
-    <div class="general-card card">
-      <div class="general-field">
-        <label class="field-label" for="instance-name">Instance name</label>
-        <input
-          id="instance-name"
-          type="text"
-          class="input"
-          bind:value={instanceName}
-          placeholder="HybridSocial"
-        />
-        <p class="field-hint">Shown in the header, browser tab titles, and emails.</p>
-      </div>
+    <SettingsSection title={$t('admin_general.identity_title')} description={$t('admin_general.identity_description')}>
+      <SettingRow
+        label={$t('admin_general.name_label')}
+        help={$t('admin_general.name_help')}
+        labelFor="instance-name"
+        layout="stacked"
+      >
+        <input id="instance-name" type="text" class="input" maxlength="100" bind:value={form.instance_name} />
+      </SettingRow>
 
-      <div class="general-field">
-        <label class="field-label" for="instance-desc">Description</label>
-        <textarea
-          id="instance-desc"
-          class="textarea"
-          rows="4"
-          bind:value={instanceDescription}
-          placeholder="A short description of what this server is about."
-        ></textarea>
-        <p class="field-hint">Used on the about page, link previews, and your federation profile.</p>
-      </div>
+      <SettingRow
+        label={$t('admin_general.description_label')}
+        help={$t('admin_general.description_help')}
+        labelFor="instance-desc"
+        layout="stacked"
+      >
+        <textarea id="instance-desc" class="textarea" rows="4" bind:value={form.instance_description}></textarea>
+      </SettingRow>
+    </SettingsSection>
 
-      <div class="general-field">
-        <label class="field-label" for="contact-email">Contact email</label>
+    <SettingsSection title={$t('admin_general.contact_title')} description={$t('admin_general.contact_description')}>
+      <SettingRow
+        label={$t('admin_general.email_label')}
+        help={$t('admin_general.email_help')}
+        labelFor="contact-email"
+        layout="stacked"
+      >
         <input
           id="contact-email"
           type="email"
           class="input"
-          bind:value={contactEmail}
+          bind:value={form.contact_email}
           placeholder="admin@example.com"
         />
-        <p class="field-hint">Where members and other servers can reach the operator.</p>
-      </div>
-    </div>
+      </SettingRow>
+    </SettingsSection>
+
+    <SaveBar {dirty} {saving} onsave={save} ondiscard={discard} />
   {/if}
-</div>
+</AdminPage>
 
 <style>
-  .general-page {
-    max-width: 720px;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .general-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-4);
-    flex-wrap: wrap;
-  }
-
-  .page-title {
-    font-size: var(--text-2xl);
-    font-weight: 700;
-    margin: 0 0 4px;
-    color: var(--color-text);
-  }
-
-  .general-subtitle {
-    margin: 0;
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    max-width: 52ch;
-    line-height: 1.5;
-  }
-
   .general-loading {
-    color: var(--color-text-tertiary);
-    font-size: var(--text-sm);
-    padding: var(--space-6) 0;
-  }
-
-  .general-card {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-5);
-    padding: var(--space-6);
-  }
-
-  .general-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .field-label {
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .field-hint {
     margin: 0;
-    font-size: var(--text-xs);
     color: var(--color-text-tertiary);
-    line-height: 1.4;
+    font-size: var(--text-sm);
   }
 </style>

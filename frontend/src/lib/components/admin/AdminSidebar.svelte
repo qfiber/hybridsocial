@@ -3,7 +3,14 @@
   import { api } from '$lib/api/client.js';
   import { hasPermission, hasAnyPermission } from '$lib/stores/auth.js';
   import { sudoExpiresAt, isSudoValid } from '$lib/stores/admin-sudo.js';
-  import { adminSections, type AdminItem, type AdminSection } from '$lib/admin-nav.js';
+  import { adminSections, type AdminItem, type AdminSection, type AdminCluster } from '$lib/admin-nav.js';
+  import BrandMark from '$lib/components/ui/BrandMark.svelte';
+  import { instanceName } from '$lib/stores/instance.js';
+  import { t } from '$lib/stores/i18n.js';
+
+  // `open` only matters below the drawer breakpoint, where the rail is an
+  // off-canvas drawer the top bar's menu button opens.
+  let { open = false, onclose }: { open?: boolean; onclose?: () => void } = $props();
 
   function itemVisible(item: AdminItem): boolean {
     if (item.permission) return hasPermission(item.permission);
@@ -19,6 +26,12 @@
       .map((s) => ({ ...s, items: s.items.filter(itemVisible) }))
       .filter((s) => s.items.length > 0),
   );
+
+  // Two halves: what staff act on daily, then what they configure.
+  const clusters: { id: AdminCluster; labelKey: string }[] = [
+    { id: 'operate', labelKey: 'admin_shell.cluster_operate' },
+    { id: 'configure', labelKey: 'admin_shell.cluster_configure' },
+  ];
 
   // Live pending counts, shown as red pills next to Approvals / Appeals —
   // the same urgency cue the dashboard uses, so staff feel the queue
@@ -70,42 +83,60 @@
   }
 </script>
 
-<aside class="admin-sidebar">
+{#if open}
+  <button
+    type="button"
+    class="admin-sidebar-backdrop"
+    aria-label={$t('admin_shell.close_menu')}
+    onclick={() => onclose?.()}
+  ></button>
+{/if}
+
+<aside class="admin-sidebar" class:open id="admin-sidebar">
   <div class="admin-sidebar-header">
     <a href="/admin" class="admin-brand">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-      </svg>
-      <span>Admin Panel</span>
+      <span class="admin-brand-mark"><BrandMark size={28} /></span>
+      <span class="admin-brand-text">
+        <span class="admin-brand-name">{$instanceName}</span>
+        <span class="admin-brand-sub">{$t('admin_shell.admin')}</span>
+      </span>
     </a>
   </div>
 
-  <nav class="admin-nav" aria-label="Admin navigation">
-    {#each sections as section (section.title)}
-      <div class="admin-nav-group">
-        <p class="admin-nav-group-title" class:current={sectionActive(section)}>{section.title}</p>
-        <ul class="admin-nav-list">
-          {#each section.items as item (item.href)}
-            {@const count = badgeCount(item)}
-            <li>
-              <a
-                href={item.href}
-                class="admin-nav-item"
-                class:active={isActive(item.href)}
-                aria-current={isActive(item.href) ? 'page' : undefined}
-              >
-                <svg class="admin-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d={item.icon} />
-                </svg>
-                <span class="admin-nav-label">{item.label}</span>
-                {#if count > 0}
-                  <span class="admin-nav-badge" title="{count} pending">{count}</span>
-                {/if}
-              </a>
-            </li>
+  <nav class="admin-nav" aria-label={$t('admin_shell.nav_label')}>
+    {#each clusters as cluster (cluster.id)}
+      {@const clusterSections = sections.filter((s) => s.cluster === cluster.id)}
+      {#if clusterSections.length > 0}
+        <div class="admin-nav-cluster">
+          <p class="admin-nav-cluster-title">{$t(cluster.labelKey)}</p>
+          {#each clusterSections as section (section.title)}
+            <div class="admin-nav-group">
+              <p class="admin-nav-group-title" class:current={sectionActive(section)}>{section.title}</p>
+              <ul class="admin-nav-list">
+                {#each section.items as item (item.href)}
+                  {@const count = badgeCount(item)}
+                  <li>
+                    <a
+                      href={item.href}
+                      class="admin-nav-item"
+                      class:active={isActive(item.href)}
+                      aria-current={isActive(item.href) ? 'page' : undefined}
+                    >
+                      <svg class="admin-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d={item.icon} />
+                      </svg>
+                      <span class="admin-nav-label">{item.label}</span>
+                      {#if count > 0}
+                        <span class="admin-nav-badge" title={$t('admin_shell.pending', { count })}>{count}</span>
+                      {/if}
+                    </a>
+                  </li>
+                {/each}
+              </ul>
+            </div>
           {/each}
-        </ul>
-      </div>
+        </div>
+      {/if}
     {/each}
   </nav>
 
@@ -114,7 +145,7 @@
       <svg class="admin-nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M10 19l-7-7m0 0l7-7m-7 7h18" />
       </svg>
-      <span>Back to App</span>
+      <span>{$t('admin_shell.back_to_app')}</span>
     </a>
   </div>
 </aside>
@@ -124,7 +155,8 @@
     position: sticky;
     top: 0;
     height: 100vh;
-    width: 240px;
+    height: 100dvh;
+    width: 248px;
     display: flex;
     flex-direction: column;
     background: var(--color-surface-raised);
@@ -141,15 +173,40 @@
   .admin-brand {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    font-weight: 700;
-    font-size: var(--text-base);
+    gap: var(--space-3);
+    min-width: 0;
     color: var(--color-text);
     text-decoration: none;
   }
 
   .admin-brand:hover {
     text-decoration: none;
+  }
+
+  .admin-brand-mark {
+    display: flex;
+    flex-shrink: 0;
+    max-width: 96px;
+  }
+
+  .admin-brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.2;
+  }
+
+  .admin-brand-name {
+    font-weight: 700;
+    font-size: var(--text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .admin-brand-sub {
+    font-size: var(--text-xs);
+    font-weight: 600;
     color: var(--color-primary);
   }
 
@@ -159,6 +216,25 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+  }
+
+  .admin-nav-cluster {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .admin-nav-cluster + .admin-nav-cluster {
+    padding-block-start: var(--space-4);
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .admin-nav-cluster-title {
+    margin: 0;
+    padding-inline: var(--space-3);
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text);
   }
 
   .admin-nav-group {
@@ -233,8 +309,8 @@
     height: 20px;
     padding: 0 6px;
     border-radius: 9999px;
-    background: var(--color-danger, #dc2626);
-    color: #fff;
+    background: var(--color-danger);
+    color: var(--color-text-on-primary);
     font-size: 0.7rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
@@ -254,12 +330,55 @@
     color: var(--color-text);
   }
 
-  @media (max-width: 768px) {
+  .admin-sidebar-backdrop {
+    display: none;
+  }
+
+  /* Below this width the rail becomes a drawer opened from the top bar. */
+  @media (max-width: 900px) {
     .admin-sidebar {
       position: fixed;
-      z-index: var(--z-sticky);
+      inset-block: 0;
+      inset-inline-start: 0;
+      z-index: var(--z-modal);
+      box-shadow: var(--shadow-xl);
       transform: translateX(-100%);
-      transition: transform var(--transition-base);
+      visibility: hidden;
+      transition: transform var(--transition-base), visibility var(--transition-base);
+    }
+
+    :global([dir='rtl']) .admin-sidebar {
+      transform: translateX(100%);
+    }
+
+    .admin-sidebar.open,
+    :global([dir='rtl']) .admin-sidebar.open {
+      transform: none;
+      visibility: visible;
+    }
+
+    .admin-sidebar-backdrop {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: var(--z-modal-backdrop);
+      border: 0;
+      padding: 0;
+      background: var(--color-overlay);
+      cursor: pointer;
+    }
+  }
+
+  /* Finger-sized targets on touch screens, whatever the width. */
+  @media (pointer: coarse) {
+    .admin-nav-item {
+      min-height: 44px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-sidebar {
+      transition: none;
     }
   }
 </style>

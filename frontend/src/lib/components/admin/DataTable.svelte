@@ -172,11 +172,11 @@
   }
 
   :global(.data-table tbody tr:nth-child(even)) {
-    background: var(--color-surface, #f9fafb);
+    background: var(--color-surface);
   }
 
   :global(.data-table tbody tr:hover) {
-    background: var(--color-surface-container-low, #f0f2f3);
+    background: var(--color-surface-container-low);
   }
 
   :global(.data-table tbody tr:last-child td) {

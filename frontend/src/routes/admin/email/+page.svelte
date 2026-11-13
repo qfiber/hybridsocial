@@ -318,7 +318,7 @@
   .env-notice code {
     font-family: var(--font-mono, monospace);
     font-size: 0.85em;
-    background: var(--color-surface-container-high, rgba(127, 127, 127, 0.12));
+    background: var(--color-surface-container-high);
     padding: 1px 5px;
     border-radius: 4px;
   }
