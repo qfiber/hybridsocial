@@ -57,6 +57,8 @@ defmodule Hybridsocial.HTTP do
       ]
       |> maybe_put(:body, request_body(method, body))
       |> maybe_put(:params, Keyword.get(opts, :params))
+      # Test seam: a `Req.Test` stub. Never passed in production code.
+      |> maybe_put(:plug, Keyword.get(opts, :plug))
       |> put_receive_timeout(opts)
       |> put_connect_options(opts)
 

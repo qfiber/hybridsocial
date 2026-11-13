@@ -95,10 +95,45 @@ defmodule Hybridsocial.Federation.HTTPSignature do
   """
   def verify(conn) do
     with {:ok, sig_params} <- parse_signature_header(conn),
+         {:ok, key_id} <- fetch_key_id(sig_params),
          :ok <- verify_date_freshness(conn),
-         {:ok, public_key_pem} <- fetch_public_key(sig_params["keyId"]),
-         {:ok, _} <- verify_signature(conn, sig_params, public_key_pem) do
-      {:ok, sig_params["keyId"]}
+         {:ok, _} <- verify_with_key(conn, sig_params, key_id) do
+      {:ok, key_id}
+    end
+  end
+
+  defp fetch_key_id(%{"keyId" => key_id}) when is_binary(key_id) and key_id != "",
+    do: {:ok, key_id}
+
+  defp fetch_key_id(_), do: {:error, :missing_key_id}
+
+  # Verify against the cached key first; on a miss, or if the cached key no
+  # longer verifies (the actor rotated it), fetch the current key once and
+  # try again. A forged signature costs at most one fetch per keyId per
+  # cache window, never one per request.
+  defp verify_with_key(conn, sig_params, key_id) do
+    case cached_public_key(key_id) do
+      nil ->
+        with {:ok, pem} <- fetch_and_cache_public_key(key_id) do
+          verify_signature(conn, sig_params, pem)
+        end
+
+      cached_pem ->
+        case verify_signature(conn, sig_params, cached_pem) do
+          {:ok, _} = ok ->
+            ok
+
+          {:error, :invalid_signature} ->
+            with {:ok, pem} when pem != cached_pem <- fetch_and_cache_public_key(key_id) do
+              verify_signature(conn, sig_params, pem)
+            else
+              {:ok, _same_pem} -> {:error, :invalid_signature}
+              error -> error
+            end
+
+          error ->
+            error
+        end
     end
   end
 
@@ -214,42 +249,64 @@ defmodule Hybridsocial.Federation.HTTPSignature do
     end
   end
 
+  @key_cache_prefix "httpsig:key:"
+
+  defp cached_public_key(key_id) do
+    case Hybridsocial.Cache.get(@key_cache_prefix <> key_id) do
+      pem when is_binary(pem) -> pem
+      _ -> nil
+    end
+  end
+
+  defp fetch_and_cache_public_key(key_id) do
+    with {:ok, pem} <- fetch_public_key(key_id) do
+      Hybridsocial.Cache.set(@key_cache_prefix <> key_id, pem, key_cache_ttl())
+      {:ok, pem}
+    end
+  end
+
+  defp key_cache_ttl do
+    case Hybridsocial.Config.get("federation_key_cache_seconds", 3600) do
+      n when is_integer(n) and n > 0 -> n
+      _ -> 3600
+    end
+  end
+
+  # Signed with the instance actor (`SignedFetch`). Mastodon's secure mode
+  # (authorized fetch), now on at mastodon.social and many others, answers
+  # 401 to an unsigned actor fetch, and an unsigned key lookup meant we could
+  # never verify, and so 401'd, every delivery from those servers. There's
+  # no verification loop: the peer verifies our GET by fetching our instance
+  # actor, which is served to anyone without a signature.
   defp fetch_public_key(key_id) do
     actor_url = key_id |> String.split("#") |> List.first()
-
-    uri = URI.parse(actor_url)
-    host = uri.host || ""
+    host = URI.parse(actor_url).host || ""
 
     # Reject requests to private/internal hosts to prevent SSRF
     if private_host?(host) do
       {:error, :private_host}
     else
-      # INTENTIONALLY UNSIGNED. This fetch retrieves a remote actor's
-      # public key so we can verify their signature. Signing it would
-      # require them to fetch our key to verify, which would (with their
-      # own secure-mode) require them to verify our fetch — and so on.
-      # Key-discovery GETs are unsigned by convention across the fediverse.
-      headers = [
-        {"Accept", "application/activity+json"}
-      ]
+      opts =
+        [timeout: 5_000, recv_timeout: 5_000, max_body_length: 100_000] ++
+          Application.get_env(:hybridsocial, :http_signature_fetch_options, [])
 
-      case Hybridsocial.HTTP.get(actor_url, headers,
-             timeout: 5_000,
-             recv_timeout: 5_000,
-             max_body_length: 100_000
-           ) do
-        {:ok, %{status_code: 200, body: body}} ->
-          case Jason.decode(body) do
-            {:ok, %{"publicKey" => %{"publicKeyPem" => pem}}} ->
-              {:ok, pem}
-
-            _ ->
-              {:error, :invalid_actor}
-          end
-
-        _ ->
-          {:error, :fetch_failed}
+      case Hybridsocial.Federation.SignedFetch.get(actor_url, opts) do
+        {:ok, %{status_code: 200, body: body}} -> extract_public_key(body, key_id)
+        _ -> {:error, :fetch_failed}
       end
+    end
+  end
+
+  # The key must be the one the signature names: `publicKey.id == keyId`.
+  # Otherwise any key published under an actor URL could stand in for a
+  # different keyId. Some servers publish a list of keys.
+  defp extract_public_key(body, key_id) do
+    with {:ok, %{"publicKey" => keys}} <- Jason.decode(body),
+         %{"publicKeyPem" => pem} when is_binary(pem) <-
+           keys |> List.wrap() |> Enum.find(&match?(%{"id" => ^key_id}, &1)) do
+      {:ok, pem}
+    else
+      _ -> {:error, :invalid_actor}
     end
   end
 
@@ -261,8 +318,20 @@ defmodule Hybridsocial.Federation.HTTPSignature do
   end
 
   defp verify_signature(conn, sig_params, public_key_pem) do
-    headers_to_verify = String.split(sig_params["headers"], " ")
+    # draft-cavage: an absent `headers` parameter means just "date".
+    headers_to_verify = String.split(sig_params["headers"] || "date", " ", trim: true)
 
+    if conn.method == "POST" and "digest" not in headers_to_verify do
+      # DigestPlug checks the body against the Digest header, but unless that
+      # header is itself signed, a captured signature could be replayed with
+      # another body. Every major implementation signs it on POST.
+      {:error, :digest_not_signed}
+    else
+      do_verify_signature(conn, sig_params, headers_to_verify, public_key_pem)
+    end
+  end
+
+  defp do_verify_signature(conn, sig_params, headers_to_verify, public_key_pem) do
     request_data =
       headers_to_verify
       |> Enum.map(fn
@@ -292,15 +361,26 @@ defmodule Hybridsocial.Federation.HTTPSignature do
 
     signing_string = build_signing_string(headers_to_verify, request_data)
 
-    [pem_entry] = :public_key.pem_decode(public_key_pem)
-    public_key = :public_key.pem_entry_decode(pem_entry)
-
-    signature = Base.decode64!(sig_params["signature"])
-
-    if :public_key.verify(signing_string, :sha256, signature, public_key) do
-      {:ok, sig_params["keyId"]}
+    # Malformed input from a peer is a rejection, not a crash.
+    with {:ok, public_key} <- decode_public_key(public_key_pem),
+         {:ok, signature} <- Base.decode64(sig_params["signature"] || "") do
+      if :public_key.verify(signing_string, :sha256, signature, public_key) do
+        {:ok, sig_params["keyId"]}
+      else
+        {:error, :invalid_signature}
+      end
     else
-      {:error, :invalid_signature}
+      :error -> {:error, :invalid_signature}
+      {:error, _} = error -> error
     end
+  end
+
+  defp decode_public_key(pem) do
+    case :public_key.pem_decode(pem) do
+      [entry] -> {:ok, :public_key.pem_entry_decode(entry)}
+      _ -> {:error, :invalid_key}
+    end
+  rescue
+    _ -> {:error, :invalid_key}
   end
 end

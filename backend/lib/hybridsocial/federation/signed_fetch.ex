@@ -19,14 +19,16 @@ defmodule Hybridsocial.Federation.SignedFetch do
   existing error path handles that. Run `mix hybridsocial.gen.instance_keys`
   to fix the warning.
 
+  ## Key discovery is signed too
+
+  `HTTPSignature.fetch_public_key/1` goes through this helper. Secure-mode
+  peers 401 an unsigned actor fetch, so an unsigned key lookup left us
+  unable to verify (and so refusing) every delivery from them. There's no
+  verification loop: the peer verifies our GET by fetching our instance
+  actor at `/actor`, which is served to anyone without a signature.
+
   ## Excluded paths
 
-  - HTTP-Signature key fetch in `HTTPSignature.fetch_public_key/1` is
-    NOT routed through this helper — verifying a remote's signature
-    requires fetching their public key, and if THAT fetch were also
-    signed, the remote would need our key to verify, requiring them
-    to fetch us, requiring our verifier to verify them, etc. The
-    convention is: key-discovery GETs are unsigned.
   - `Webfinger` and `NodeInfo` are unsigned by their own specs and
     must remain so.
   """
