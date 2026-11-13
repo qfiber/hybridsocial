@@ -5,10 +5,20 @@ defmodule Hybridsocial.Instance do
   alias Hybridsocial.Config
 
   @doc """
-  Canonical semver — read from mix.exs via the compiled app spec, so it's
-  a single source of truth (no more hand-syncing a hardcoded copy).
+  The release version (CalVer `YYYY.MM.N`), read from mix.exs via the
+  compiled app spec, so it's a single source of truth.
   """
   def version, do: to_string(Application.spec(:hybridsocial, :vsn) || ~c"0.0.0")
+
+  @doc """
+  User-Agent for every outbound request: software, version and the
+  instance URL, as fediverse servers expect, so a remote admin can tell
+  who is calling. `component` names a specific client (e.g. "MediaProxy").
+  """
+  def user_agent(component \\ nil) do
+    name = if component, do: "HybridSocial #{component}", else: "HybridSocial"
+    "#{name}/#{version()} (+#{HybridsocialWeb.Endpoint.url()})"
+  end
 
   @doc """
   Short git SHA the running release was built from ('dev' when built

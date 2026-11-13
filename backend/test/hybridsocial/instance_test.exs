@@ -12,7 +12,7 @@ defmodule Hybridsocial.InstanceTest do
   test "info returns instance data" do
     info = Instance.info()
     assert info.title == "HybridSocial"
-    assert info.version =~ "HybridSocial 0.1.0"
+    assert info.version =~ "HybridSocial #{Hybridsocial.Instance.version()}"
     assert is_map(info.stats)
     assert is_integer(info.stats.user_count)
   end
@@ -23,5 +23,16 @@ defmodule Hybridsocial.InstanceTest do
     assert ni.software.name == "hybridsocial"
     assert "activitypub" in ni.protocols
     assert is_integer(ni.usage.localPosts)
+  end
+
+  test "user_agent/0 names the software, the real version and this instance" do
+    ua = Hybridsocial.Instance.user_agent()
+
+    assert ua ==
+             "HybridSocial/#{Hybridsocial.Instance.version()} (+#{HybridsocialWeb.Endpoint.url()})"
+
+    assert Hybridsocial.Instance.user_agent("MediaProxy") =~ ~r{^HybridSocial MediaProxy/}
+    # Other HybridSocial instances detect previews by the "hybridsocial" substring.
+    assert String.downcase(Hybridsocial.Instance.user_agent("LinkPreview")) =~ "hybridsocial"
   end
 end
