@@ -12,16 +12,23 @@ defmodule HybridsocialWeb.Plugs.DigestPlug do
   """
   import Plug.Conn
 
+  alias Hybridsocial.Federation.HTTPMessageSignature
+
   require Logger
 
   def init(opts), do: opts
 
   def call(%{method: "POST"} = conn, _opts) do
-    case get_req_header(conn, "digest") do
-      [digest_header] ->
+    case {get_req_header(conn, "digest"), get_req_header(conn, "content-digest")} do
+      {[digest_header], _} ->
         verify_digest(conn, digest_header)
 
-      [] ->
+      # RFC 9421 senders use RFC 9530 Content-Digest instead. The signature
+      # must cover it (HTTPMessageSignature requires that on POST).
+      {[], [_ | _] = content_digest} ->
+        verify_content_digest(conn, Enum.join(content_digest, ", "))
+
+      {[], []} ->
         if signature_check_enabled?() do
           Logger.warning(
             "Inbox POST missing Digest header (#{conn.request_path}) " <>
@@ -66,6 +73,21 @@ defmodule HybridsocialWeb.Plugs.DigestPlug do
 
   defp signature_check_enabled? do
     Application.get_env(:hybridsocial, :federation_signature_check, true)
+  end
+
+  defp verify_content_digest(conn, header) do
+    case HTTPMessageSignature.verify_content_digest(header, read_cached_body(conn)) do
+      :ok ->
+        conn
+
+      {:error, reason} ->
+        Logger.warning("Content-Digest rejected: #{reason}")
+
+        conn
+        |> put_status(401)
+        |> Phoenix.Controller.json(%{error: "Invalid digest"})
+        |> halt()
+    end
   end
 
   defp verify_digest(conn, digest_header) do
