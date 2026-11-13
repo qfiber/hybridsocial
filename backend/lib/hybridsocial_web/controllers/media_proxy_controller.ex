@@ -78,16 +78,45 @@ defmodule HybridsocialWeb.MediaProxyController do
     # SHA-256 of the verified remote URL — never user input.
     with {:ok, %{tmp_path: tmp_path, content_type: ct, byte_size: size}} <-
            stream_remote_to_tmp(remote_url),
-         :ok <- scan_file_or_cleanup(tmp_path),
-         content_type = sanitize_content_type(ct),
-         {:ok, %{path: cache_path}} <-
-           MediaProxyCache.store_path(remote_url, tmp_path, content_type, size) do
-      conn
-      |> put_response_headers(content_type)
-      |> serve_with_range(cache_path)
+         :ok <- scan_file_or_cleanup(tmp_path) do
+      content_type = sanitize_content_type(ct)
+
+      if MediaProxyCache.enabled?() do
+        serve_cached(conn, remote_url, tmp_path, content_type, size)
+      else
+        serve_uncached(conn, tmp_path, content_type)
+      end
     else
       {:error, reason} -> handle_error(conn, reason)
     end
+  end
+
+  # sobelow_skip ["Traversal.SendFile"]
+  defp serve_cached(conn, remote_url, tmp_path, content_type, size) do
+    case MediaProxyCache.store_path(remote_url, tmp_path, content_type, size) do
+      {:ok, %{path: cache_path}} ->
+        conn
+        |> put_response_headers(content_type)
+        |> serve_with_range(cache_path)
+
+      {:error, reason} ->
+        handle_error(conn, reason)
+    end
+  end
+
+  # With `media_proxy_cache_enabled` off there's no cache file to promote
+  # into, so serve the scanned tmp download directly and delete it once
+  # it's sent. `after` also covers a client that hangs up mid-transfer.
+  # (Handing the tmp file to `store_path/4` here used to delete it and
+  # return a bare `:ok` that matched no clause: a 500 on every request.)
+  # sobelow_skip ["Traversal.SendFile", "Traversal.FileModule"]
+  # Safe: tmp_path comes from new_tmp_path/0 (random name in our own dir).
+  defp serve_uncached(conn, tmp_path, content_type) do
+    conn
+    |> put_response_headers(content_type)
+    |> serve_with_range(tmp_path)
+  after
+    File.rm(tmp_path)
   end
 
   # send_file/3 ignores Range headers — Plug.Static handles them but
@@ -187,7 +216,7 @@ defmodule HybridsocialWeb.MediaProxyController do
       end
 
       result =
-        case Req.request(
+        case [
                method: :get,
                url: url,
                headers: headers,
@@ -198,7 +227,9 @@ defmodule HybridsocialWeb.MediaProxyController do
                decode_body: false,
                retry: false,
                into: collector
-             ) do
+             ]
+             |> Keyword.merge(req_test_options())
+             |> Req.request() do
           {:ok, resp} ->
             cond do
               resp.status not in 200..299 ->
@@ -227,6 +258,10 @@ defmodule HybridsocialWeb.MediaProxyController do
       finalize_stream(result, tmp_path)
     end
   end
+
+  # Test seam: lets tests route the upstream fetch to a `Req.Test` stub.
+  # Unset (empty) outside tests.
+  defp req_test_options, do: Application.get_env(:hybridsocial, :media_proxy_req_options, [])
 
   defp put_resp_private(resp, key, value) do
     %{resp | private: Map.put(resp.private, key, value)}
