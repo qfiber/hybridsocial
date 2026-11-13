@@ -211,3 +211,17 @@ Gates for each: `mix precommit`, `npm run check` (0 errors), `node scripts/check
   stored strings typed on cache load. Also fixes: Tiers page saved limits as strings
   (`"800"`), which the post changeset used as a length; `false` settings were listed as
   `{"value": false}`.
+- PR 2 (`feat/admin-shell-primitives`): instance-branded sidebar with Operate/Configure
+  clusters, top bar (breadcrumb, sudo countdown, mobile drawer), AdminPage /
+  SettingsSection / SettingRow / SaveBar / StatusPill, hardcoded colors moved to tokens.
+- PR 3 (`feat/admin-settings-pages`): the registry covers every `Config.get` tunable
+  (about 160 keys, each with default, unit, section, Advanced flag and conditional
+  visibility); a test fails if a new key is neither registered nor deliberately unmanaged,
+  and another if a rendered setting lacks an English label. One permission per group
+  (`settings.<group>`, reusing `settings.manage`, `theme.manage`, `federation.manage`),
+  granted on migrate to every role holding `settings.manage`. `GET /admin/settings/schema`
+  and `DELETE /admin/settings/:key` (reset). Twelve `/admin/settings/<group>` pages rendered
+  from the schema; dedicated editors become hidden nav items under their group;
+  `/admin/instance/general` redirects. Still unmanaged and needing editors: `mrf_policies`,
+  `mrf_keyword_replace`, `upload_filters`.
+

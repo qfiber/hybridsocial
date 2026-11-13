@@ -18,7 +18,7 @@
     return true;
   }
   const hubSections = adminSections
-    .map((s) => ({ ...s, items: s.items.filter((i) => i.href !== '/admin' && itemVisible(i)) }))
+    .map((s) => ({ ...s, items: s.items.filter((i) => i.href !== '/admin' && !i.hidden && itemVisible(i)) }))
     .filter((s) => s.items.length > 0);
 
   let stats: AdminDashboardStats | null = $state(null);

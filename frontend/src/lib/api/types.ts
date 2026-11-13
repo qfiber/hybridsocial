@@ -817,6 +817,45 @@ export interface AdminSetting {
   set?: boolean;
 }
 
+export type SettingValue = string | number | boolean | string[] | null;
+
+/** One registered setting, as `GET /api/v1/admin/settings/schema` describes it. */
+export interface SettingSchemaEntry {
+  key: string;
+  section: string;
+  type: 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'enum';
+  options: string[] | null;
+  default: SettingValue;
+  /** The effective value: stored, or the default. `null` for a secret. */
+  value: SettingValue;
+  /** Whether a value is stored (false = running on the default). */
+  stored: boolean;
+  /** Secrets only: whether one is stored. */
+  set: boolean | null;
+  secret: boolean;
+  advanced: boolean;
+  multiline: boolean;
+  nullable: boolean;
+  min: number | null;
+  max: number | null;
+  max_length: number | null;
+  unit: string | null;
+  visible_when: { key: string; value: string } | null;
+}
+
+export interface SettingsSchemaGroup {
+  id: string;
+  permission: string;
+  can_manage: boolean;
+  sections: { id: string; settings: SettingSchemaEntry[] }[];
+}
+
+/** A per-key failure from a 422 `settings.invalid` response. */
+export interface SettingError {
+  key: string | null;
+  error: string;
+}
+
 export interface ServiceHealth {
   status: 'up' | 'down' | 'degraded' | 'not_configured';
   backend?: string;

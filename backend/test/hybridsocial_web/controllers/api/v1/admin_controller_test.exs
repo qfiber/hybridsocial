@@ -1310,6 +1310,12 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
     defp put_settings(conn, settings),
       do: put(conn, "/api/v1/admin/settings", %{"settings" => settings})
 
+    defp grant_permission(role, name) do
+      permission = Repo.get_by!(Hybridsocial.Auth.Permission, name: name)
+      {:ok, _} = RBAC.add_permission_to_role(role.id, permission.id)
+      :ok
+    end
+
     test "writes registered keys, typed", %{conn: conn} do
       body =
         conn
@@ -1422,6 +1428,90 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
         |> Enum.find(&(&1["key"] == "pow_enabled"))
 
       assert listed["value"] == false
+    end
+
+    test "schema groups settings, marks stored values and masks secrets", %{conn: conn} do
+      conn
+      |> put_settings([
+        %{"key" => "max_media_per_post", "value" => 6},
+        %{"key" => "stripe_secret_key", "value" => "sk_live_hidden"}
+      ])
+      |> json_response(200)
+
+      %{"groups" => groups} = conn |> get("/api/v1/admin/settings/schema") |> json_response(200)
+
+      assert Enum.map(groups, & &1["id"]) |> List.first() == "general"
+      assert Enum.all?(groups, & &1["can_manage"])
+
+      settings =
+        for g <- groups, s <- g["sections"], e <- s["settings"], into: %{}, do: {e["key"], e}
+
+      assert %{"value" => 6, "default" => 4, "stored" => true, "type" => "integer"} =
+               settings["max_media_per_post"]
+
+      assert %{"value" => 5, "stored" => false} = settings["max_profile_fields"]
+      assert %{"value" => nil, "secret" => true, "set" => true} = settings["stripe_secret_key"]
+      refute conn |> get("/api/v1/admin/settings/schema") |> response(200) =~ "sk_live_hidden"
+
+      assert %{"type" => "enum", "options" => ["open", "approval", "invite_only", "closed"]} =
+               settings["registration_mode"]
+
+      assert settings["turnstile_site_key"]["visible_when"] ==
+               %{"key" => "captcha_provider", "value" => "turnstile"}
+
+      # Dedicated-page settings stay on their own pages.
+      refute Map.has_key?(settings, "user_posts_per_hour")
+      refute Map.has_key?(settings, "tier_free_char_limit")
+    end
+
+    test "reset deletes the stored value so the default applies", %{conn: conn} do
+      conn |> put_settings([%{"key" => "max_media_per_post", "value" => 6}]) |> json_response(200)
+
+      assert conn |> delete("/api/v1/admin/settings/max_media_per_post") |> response(204)
+      assert Config.get("max_media_per_post") == nil
+      assert Repo.get(Config.Setting, "max_media_per_post") == nil
+
+      assert conn |> delete("/api/v1/admin/settings/not_a_setting") |> json_response(404)
+    end
+
+    test "each settings group needs its own permission", %{plain: conn} do
+      # A moderator holds no settings permissions.
+      moderator = create_moderator("settings_mod")
+      conn = admin_conn(conn, moderator)
+
+      assert %{"required" => "settings.posting"} =
+               conn
+               |> put_settings([%{"key" => "max_media_per_post", "value" => 6}])
+               |> json_response(403)
+
+      assert %{"required" => "federation.manage"} =
+               conn
+               |> put_settings([%{"key" => "federation_enabled", "value" => false}])
+               |> json_response(403)
+
+      assert conn |> delete("/api/v1/admin/settings/max_media_per_post") |> json_response(403)
+      assert Config.get("max_media_per_post") == nil
+    end
+
+    test "a role granted one group can write that group only", %{plain: conn} do
+      editor = create_moderator("settings_editor")
+      {:ok, role} = RBAC.create_role(%{name: "limits_editor", description: "Limits"})
+      :ok = grant_permission(role, "settings.posting")
+      {:ok, _} = RBAC.assign_role(editor.id, "limits_editor", editor.id)
+      conn = admin_conn(conn, editor)
+
+      conn |> put_settings([%{"key" => "max_media_per_post", "value" => 8}]) |> json_response(200)
+      assert Config.get("max_media_per_post") == 8
+
+      # A mixed batch is refused whole when any group is out of reach.
+      conn
+      |> put_settings([
+        %{"key" => "max_media_per_post", "value" => 9},
+        %{"key" => "rate_limit_login", "value" => 50}
+      ])
+      |> json_response(403)
+
+      assert Config.get("max_media_per_post") == 8
     end
 
     test "requires settings.manage to write", %{plain: conn} do

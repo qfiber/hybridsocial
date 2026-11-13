@@ -3,7 +3,7 @@
   // breadcrumb resolved from the nav catalog, and the sudo window countdown so
   // staff can see when they'll be asked to re-authenticate.
   import { page } from '$app/state';
-  import { adminItemForPath, adminSectionForItem } from '$lib/admin-nav.js';
+  import { adminItemForPath, adminSectionForItem, adminItemByHref } from '$lib/admin-nav.js';
   import { sudoExpiresAt } from '$lib/stores/admin-sudo.js';
   import { t } from '$lib/stores/i18n.js';
 
@@ -11,6 +11,8 @@
 
   let item = $derived(adminItemForPath(page.url.pathname));
   let section = $derived(item ? adminSectionForItem(item) : null);
+  // A dedicated editor sits under the settings page it belongs to.
+  let parent = $derived(item?.parent ? adminItemByHref(item.parent) : null);
   // A sub-page (a report, a user) sits below its item in the trail.
   let isSubPage = $derived(!!item && page.url.pathname !== item.href);
 
@@ -45,6 +47,9 @@
     <ol>
       {#if section}
         <li>{section.title}</li>
+      {/if}
+      {#if parent}
+        <li><a href={parent.href}>{parent.label}</a></li>
       {/if}
       {#if item}
         <li>
@@ -131,6 +136,12 @@
     display: flex;
     align-items: center;
     gap: var(--space-2);
+    flex-shrink: 0;
+  }
+
+  /* Only the current page truncates; the trail before it stays readable. */
+  .admin-breadcrumb li:last-child {
+    flex-shrink: 1;
     min-width: 0;
   }
 
