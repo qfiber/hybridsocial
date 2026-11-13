@@ -8,6 +8,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   alias Hybridsocial.Accounts
   alias Hybridsocial.Social.Posts
   alias Hybridsocial.Auth.RBAC
+  alias Hybridsocial.Config.Registry
   import HybridsocialWeb.Helpers.Pagination, only: [clamp_limit: 1]
 
   # ── Permission helper ──────────────────────────────────────────────
@@ -913,15 +914,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
         Hybridsocial.Config.Setting
         |> Hybridsocial.Repo.all()
         |> Enum.reject(&hidden_setting?/1)
-        |> Enum.map(fn s ->
-          %{
-            key: s.key,
-            value: get_in(s.value, ["value"]) || s.value,
-            type: s.type,
-            category: s.category,
-            description: s.description
-          }
-        end)
+        |> Enum.map(&serialize_setting/1)
 
       json(conn, settings)
     else
@@ -929,38 +922,78 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     end
   end
 
+  # Writes are allowlisted and typed by `Config.Registry`. The batch is
+  # validated as a whole first, so a bad entry can't leave half a form saved.
   def update_settings(conn, %{"settings" => settings_list}) when is_list(settings_list) do
-    with :ok <- require_permission(conn, "settings.manage") do
+    with :ok <- require_permission(conn, "settings.manage"),
+         {:ok, changes} <- cast_settings(settings_list) do
       admin_id = conn.assigns.current_identity.id
+      ip = conn.remote_ip |> :inet.ntoa() |> to_string()
 
       updated =
-        Enum.map(settings_list, fn %{"key" => key, "value" => value} ->
-          Hybridsocial.Config.set(key, value)
+        Enum.map(changes, fn {key, value} ->
+          :ok = Hybridsocial.Config.set(key, value)
 
-          # Log the change
-          ip = conn.remote_ip |> :inet.ntoa() |> to_string()
-          Moderation.log(admin_id, "settings.updated", "setting", key, %{value: value}, ip)
+          # A secret's value must never reach the audit log.
+          logged = if Registry.secret?(key), do: "[redacted]", else: value
+          Moderation.log(admin_id, "settings.updated", "setting", key, %{value: logged}, ip)
 
-          setting = Hybridsocial.Repo.get(Hybridsocial.Config.Setting, key)
-
-          %{
-            key: setting.key,
-            value: get_in(setting.value, ["value"]) || setting.value,
-            type: setting.type,
-            category: setting.category,
-            description: setting.description
-          }
+          Hybridsocial.Config.Setting
+          |> Hybridsocial.Repo.get(key)
+          |> serialize_setting()
         end)
 
       json(conn, updated)
     else
-      {:error, perm} -> deny(conn, perm)
+      {:error, :invalid, errors} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "settings.invalid", errors: errors})
+
+      {:error, perm} ->
+        deny(conn, perm)
     end
   end
 
   def update_settings(conn, _params) do
     conn |> put_status(:bad_request) |> json(%{error: "settings.invalid_format"})
   end
+
+  defp cast_settings(settings_list) do
+    {changes, errors} =
+      Enum.reduce(settings_list, {[], []}, fn
+        %{"key" => key, "value" => value}, {ok, bad} when is_binary(key) ->
+          case Registry.cast(key, value) do
+            {:ok, cast} -> {[{key, cast} | ok], bad}
+            {:error, reason} -> {ok, [%{key: key, error: Atom.to_string(reason)} | bad]}
+          end
+
+        _entry, {ok, bad} ->
+          {ok, [%{key: nil, error: "malformed_entry"} | bad]}
+      end)
+
+    case errors do
+      [] -> {:ok, Enum.reverse(changes)}
+      _ -> {:error, :invalid, Enum.reverse(errors)}
+    end
+  end
+
+  # Secrets are write-only: the response says whether one is set, never what
+  # it is. Everything else reads back typed, so `false` stays `false`.
+  defp serialize_setting(%Hybridsocial.Config.Setting{} = s) do
+    raw = stored_value(s.value)
+
+    base = %{key: s.key, type: s.type, category: s.category, description: s.description}
+
+    if Registry.secret?(s.key) do
+      Map.merge(base, %{value: nil, secret: true, set: raw not in [nil, ""]})
+    else
+      Map.put(base, :value, Registry.normalize(s.key, raw))
+    end
+  end
+
+  defp stored_value(%{"value" => value}), do: value
+  defp stored_value(value), do: value
 
   # ── Instance Rules ──────────────────────────────────────────────────
 

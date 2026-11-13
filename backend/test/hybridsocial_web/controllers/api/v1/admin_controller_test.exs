@@ -1294,4 +1294,143 @@ defmodule HybridsocialWeb.Api.V1.AdminControllerTest do
              |> json_response(201)
     end
   end
+
+  describe "generic settings API" do
+    alias Hybridsocial.Config
+    alias Hybridsocial.Moderation.AuditLog
+    alias Hybridsocial.Repo
+
+    setup %{conn: conn} do
+      Ecto.Adapters.SQL.Sandbox.mode(Repo, {:shared, self()})
+      start_supervised!(Config.Store)
+
+      %{conn: admin_conn(conn, create_admin("settings_admin")), plain: conn}
+    end
+
+    defp put_settings(conn, settings),
+      do: put(conn, "/api/v1/admin/settings", %{"settings" => settings})
+
+    test "writes registered keys, typed", %{conn: conn} do
+      body =
+        conn
+        |> put_settings([
+          %{"key" => "pow_difficulty", "value" => "18"},
+          %{"key" => "pow_enabled", "value" => "true"},
+          %{"key" => "tier_free_char_limit", "value" => "900"}
+        ])
+        |> json_response(200)
+
+      assert Enum.map(body, & &1["value"]) == [18, true, 900]
+      assert Config.get("pow_difficulty") == 18
+      assert Config.get("pow_enabled") == true
+      assert Config.get("tier_free_char_limit") == 900
+    end
+
+    test "rejects an unknown key and writes nothing from the batch", %{conn: conn} do
+      body =
+        conn
+        |> put_settings([
+          %{"key" => "pow_difficulty", "value" => 20},
+          %{"key" => "made_up_setting", "value" => "x"}
+        ])
+        |> json_response(422)
+
+      assert body["error"] == "settings.invalid"
+      assert body["errors"] == [%{"key" => "made_up_setting", "error" => "unknown_key"}]
+      assert Config.get("pow_difficulty") == nil
+      assert Repo.get(Config.Setting, "made_up_setting") == nil
+    end
+
+    test "rejects out-of-range and wrongly typed values", %{conn: conn} do
+      body =
+        conn
+        |> put_settings([
+          %{"key" => "pow_difficulty", "value" => 99},
+          %{"key" => "registration_mode", "value" => "secret"},
+          %{"value" => 1}
+        ])
+        |> json_response(422)
+
+      assert body["errors"] == [
+               %{"key" => "pow_difficulty", "error" => "above_maximum"},
+               %{"key" => "registration_mode", "error" => "invalid_option"},
+               %{"key" => nil, "error" => "malformed_entry"}
+             ]
+    end
+
+    test "never returns a secret, on write or on list", %{conn: conn} do
+      secret = "sk_live_do_not_leak"
+
+      [written] =
+        conn
+        |> put_settings([%{"key" => "stripe_secret_key", "value" => secret}])
+        |> json_response(200)
+
+      assert written["value"] == nil
+      assert written["secret"] == true
+      assert written["set"] == true
+
+      listed =
+        conn
+        |> get("/api/v1/admin/settings")
+        |> json_response(200)
+        |> Enum.find(&(&1["key"] == "stripe_secret_key"))
+
+      assert listed["value"] == nil
+      assert listed["set"] == true
+      refute conn |> get("/api/v1/admin/settings") |> response(200) =~ secret
+
+      # The real value is still stored for the code that needs it.
+      assert Config.get("stripe_secret_key") == secret
+    end
+
+    test "masks secret-looking keys that were stored by other paths", %{conn: conn} do
+      :ok = Config.set("future_service_api_key", "abc123")
+
+      listed =
+        conn
+        |> get("/api/v1/admin/settings")
+        |> json_response(200)
+        |> Enum.find(&(&1["key"] == "future_service_api_key"))
+
+      assert listed["value"] == nil
+      assert listed["secret"] == true
+    end
+
+    test "redacts secrets in the audit log but records other values", %{conn: conn} do
+      conn
+      |> put_settings([
+        %{"key" => "turnstile_secret_key", "value" => "ts-secret-value"},
+        %{"key" => "pow_difficulty", "value" => 12}
+      ])
+      |> json_response(200)
+
+      logs = Repo.all(AuditLog) |> Enum.filter(&(&1.action == "settings.updated"))
+      by_key = Map.new(logs, &{&1.target_id, &1.details})
+
+      assert by_key["turnstile_secret_key"] == %{"value" => "[redacted]"}
+      assert by_key["pow_difficulty"] == %{"value" => 12}
+    end
+
+    test "lists false booleans as false, not as the stored wrapper", %{conn: conn} do
+      conn |> put_settings([%{"key" => "pow_enabled", "value" => false}]) |> json_response(200)
+
+      listed =
+        conn
+        |> get("/api/v1/admin/settings")
+        |> json_response(200)
+        |> Enum.find(&(&1["key"] == "pow_enabled"))
+
+      assert listed["value"] == false
+    end
+
+    test "requires settings.manage to write", %{plain: conn} do
+      conn = auth_conn(conn, create_user("settings_nosy"))
+
+      response = put_settings(conn, [%{"key" => "pow_enabled", "value" => true}])
+
+      assert response.status in [401, 403]
+      assert Config.get("pow_enabled") == nil
+    end
+  end
 end
