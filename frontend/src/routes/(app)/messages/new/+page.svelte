@@ -11,6 +11,8 @@
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import { instanceName } from '$lib/stores/instance.js';
+  import { addToast } from '$lib/stores/toast.js';
+  import { tError } from '$lib/utils/i18n.js';
 
   let query = $state('');
   let results = $state<Identity[]>([]);
@@ -172,6 +174,8 @@
             }),
           );
         }, 50);
+      } else if (err?.body?.error) {
+        addToast(tError(err.body.error), 'error');
       }
     }
   }

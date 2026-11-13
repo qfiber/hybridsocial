@@ -328,6 +328,9 @@
   "error.2fa.disable_failed": "Failed to disable two-factor authentication",
   "error.validation.failed": "Please check your input and try again",
   "error.account.confirmation_required": "Please check your email to confirm your account",
+  "error.trust.links_not_allowed": "New accounts can't post links yet. This lifts automatically once your account is established.",
+  "error.trust.dm_not_allowed": "New accounts can only message people who follow them. This lifts automatically once your account is established.",
+  "error.dm.not_allowed": "This person isn't accepting messages from you.",
   "error.promotions.disabled": "Profile promotions are not available at this time",
   "error.promotions.already_active": "You already have an active promotion",
   "error.media.upload_failed": "Failed to upload file. Please try again.",
@@ -801,5 +804,8 @@
   "verification.vouch_step_review": "Our team reviews your request, along with the vouches you've received",
   "admin.verification_vouches": "Vouches: {count}",
   "admin.verification_not_pending": "This request was already decided. Reload to see it.",
-  "register.plan_timed_posts": "Timed posts"
+  "register.plan_timed_posts": "Timed posts",
+  "admin.trust_level_auto": "Automatic (from account activity)",
+  "admin.trust_level_vouched": "4 - Vouched (staff only)",
+  "admin.trust_level_pin_hint": "Choosing a number pins it, and automatic updates stop until you set it back to Automatic."
 }

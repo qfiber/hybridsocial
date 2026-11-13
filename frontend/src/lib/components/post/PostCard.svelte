@@ -20,7 +20,7 @@
   import DisplayName from '$lib/components/DisplayName.svelte';
   import { filterBadges, type Badge } from '$lib/utils/badges.js';
   import { t, availableLocales } from '$lib/stores/i18n.js';
-  import { t as translate } from '$lib/utils/i18n.js';
+  import { t as translate, tError } from '$lib/utils/i18n.js';
   import { effectiveTranslationTarget, translationEnabled } from '$lib/stores/translation.js';
   import { addToast } from '$lib/stores/toast.js';
   import { follow } from '$lib/api/accounts.js';
@@ -463,8 +463,9 @@
       post.sensitive = updated.sensitive;
       post.media_attachments = updated.media_attachments;
       editing = false;
-    } catch {
-      editError = translate('post.edit_save_failed');
+    } catch (err) {
+      const code = (err as { body?: { error?: string } })?.body?.error;
+      editError = code?.startsWith('trust.') ? tError(code) : translate('post.edit_save_failed');
     } finally {
       editSaving = false;
     }

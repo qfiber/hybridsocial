@@ -61,6 +61,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
       {:error, :dm_not_allowed} ->
         conn |> put_status(:forbidden) |> json(%{error: "dm.not_allowed"})
 
+      {:error, :trust_dm_not_allowed} ->
+        conn |> put_status(:forbidden) |> json(%{error: "trust.dm_not_allowed"})
+
       {:error, :dm_not_supported, info} ->
         # Peer software doesn't speak ChatMessage. The frontend will
         # catch this and silently compose a direct-visibility post

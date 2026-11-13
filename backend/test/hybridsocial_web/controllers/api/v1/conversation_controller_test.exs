@@ -23,7 +23,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns empty list when no conversations", %{conn: conn} do
-      alice = create_user("cc_alice", "cc_alice@example.com")
+      alice = create_trusted_user("cc_alice", "cc_alice@example.com")
 
       conn =
         conn
@@ -34,8 +34,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns user's conversations", %{conn: conn} do
-      alice = create_user("cc_alice2", "cc_alice2@example.com")
-      bob = create_user("cc_bob2", "cc_bob2@example.com")
+      alice = create_trusted_user("cc_alice2", "cc_alice2@example.com")
+      bob = create_trusted_user("cc_bob2", "cc_bob2@example.com")
 
       {:ok, _} = Messaging.find_or_create_direct(alice.id, bob.id)
 
@@ -52,8 +52,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "POST /api/v1/conversations" do
     test "creates a direct conversation", %{conn: conn} do
-      alice = create_user("cc_create", "cc_create@example.com")
-      bob = create_user("cc_create2", "cc_create2@example.com")
+      alice = create_trusted_user("cc_create", "cc_create@example.com")
+      bob = create_trusted_user("cc_create2", "cc_create2@example.com")
 
       conn =
         conn
@@ -66,9 +66,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "creates a group DM", %{conn: conn} do
-      alice = create_user("cc_grp", "cc_grp@example.com")
-      bob = create_user("cc_grp2", "cc_grp2@example.com")
-      carol = create_user("cc_grp3", "cc_grp3@example.com")
+      alice = create_trusted_user("cc_grp", "cc_grp@example.com")
+      bob = create_trusted_user("cc_grp2", "cc_grp2@example.com")
+      carol = create_trusted_user("cc_grp3", "cc_grp3@example.com")
 
       conn =
         conn
@@ -80,7 +80,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns error for self-messaging", %{conn: conn} do
-      alice = create_user("cc_self", "cc_self@example.com")
+      alice = create_trusted_user("cc_self", "cc_self@example.com")
 
       conn =
         conn
@@ -91,8 +91,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns forbidden when DM not allowed", %{conn: conn} do
-      alice = create_user("cc_block", "cc_block@example.com")
-      bob = create_user("cc_block2", "cc_block2@example.com")
+      alice = create_trusted_user("cc_block", "cc_block@example.com")
+      bob = create_trusted_user("cc_block2", "cc_block2@example.com")
 
       {:ok, _} = Messaging.update_dm_preferences(bob.id, %{"allow_dms_from" => "nobody"})
 
@@ -107,8 +107,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "GET /api/v1/conversations/:id" do
     test "shows a conversation", %{conn: conn} do
-      alice = create_user("cc_show", "cc_show@example.com")
-      bob = create_user("cc_show2", "cc_show2@example.com")
+      alice = create_trusted_user("cc_show", "cc_show@example.com")
+      bob = create_trusted_user("cc_show2", "cc_show2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
 
@@ -123,9 +123,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns 404 for non-participant", %{conn: conn} do
-      alice = create_user("cc_show3", "cc_show3@example.com")
-      bob = create_user("cc_show4", "cc_show4@example.com")
-      carol = create_user("cc_show5", "cc_show5@example.com")
+      alice = create_trusted_user("cc_show3", "cc_show3@example.com")
+      bob = create_trusted_user("cc_show4", "cc_show4@example.com")
+      carol = create_trusted_user("cc_show5", "cc_show5@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
 
@@ -144,8 +144,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "POST /api/v1/conversations/:id/messages" do
     test "sends a message", %{conn: conn} do
-      alice = create_user("cc_msg", "cc_msg@example.com")
-      bob = create_user("cc_msg2", "cc_msg2@example.com")
+      alice = create_trusted_user("cc_msg", "cc_msg@example.com")
+      bob = create_trusted_user("cc_msg2", "cc_msg2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
 
@@ -160,9 +160,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns 404 for non-participant", %{conn: conn} do
-      alice = create_user("cc_msg3", "cc_msg3@example.com")
-      bob = create_user("cc_msg4", "cc_msg4@example.com")
-      carol = create_user("cc_msg5", "cc_msg5@example.com")
+      alice = create_trusted_user("cc_msg3", "cc_msg3@example.com")
+      bob = create_trusted_user("cc_msg4", "cc_msg4@example.com")
+      carol = create_trusted_user("cc_msg5", "cc_msg5@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
 
@@ -177,8 +177,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "GET /api/v1/conversations/:id/messages" do
     test "returns messages", %{conn: conn} do
-      alice = create_user("cc_gm", "cc_gm@example.com")
-      bob = create_user("cc_gm2", "cc_gm2@example.com")
+      alice = create_trusted_user("cc_gm", "cc_gm@example.com")
+      bob = create_trusted_user("cc_gm2", "cc_gm2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, _} = Messaging.send_message(conv.id, alice.id, %{"content" => "Hello!"})
@@ -196,8 +196,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "PUT /api/v1/conversations/:id/messages/:mid" do
     test "edits a message", %{conn: conn} do
-      alice = create_user("cc_em", "cc_em@example.com")
-      bob = create_user("cc_em2", "cc_em2@example.com")
+      alice = create_trusted_user("cc_em", "cc_em@example.com")
+      bob = create_trusted_user("cc_em2", "cc_em2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, msg} = Messaging.send_message(conv.id, alice.id, %{"content" => "Hello!"})
@@ -213,8 +213,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns forbidden when editing another's message", %{conn: conn} do
-      alice = create_user("cc_em3", "cc_em3@example.com")
-      bob = create_user("cc_em4", "cc_em4@example.com")
+      alice = create_trusted_user("cc_em3", "cc_em3@example.com")
+      bob = create_trusted_user("cc_em4", "cc_em4@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, msg} = Messaging.send_message(conv.id, alice.id, %{"content" => "Hello!"})
@@ -230,8 +230,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "DELETE /api/v1/conversations/:id/messages/:mid" do
     test "deletes a message", %{conn: conn} do
-      alice = create_user("cc_dm", "cc_dm@example.com")
-      bob = create_user("cc_dm2", "cc_dm2@example.com")
+      alice = create_trusted_user("cc_dm", "cc_dm@example.com")
+      bob = create_trusted_user("cc_dm2", "cc_dm2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, msg} = Messaging.send_message(conv.id, alice.id, %{"content" => "Hello!"})
@@ -245,8 +245,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns forbidden when deleting another's message", %{conn: conn} do
-      alice = create_user("cc_dm3", "cc_dm3@example.com")
-      bob = create_user("cc_dm4", "cc_dm4@example.com")
+      alice = create_trusted_user("cc_dm3", "cc_dm3@example.com")
+      bob = create_trusted_user("cc_dm4", "cc_dm4@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, msg} = Messaging.send_message(conv.id, alice.id, %{"content" => "Hello!"})
@@ -266,8 +266,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "POST /api/v1/conversations/:id/read" do
     test "marks conversation as read", %{conn: conn} do
-      alice = create_user("cc_mr", "cc_mr@example.com")
-      bob = create_user("cc_mr2", "cc_mr2@example.com")
+      alice = create_trusted_user("cc_mr", "cc_mr@example.com")
+      bob = create_trusted_user("cc_mr2", "cc_mr2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, _} = Messaging.send_message(conv.id, alice.id, %{"content" => "Hello!"})
@@ -287,8 +287,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "PATCH /api/v1/conversations/:id/settings" do
     test "mutes a conversation", %{conn: conn} do
-      alice = create_user("cc_st", "cc_st@example.com")
-      bob = create_user("cc_st2", "cc_st2@example.com")
+      alice = create_trusted_user("cc_st", "cc_st@example.com")
+      bob = create_trusted_user("cc_st2", "cc_st2@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
 
@@ -302,8 +302,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "unmutes a conversation", %{conn: conn} do
-      alice = create_user("cc_st3", "cc_st3@example.com")
-      bob = create_user("cc_st4", "cc_st4@example.com")
+      alice = create_trusted_user("cc_st3", "cc_st3@example.com")
+      bob = create_trusted_user("cc_st4", "cc_st4@example.com")
 
       {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, _} = Messaging.mute_conversation(conv.id, alice.id)
@@ -324,7 +324,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "GET /api/v1/dm_preferences" do
     test "returns default preferences", %{conn: conn} do
-      alice = create_user("cc_dp", "cc_dp@example.com")
+      alice = create_trusted_user("cc_dp", "cc_dp@example.com")
 
       conn =
         conn
@@ -339,7 +339,7 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
 
   describe "PATCH /api/v1/dm_preferences" do
     test "updates DM preferences", %{conn: conn} do
-      alice = create_user("cc_dp2", "cc_dp2@example.com")
+      alice = create_trusted_user("cc_dp2", "cc_dp2@example.com")
 
       conn =
         conn
@@ -358,8 +358,8 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
   describe "DELETE /api/v1/conversations/:id" do
     test "removes the conversation from caller's inbox without affecting the other party",
          %{conn: conn} do
-      alice = create_user("dc_alice", "dc_alice@example.com")
-      bob = create_user("dc_bob", "dc_bob@example.com")
+      alice = create_trusted_user("dc_alice", "dc_alice@example.com")
+      bob = create_trusted_user("dc_bob", "dc_bob@example.com")
 
       {:ok, conversation} = Messaging.find_or_create_direct(alice.id, bob.id)
       {:ok, _msg} = Messaging.send_message(conversation.id, alice.id, %{"content" => "hi"})
@@ -392,9 +392,9 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
     end
 
     test "returns 404 when caller is not a participant", %{conn: conn} do
-      alice = create_user("dc2_alice", "dc2_alice@example.com")
-      bob = create_user("dc2_bob", "dc2_bob@example.com")
-      eve = create_user("dc2_eve", "dc2_eve@example.com")
+      alice = create_trusted_user("dc2_alice", "dc2_alice@example.com")
+      bob = create_trusted_user("dc2_bob", "dc2_bob@example.com")
+      eve = create_trusted_user("dc2_eve", "dc2_eve@example.com")
 
       {:ok, conversation} = Messaging.find_or_create_direct(alice.id, bob.id)
 

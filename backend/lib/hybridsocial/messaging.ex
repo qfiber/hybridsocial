@@ -31,8 +31,12 @@ defmodule Hybridsocial.Messaging do
         %Conversation{} = conv ->
           {:ok, conv}
 
+        # Only *starting* a conversation is trust-gated: a new account can
+        # always answer someone who messaged it first.
         nil ->
-          create_direct_conversation(sender_id, recipient_id)
+          with :ok <- check_trust(sender_id, [recipient_id]) do
+            create_direct_conversation(sender_id, recipient_id)
+          end
       end
     end
   end
@@ -69,6 +73,15 @@ defmodule Hybridsocial.Messaging do
           end
         end
     end
+  end
+
+  # New accounts (trust level 0) can only start a DM with people who follow
+  # them. See `Accounts.Trust`.
+  defp check_trust(sender_id, recipient_ids) do
+    Hybridsocial.Accounts.Trust.check_dm(
+      Repo.get(Hybridsocial.Accounts.Identity, sender_id),
+      recipient_ids
+    )
   end
 
   defp check_not_self(id, id), do: {:error, :cannot_message_self}
@@ -146,6 +159,12 @@ defmodule Hybridsocial.Messaging do
 
   @doc "Create a group DM with multiple participants."
   def create_group_dm(creator_id, participant_ids) when is_list(participant_ids) do
+    with :ok <- check_trust(creator_id, participant_ids) do
+      do_create_group_dm(creator_id, participant_ids)
+    end
+  end
+
+  defp do_create_group_dm(creator_id, participant_ids) do
     all_ids = Enum.uniq([creator_id | participant_ids])
 
     if length(all_ids) < 2 do

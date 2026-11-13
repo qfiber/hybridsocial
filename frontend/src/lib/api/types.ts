@@ -570,6 +570,8 @@ export interface AdminUser {
   is_shadow_banned: boolean;
   force_sensitive: boolean;
   trust_level: number;
+  /** Set by staff by hand; the automatic recompute leaves it alone. */
+  trust_level_locked?: boolean;
   /** Top-level posts only — replies are counted separately. */
   post_count: number;
   reply_count?: number;

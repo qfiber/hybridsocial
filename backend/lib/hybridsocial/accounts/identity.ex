@@ -64,6 +64,8 @@ defmodule Hybridsocial.Accounts.Identity do
     field :also_known_as, {:array, :string}, default: []
     field :moved_to, :string
     field :trust_level, :integer, default: 0
+    # Set when staff pin the level by hand; the automatic recompute skips it.
+    field :trust_level_locked, :boolean, default: false
     field :deleted_at, :utc_datetime_usec
     field :is_suggested, :boolean, default: false
     field :is_name_revoked, :boolean, default: false
@@ -306,6 +308,7 @@ defmodule Hybridsocial.Accounts.Identity do
         [
           :verification_tier,
           :trust_level,
+          :trust_level_locked,
           :is_bot,
           :force_bot,
           :is_suggested,
@@ -322,6 +325,10 @@ defmodule Hybridsocial.Accounts.Identity do
     |> validate_length(:bio, max: 500)
     |> validate_length(:avatar_url, max: 2048)
     |> validate_length(:header_url, max: 2048)
+    |> validate_number(:trust_level,
+      greater_than_or_equal_to: 0,
+      less_than_or_equal_to: Hybridsocial.Accounts.Trust.max_level()
+    )
   end
 
   defp reject_display_name_change_if_verified(changeset) do

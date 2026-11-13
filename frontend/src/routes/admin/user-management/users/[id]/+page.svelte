@@ -60,7 +60,8 @@
   let emailInput = $state('');
   let displayNameInput = $state('');
   let bioInput = $state('');
-  let trustInput = $state(0);
+  // 'auto' = computed from activity; a number pins that level.
+  let trustInput = $state<number | 'auto'>('auto');
   let tierInput = $state('free');
   // Blank means "use the instance default", so these stay strings until saved.
   let limitInputs = $state({ per_minute: '', per_hour: '', per_day: '' });
@@ -224,7 +225,7 @@
       emailInput = u.email || '';
       displayNameInput = u.display_name || '';
       bioInput = u.bio || '';
-      trustInput = u.trust_level ?? 0;
+      trustInput = u.trust_level_locked ? (u.trust_level ?? 0) : 'auto';
       tierInput = u.verification_tier || 'free';
       limitInputs = {
         per_minute: String(u.post_limits?.per_minute ?? ''),
@@ -323,7 +324,12 @@
 
   async function handleTrust() {
     if (!user) return;
-    await run('trust', () => setTrustLevel(user!.id, Number(trustInput)), `Trust level set to ${trustInput}`);
+    const level = trustInput === 'auto' ? 'auto' : Number(trustInput);
+    await run(
+      'trust',
+      () => setTrustLevel(user!.id, level),
+      level === 'auto' ? 'Trust level set to automatic' : `Trust level pinned at ${level}`,
+    );
   }
 
   async function handleTier() {
@@ -841,7 +847,8 @@
             <label class="field-label" for="trust">Trust level</label>
             <div class="inline-row">
               <select id="trust" class="input access-select" bind:value={trustInput}>
-                {#each [0, 1, 2, 3, 4] as l (l)}<option value={l}>{l}</option>{/each}
+                <option value="auto">Auto (currently {user.trust_level})</option>
+                {#each [0, 1, 2, 3, 4] as l (l)}<option value={l}>{l}{l === 4 ? ' (vouched)' : ''}</option>{/each}
               </select>
               <button class="btn btn-secondary" disabled={busy === 'trust'} onclick={handleTrust}>Set</button>
             </div>

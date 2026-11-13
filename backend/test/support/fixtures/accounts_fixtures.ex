@@ -35,6 +35,22 @@ defmodule Hybridsocial.AccountsFixtures do
   end
 
   @doc """
+  A confirmed user past the new-account gates (trust level 1), for tests of
+  features rather than of `Accounts.Trust`: a fresh account can't post links
+  or DM people who don't follow it.
+  """
+  def create_trusted_user(handle, email \\ nil) do
+    handle |> create_user(email) |> make_trusted()
+  end
+
+  @doc "Raise an identity to `level` (default 1), as the trust computation would."
+  def make_trusted(identity, level \\ 1) do
+    identity
+    |> Ecto.Changeset.change(trust_level: level)
+    |> Repo.update!()
+  end
+
+  @doc """
   Register an UNCONFIRMED user (confirmed_at: nil) — for tests that
   exercise the email-confirmation gate itself. Returns the identity.
   """
