@@ -838,6 +838,8 @@ defmodule HybridsocialWeb.Router do
     # Instance Settings
     get "/settings", AdminController, :list_settings
     put "/settings", AdminController, :update_settings
+    get "/settings/schema", AdminController, :settings_schema
+    delete "/settings/:key", AdminController, :reset_setting
 
     # Resolved tier limits (defaults filled in for any unset key) so
     # the Verification Tiers admin page can pre-fill its inputs.

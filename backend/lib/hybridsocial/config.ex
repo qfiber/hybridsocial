@@ -16,6 +16,9 @@ defmodule Hybridsocial.Config do
   @doc "Set a setting value (writes to DB and updates ETS cache)."
   defdelegate set(key, value), to: Store
 
+  @doc "Delete a setting so readers fall back to their defaults."
+  defdelegate delete(key), to: Store
+
   @doc "Get all settings as a map."
   defdelegate all(), to: Store
 

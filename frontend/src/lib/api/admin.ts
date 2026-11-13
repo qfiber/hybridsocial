@@ -10,6 +10,8 @@ import type {
   FederationPolicy,
   DeliveryQueueStats,
   AdminSetting,
+  SettingValue,
+  SettingsSchemaGroup,
   AdminDashboardStats,
   Backup,
   AuditLogEntry,
@@ -275,9 +277,19 @@ export function getAdminSettings(): Promise<AdminSetting[]> {
 // is compared `== true`, pow_difficulty is used as an integer), so callers
 // must send the right JSON type, not a stringified one.
 export function updateAdminSettings(
-  settings: { key: string; value: string | number | boolean }[],
+  settings: { key: string; value: SettingValue }[],
 ): Promise<AdminSetting[]> {
   return api.put('/api/v1/admin/settings', { settings });
+}
+
+/** Every registered setting, grouped for the generic settings pages. */
+export function getSettingsSchema(): Promise<{ groups: SettingsSchemaGroup[] }> {
+  return api.get('/api/v1/admin/settings/schema');
+}
+
+/** Delete a stored setting so its default applies again. */
+export function resetAdminSetting(key: string): Promise<void> {
+  return api.delete(`/api/v1/admin/settings/${encodeURIComponent(key)}`);
 }
 
 // Theme

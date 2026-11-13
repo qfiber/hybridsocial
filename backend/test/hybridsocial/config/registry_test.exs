@@ -83,11 +83,85 @@ defmodule Hybridsocial.Config.RegistryTest do
           :integer -> Map.get(entry, :min, 0)
           :number -> Map.get(entry, :min, 0)
           :string -> ""
+          :string_list -> []
           {:enum, [first | _]} -> first
         end
 
       assert {:ok, _} = Registry.cast(entry.key, sample),
              "#{entry.key} rejected #{inspect(sample)}"
     end
+  end
+
+  test "every non-nil default is a valid value for its own entry" do
+    for %{default: default} = entry <- Registry.entries(), not is_nil(default) do
+      assert {:ok, _} = Registry.cast(entry.key, default),
+             "#{entry.key} rejects its own default #{inspect(default)}"
+    end
+  end
+
+  test "every group has a permission and entries carry a section" do
+    for entry <- Registry.entries() do
+      assert Registry.permission_for(entry.group), "#{entry.key} has no group permission"
+      assert is_atom(entry.section)
+    end
+  end
+
+  # New tunables must be registered (or deliberately excluded) so they show up
+  # in the admin panel instead of being SQL-only.
+  test "every Config.get key in lib/ is registered or deliberately unmanaged" do
+    missing =
+      Path.wildcard("lib/**/*.ex")
+      |> Enum.flat_map(
+        &Regex.scan(~r/Config\.get\(\s*"([a-z0-9_]+)"/, File.read!(&1), capture: :all_but_first)
+      )
+      |> List.flatten()
+      |> Enum.uniq()
+      |> Enum.reject(&(Registry.fetch(&1) || Registry.unmanaged?(&1)))
+
+    assert missing == [], "unregistered settings: #{Enum.join(missing, ", ")}"
+  end
+
+  describe "string lists and nullable strings" do
+    test "trims, drops blanks and dedupes list items" do
+      assert Registry.cast("reserved_handles", [" admin ", "", "admin", "root"]) ==
+               {:ok, ["admin", "root"]}
+
+      assert Registry.cast("reserved_handles", "admin") == {:error, :invalid_list}
+      assert Registry.cast("reserved_handles", [1]) == {:error, :invalid_list}
+    end
+
+    test "stores a cleared nullable string as nil" do
+      assert Registry.cast("instance_thumbnail", "") == {:ok, nil}
+      assert Registry.cast("s3_bucket", "") == {:ok, nil}
+      assert Registry.cast("instance_name", "") == {:ok, ""}
+    end
+
+    test "prices are registered even though they look like tier keys" do
+      assert Registry.cast("tier_verified_pro_price", "2999") == {:ok, 2999}
+    end
+  end
+
+  # The admin panel renders these pages generically, so a registered setting
+  # with no English label shows its raw key.
+  test "every setting on a generic page has an English label" do
+    en = "../frontend/src/locales/en.json" |> File.read!() |> Jason.decode!()
+
+    wanted =
+      for entry <- Registry.entries(), not Map.has_key?(entry, :page), uniq: true do
+        options =
+          case entry.type do
+            {:enum, values} -> Enum.map(values, &"admin_settings.option.#{entry.key}.#{&1}")
+            _ -> []
+          end
+
+        ["admin_settings.#{entry.key}", "admin_settings.section.#{entry.section}" | options]
+      end
+
+    groups = for {group, _} <- Registry.groups(), do: "admin_settings.group.#{group}"
+
+    missing =
+      (List.flatten(wanted) ++ groups) |> Enum.uniq() |> Enum.reject(&Map.has_key?(en, &1))
+
+    assert missing == [], "missing en.json labels: #{Enum.join(missing, ", ")}"
   end
 end

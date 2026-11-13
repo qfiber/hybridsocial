@@ -923,10 +923,11 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   end
 
   # Writes are allowlisted and typed by `Config.Registry`. The batch is
-  # validated as a whole first, so a bad entry can't leave half a form saved.
+  # validated as a whole first, so a bad entry can't leave half a form saved,
+  # and every key's settings group must be one the actor may manage.
   def update_settings(conn, %{"settings" => settings_list}) when is_list(settings_list) do
-    with :ok <- require_permission(conn, "settings.manage"),
-         {:ok, changes} <- cast_settings(settings_list) do
+    with {:ok, changes} <- cast_settings(settings_list),
+         :ok <- require_group_permissions(conn, Enum.map(changes, &elem(&1, 0))) do
       admin_id = conn.assigns.current_identity.id
       ip = conn.remote_ip |> :inet.ntoa() |> to_string()
 
@@ -958,6 +959,133 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
   def update_settings(conn, _params) do
     conn |> put_status(:bad_request) |> json(%{error: "settings.invalid_format"})
   end
+
+  @doc """
+  The settings catalog the admin panel renders its settings pages from: every
+  registered setting grouped and sectioned, with its type, bounds, default,
+  current value (secrets masked) and whether it is stored or defaulted.
+  Settings edited on a dedicated page (`:page`) are left out.
+  """
+  def settings_schema(conn, _params) do
+    with :ok <- require_permission(conn, "settings.view") do
+      identity_id = conn.assigns.current_identity.id
+
+      stored =
+        Hybridsocial.Config.Setting
+        |> Hybridsocial.Repo.all()
+        |> Map.new(&{&1.key, stored_value(&1.value)})
+
+      entries =
+        Registry.entries()
+        |> Enum.reject(&Map.has_key?(&1, :page))
+        |> Enum.group_by(& &1.group)
+
+      groups =
+        for {group, permission} <- Registry.groups() do
+          sections =
+            entries
+            |> Map.get(group, [])
+            |> Enum.chunk_by(& &1.section)
+            |> Enum.map(fn [first | _] = rows ->
+              %{id: first.section, settings: Enum.map(rows, &schema_entry(&1, stored))}
+            end)
+
+          %{
+            id: group,
+            permission: permission,
+            can_manage: RBAC.has_permission?(identity_id, permission),
+            sections: sections
+          }
+        end
+
+      json(conn, %{groups: groups})
+    else
+      {:error, perm} -> deny(conn, perm)
+    end
+  end
+
+  @doc "Reset a setting to its default by deleting the stored value."
+  def reset_setting(conn, %{"key" => key}) do
+    case Registry.fetch(key) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "settings.unknown_key"})
+
+      _entry ->
+        with :ok <- require_group_permissions(conn, [key]) do
+          :ok = Hybridsocial.Config.delete(key)
+
+          ip = conn.remote_ip |> :inet.ntoa() |> to_string()
+
+          Moderation.log(
+            conn.assigns.current_identity.id,
+            "settings.reset",
+            "setting",
+            key,
+            %{},
+            ip
+          )
+
+          send_resp(conn, :no_content, "")
+        else
+          {:error, perm} -> deny(conn, perm)
+        end
+    end
+  end
+
+  defp require_group_permissions(conn, keys) do
+    keys
+    |> Enum.map(fn key -> Registry.permission_for(Registry.fetch(key).group) end)
+    |> Enum.uniq()
+    |> Enum.find_value(:ok, fn permission ->
+      case require_permission(conn, permission) do
+        :ok -> nil
+        error -> error
+      end
+    end)
+  end
+
+  defp schema_entry(entry, stored) do
+    {type, options} =
+      case entry.type do
+        {:enum, values} -> {"enum", values}
+        type -> {Atom.to_string(type), nil}
+      end
+
+    secret? = Map.get(entry, :secret, false)
+    raw = Map.get(stored, entry.key)
+    stored? = Map.has_key?(stored, entry.key)
+
+    %{
+      key: entry.key,
+      section: entry.section,
+      type: type,
+      options: options,
+      default: if(secret?, do: nil, else: entry.default),
+      # The effective value: what's stored, or the default readers fall back to.
+      value: effective_value(entry, secret?, stored?, raw),
+      stored: stored?,
+      set: if(secret?, do: raw not in [nil, ""], else: nil),
+      secret: secret?,
+      advanced: Map.get(entry, :advanced, false),
+      multiline: Map.get(entry, :multiline, false),
+      nullable: Map.get(entry, :nullable, false),
+      min: Map.get(entry, :min),
+      max: Map.get(entry, :max),
+      max_length: Map.get(entry, :max_length),
+      unit: Map.get(entry, :unit),
+      visible_when: visible_when(entry)
+    }
+  end
+
+  defp effective_value(_entry, true = _secret?, _stored?, _raw), do: nil
+
+  defp effective_value(entry, _secret?, true = _stored?, raw),
+    do: Registry.normalize(entry.key, raw)
+
+  defp effective_value(entry, _secret?, _stored?, _raw), do: entry.default
+
+  defp visible_when(%{visible_when: {key, value}}), do: %{key: key, value: value}
+  defp visible_when(_), do: nil
 
   defp cast_settings(settings_list) do
     {changes, errors} =

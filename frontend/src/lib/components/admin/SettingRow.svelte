@@ -9,12 +9,15 @@
     help = '',
     labelFor = undefined,
     layout = 'inline',
+    meta,
     children,
   }: {
     label: string;
     help?: string;
     labelFor?: string;
     layout?: 'inline' | 'stacked';
+    /** Status line under the help text (changed / default / reset). */
+    meta?: Snippet;
     children: Snippet;
   } = $props();
 </script>
@@ -28,6 +31,9 @@
     {/if}
     {#if help}
       <p class="setting-row-help">{help}</p>
+    {/if}
+    {#if meta}
+      <div class="setting-row-meta">{@render meta()}</div>
     {/if}
   </div>
   <div class="setting-row-control">
@@ -67,6 +73,14 @@
     font-size: var(--text-xs);
     line-height: 1.45;
     color: var(--color-text-tertiary);
+  }
+
+  .setting-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px var(--space-2);
+    margin-block-start: 4px;
   }
 
   .setting-row-control {

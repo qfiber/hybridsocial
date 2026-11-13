@@ -46,6 +46,14 @@ defmodule Hybridsocial.Config.Store do
     GenServer.call(__MODULE__, {:set, key, Registry.normalize(key, value)})
   end
 
+  @doc """
+  Delete a setting, so readers fall back to their own defaults.
+  Returns `:ok` whether or not the key was stored.
+  """
+  def delete(key) do
+    GenServer.call(__MODULE__, {:delete, key})
+  end
+
   @doc "Get all settings as a map of key => value."
   def all do
     @table
@@ -83,6 +91,12 @@ defmodule Hybridsocial.Config.Store do
       {:error, changeset} ->
         {:reply, {:error, changeset}, state}
     end
+  end
+
+  def handle_call({:delete, key}, _from, state) do
+    from(s in Setting, where: s.key == ^key) |> Repo.delete_all()
+    :ets.delete(@table, key)
+    {:reply, :ok, state}
   end
 
   defp load_settings do

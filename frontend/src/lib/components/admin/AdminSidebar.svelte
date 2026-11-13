@@ -3,7 +3,13 @@
   import { api } from '$lib/api/client.js';
   import { hasPermission, hasAnyPermission } from '$lib/stores/auth.js';
   import { sudoExpiresAt, isSudoValid } from '$lib/stores/admin-sudo.js';
-  import { adminSections, type AdminItem, type AdminSection, type AdminCluster } from '$lib/admin-nav.js';
+  import {
+    adminSections,
+    adminItemForPath,
+    type AdminItem,
+    type AdminSection,
+    type AdminCluster,
+  } from '$lib/admin-nav.js';
   import BrandMark from '$lib/components/ui/BrandMark.svelte';
   import { instanceName } from '$lib/stores/instance.js';
   import { t } from '$lib/stores/i18n.js';
@@ -13,6 +19,7 @@
   let { open = false, onclose }: { open?: boolean; onclose?: () => void } = $props();
 
   function itemVisible(item: AdminItem): boolean {
+    if (item.hidden) return false;
     if (item.permission) return hasPermission(item.permission);
     if (item.anyPermission) return hasAnyPermission(...item.anyPermission);
     return true;
@@ -71,8 +78,12 @@
     return 0;
   }
 
+  // A dedicated editor (hidden item) highlights the settings page it belongs to.
+  let currentParent = $derived(adminItemForPath(page.url.pathname)?.parent ?? null);
+
   function isActive(href: string): boolean {
     if (href === '/admin') return page.url.pathname === '/admin';
+    if (currentParent === href) return true;
     return page.url.pathname === href || page.url.pathname.startsWith(href + '/');
   }
 
