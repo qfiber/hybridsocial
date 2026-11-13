@@ -78,4 +78,39 @@ defmodule HybridsocialWeb.MediaProxyControllerTest do
     Req.Test.stub(__MODULE__, fn conn -> Plug.Conn.send_resp(conn, 500, "upstream down") end)
     assert response(get(build_conn(), proxy_path()), 200) == @body
   end
+
+  describe "when the origin refuses or fails" do
+    setup do
+      Config.set("media_proxy_cache_enabled", true)
+
+      # Like alaraby.co.uk's CDN: an HTML "Access Denied" with a 403.
+      Req.Test.stub(__MODULE__, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("text/html")
+        |> Plug.Conn.send_resp(403, "<TITLE>Access Denied</TITLE>")
+      end)
+
+      :ok
+    end
+
+    test "serves an 'Image not available' placeholder instead of an error", %{conn: conn} do
+      conn = get(conn, proxy_path())
+
+      assert response(conn, 200) =~ "Image not available"
+      assert [content_type | _] = get_resp_header(conn, "content-type")
+      assert content_type =~ "image/svg+xml"
+      # Not cached, so the real image shows once the origin serves it.
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
+    end
+
+    test "titles the placeholder by media kind", %{conn: conn} do
+      path =
+        "https://media.example/files/clip.mp4"
+        |> MediaProxy.url()
+        |> URI.parse()
+        |> Map.get(:path)
+
+      assert response(get(conn, path), 200) =~ "Video not available"
+    end
+  end
 end

@@ -47,6 +47,10 @@ defmodule HybridsocialWeb.MediaProxyController do
     with {:ok, remote_url} <- MediaProxy.verify_url(signature, encoded_url),
          :ok <- validate_remote_url(remote_url),
          :ok <- check_instance_policy(remote_url) do
+      # Kept for the error path: a refused fetch is answered with a
+      # placeholder titled for the media kind (see handle_error/2).
+      conn = assign(conn, :proxy_remote_url, remote_url)
+
       case MediaProxyCache.lookup(remote_url) do
         {:hit, %{path: path, content_type: content_type, hash: hash}} ->
           # Bump LRU bookkeeping but don't block the response on the
@@ -379,14 +383,35 @@ defmodule HybridsocialWeb.MediaProxyController do
     conn |> put_status(413) |> json(%{error: "Remote media exceeds size limit"})
   end
 
-  defp handle_error(conn, :timeout) do
-    conn |> put_status(504) |> json(%{error: "Remote media fetch timed out"})
-  end
-
+  # The origin refused (a CDN bot wall answering 403, a 404, a 5xx), timed
+  # out or was unreachable. Serve a neutral "not available" image instead of
+  # an error so the post shows a clean frame rather than a broken-image
+  # icon. `send_placeholder/2` marks it no-store, so the real media appears
+  # as soon as the origin serves it.
   defp handle_error(conn, reason) do
     Logger.warning("Media proxy fetch failed: #{inspect(reason)}")
-    conn |> put_status(502) |> json(%{error: "Failed to fetch remote media"})
+
+    send_placeholder(
+      conn,
+      PlaceholderSvg.unavailable(media_kind(conn.assigns[:proxy_remote_url]))
+    )
   end
+
+  @video_exts ~w(.mp4 .webm .mov .m4v .ogv)
+  @audio_exts ~w(.mp3 .ogg .oga .m4a .wav .opus .flac)
+
+  defp media_kind(url) when is_binary(url) do
+    ext =
+      url |> URI.parse() |> Map.get(:path) |> to_string() |> Path.extname() |> String.downcase()
+
+    cond do
+      ext in @video_exts -> :video
+      ext in @audio_exts -> :audio
+      true -> :image
+    end
+  end
+
+  defp media_kind(_), do: :image
 
   # sobelow_skip ["XSS.SendResp"]
   defp send_placeholder(conn, svg) do
