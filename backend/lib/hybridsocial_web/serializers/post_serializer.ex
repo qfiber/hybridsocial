@@ -131,6 +131,8 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       last_activity_at: post.last_activity_at,
       edited_at: post.edited_at,
       edit_expires_at: Map.get(post, :edit_expires_at),
+      # Timed post (#261): when the post deletes itself. nil = never.
+      expires_at: Map.get(post, :expires_at),
       account: account,
       parent_id: post.parent_id,
       root_id: post.root_id,
@@ -307,6 +309,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
         last_activity_at: post.last_activity_at,
         edited_at: post.edited_at,
         edit_expires_at: Map.get(post, :edit_expires_at),
+        expires_at: Map.get(post, :expires_at),
         account: account,
         parent_id: post.parent_id,
         root_id: post.root_id,

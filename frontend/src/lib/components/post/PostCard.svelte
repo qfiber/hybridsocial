@@ -871,6 +871,16 @@
             {#if post.edited_at}
               <span class="post-edited" title={$t('post.edited_at_title', { date: fullDateTime(post.edited_at) })}>{$t('post.edited_marker')}</span>
             {/if}
+            {#if post.expires_at}
+              <span
+                class="post-expiry"
+                title={$t('post.expires_at_title', { date: fullDateTime(post.expires_at) })}
+              >
+                <span class="material-symbols-outlined post-expiry-icon" aria-hidden="true">auto_delete</span>
+                <span class="visually-hidden">{$t('post.expires_at_title', { date: fullDateTime(post.expires_at) })}</span>
+                <span aria-hidden="true">{relativeTimeFuture(post.expires_at)}</span>
+              </span>
+            {/if}
             {#if post.pending}
               <span class="post-pending-badge" aria-live="polite">
                 <span class="spinner" aria-hidden="true"></span>
@@ -1773,6 +1783,18 @@
   .post-edited {
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
+  }
+
+  .post-expiry {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  .post-expiry-icon {
+    font-size: 14px;
   }
 
   .post-reply-indicator {

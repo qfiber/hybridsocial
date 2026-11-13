@@ -13,6 +13,8 @@ export interface TierLimits {
   pinned_posts: number;
   profile_fields: number;
   scheduled_posts: boolean;
+  /** Whether the author may set a self-delete timer on a post (#261). */
+  post_expiry?: boolean;
   custom_emoji: boolean;
   follows_limit: number;
   audio_allowed: boolean;
@@ -65,6 +67,8 @@ export interface Identity {
   verification_tier?: string | null;
   is_verified?: boolean;
   limits?: TierLimits;
+  /** Own account only: allowed timed-post lifetime, in seconds. */
+  post_expiry_bounds?: { min: number; max: number };
   /** May be null when the profile owner has opted to hide counts and
    *  the viewer isn't them. */
   followers_count: number | null;
@@ -167,6 +171,8 @@ export interface Post {
   last_activity_at?: string | null;
   edited_at: string | null;
   edit_expires_at: string | null;
+  /** Timed post: when it deletes itself. null = never. */
+  expires_at?: string | null;
   account: Identity;
   parent_id: string | null;
   root_id: string | null;

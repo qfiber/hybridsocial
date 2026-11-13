@@ -7,6 +7,7 @@ defmodule Hybridsocial.Social.Posts do
   alias Hybridsocial.Social.{Post, PostRevision, Reaction, Boost, Hashtag, Polls}
   alias Hybridsocial.Premium.TierLimits
   alias Hybridsocial.Content.Emojis
+  alias Hybridsocial.Config
 
   @default_page_size 20
 
@@ -56,7 +57,8 @@ defmodule Hybridsocial.Social.Posts do
       |> Ecto.Changeset.put_change(:last_activity_at, published_at)
       |> maybe_put_edit_expires_at(edit_expires_at)
 
-    with :ok <- validate_premium_emojis(attrs["content"], identity),
+    with {:ok, expires_at} <- resolve_expires_at(attrs, published_at || scheduled_at),
+         :ok <- validate_premium_emojis(attrs["content"], identity),
          :ok <- Hybridsocial.Groups.authorize_group_post(post_attrs, identity_id),
          :ok <- check_thread_not_locked(post_attrs),
          :ok <- check_audio_allowed(attrs, limits),
@@ -64,8 +66,90 @@ defmodule Hybridsocial.Social.Posts do
       # Media is always uploaded under the human's identity, even when the post
       # is authored *as a page* (post.identity_id = page_id). Attach against the
       # uploader, not the post author, or a page post silently drops its media.
-      insert_post(changeset, attrs, uploader_id(identity, identity_id))
+      changeset
+      |> Ecto.Changeset.put_change(:expires_at, expires_at)
+      |> insert_post(attrs, uploader_id(identity, identity_id))
     end
+  end
+
+  @doc """
+  The instance-wide range a timed post's lifetime must fall in, in seconds.
+  Admin-tunable via `post_expiry_min_seconds` / `post_expiry_max_seconds`.
+  Whether an author may set a timer at all is the `post_expiry` tier limit.
+  """
+  def post_expiry_bounds do
+    %{
+      min: config_int("post_expiry_min_seconds", 300),
+      max: config_int("post_expiry_max_seconds", 365 * 86_400)
+    }
+  end
+
+  defp config_int(key, default) do
+    case Config.get(key, default) do
+      n when is_integer(n) -> n
+      n when is_binary(n) -> parse_int(n) || default
+      _ -> default
+    end
+  end
+
+  # `expires_in` (seconds, the Pleroma/Akkoma status param) makes a timed
+  # post: it is deleted that long after it publishes. A scheduled post's
+  # clock starts at its scheduled time, not now.
+  defp resolve_expires_at(attrs, base) do
+    case Map.get(attrs, "expires_in") || Map.get(attrs, :expires_in) do
+      blank when blank in [nil, ""] ->
+        {:ok, nil}
+
+      value ->
+        %{min: min, max: max} = post_expiry_bounds()
+
+        with seconds when is_integer(seconds) and seconds >= min and seconds <= max <-
+               parse_int(value),
+             %DateTime{} = base <- expiry_base(base) do
+          # Adding in microseconds also lifts a whole-second scheduled_at to
+          # the column's usec precision.
+          {:ok, DateTime.add(base, seconds * 1_000_000, :microsecond)}
+        else
+          _ -> {:error, :invalid_expires_in, %{min: min, max: max}}
+        end
+    end
+  end
+
+  defp expiry_base(%DateTime{} = dt), do: DateTime.truncate(dt, :microsecond)
+
+  defp expiry_base(str) when is_binary(str) do
+    case DateTime.from_iso8601(str) do
+      {:ok, dt, _} -> DateTime.truncate(dt, :microsecond)
+      _ -> nil
+    end
+  end
+
+  defp expiry_base(_), do: nil
+
+  defp parse_int(n) when is_integer(n), do: n
+
+  defp parse_int(n) when is_binary(n) do
+    case Integer.parse(String.trim(n)) do
+      {int, ""} -> int
+      _ -> nil
+    end
+  end
+
+  defp parse_int(_), do: nil
+
+  @doc """
+  Deletes up to `limit` local posts whose timer ran out by `now`, oldest
+  first. Each goes through `delete_post/2`, so it federates a Delete and
+  fixes reply counts like a manual delete. Returns the number deleted.
+  """
+  def delete_expired_posts(now \\ DateTime.utc_now(), limit \\ 500) do
+    Post
+    |> where([p], not is_nil(p.expires_at) and p.expires_at <= ^now and is_nil(p.deleted_at))
+    |> order_by([p], asc: p.expires_at)
+    |> limit(^limit)
+    |> select([p], {p.id, p.identity_id})
+    |> Repo.all()
+    |> Enum.count(fn {id, identity_id} -> match?({:ok, _}, delete_post(id, identity_id)) end)
   end
 
   # If the reply pins itself to a specific media attachment, the

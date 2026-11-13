@@ -292,6 +292,7 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       profile_fields: profile_fields_for(identity),
       verification_tier: Hybridsocial.Premium.TierLimits.get_tier(identity),
       limits: Hybridsocial.Premium.TierLimits.limits_for(identity),
+      post_expiry_bounds: Hybridsocial.Social.Posts.post_expiry_bounds(),
       trust_level: identity.trust_level,
       trust_restrictions: Hybridsocial.Accounts.Trust.trust_restrictions(identity),
       roles: roles,
