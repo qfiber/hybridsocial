@@ -24,7 +24,8 @@ defmodule Hybridsocial.Federation.Validators.CreateValidator do
     attachments = object["attachment"]
 
     has_content = is_binary(content) and String.trim(content) != ""
-    has_attachments = is_list(attachments) and attachments != []
+    # AS2 allows a single attachment object as well as an array.
+    has_attachments = List.wrap(attachments) != []
 
     if has_content or has_attachments do
       :ok
