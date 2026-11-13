@@ -10,7 +10,6 @@ defmodule Hybridsocial.Content.LinkPreviews do
   alias Hybridsocial.Config
   alias Hybridsocial.Media.MediaFile
 
-  @default_user_agent "HybridSocial/1.0 (LinkPreview)"
   @fetch_timeout 5_000
   @max_response_size 1_048_576
 
@@ -192,7 +191,7 @@ defmodule Hybridsocial.Content.LinkPreviews do
     oembed_url =
       "https://www.youtube.com/oembed?format=json&url=" <> URI.encode_www_form(url)
 
-    headers = [{"User-Agent", @default_user_agent}, {"Accept", "application/json"}]
+    headers = [{"User-Agent", default_user_agent()}, {"Accept", "application/json"}]
 
     options = [
       recv_timeout: @fetch_timeout,
@@ -259,12 +258,12 @@ defmodule Hybridsocial.Content.LinkPreviews do
       %URI{host: host} when is_binary(host) ->
         normalized = String.replace_prefix(String.downcase(host), "www.", "")
 
-        Enum.find_value(@spoofed_user_agents, @default_user_agent, fn {suffix, ua} ->
+        Enum.find_value(@spoofed_user_agents, default_user_agent(), fn {suffix, ua} ->
           if normalized == suffix or String.ends_with?(normalized, "." <> suffix), do: ua
         end)
 
       _ ->
-        @default_user_agent
+        default_user_agent()
     end
   end
 
@@ -672,4 +671,8 @@ defmodule Hybridsocial.Content.LinkPreviews do
   defp private_ip?({192, 168, _, _}), do: true
   defp private_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
   defp private_ip?(_), do: false
+
+  # Other HybridSocial instances recognise this (any UA containing
+  # "HybridSocial") and serve server-rendered OG; see Helpers.UserAgent.
+  defp default_user_agent, do: Hybridsocial.Instance.user_agent("LinkPreview")
 end

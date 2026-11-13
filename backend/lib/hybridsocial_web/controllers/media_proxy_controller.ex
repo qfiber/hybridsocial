@@ -189,7 +189,7 @@ defmodule HybridsocialWeb.MediaProxyController do
   # path separators or dots). No request data reaches the file path.
   defp stream_remote_to_tmp(url) do
     headers = [
-      {"User-Agent", "HybridSocial MediaProxy/0.1.0"},
+      {"User-Agent", Hybridsocial.Instance.user_agent("MediaProxy")},
       {"Accept", "*/*"}
     ]
 

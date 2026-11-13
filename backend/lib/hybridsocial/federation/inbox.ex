@@ -1296,7 +1296,7 @@ defmodule Hybridsocial.Federation.Inbox do
       # signed-fetch this.
       headers = [
         {"Accept", "application/json"},
-        {"User-Agent", "HybridSocial/0.1.0"}
+        {"User-Agent", Hybridsocial.Instance.user_agent()}
       ]
 
       case Hybridsocial.HTTP.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
@@ -1332,7 +1332,7 @@ defmodule Hybridsocial.Federation.Inbox do
   defp fetch_actor_json(url, false) do
     headers = [
       {"Accept", "application/activity+json, application/ld+json"},
-      {"User-Agent", "HybridSocial/0.1.0"}
+      {"User-Agent", Hybridsocial.Instance.user_agent()}
     ]
 
     case Hybridsocial.HTTP.get(url, headers,

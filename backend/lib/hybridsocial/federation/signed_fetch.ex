@@ -36,7 +36,6 @@ defmodule Hybridsocial.Federation.SignedFetch do
   require Logger
 
   @ap_accept "application/activity+json, application/ld+json"
-  @user_agent "HybridSocial/1.0 (+https://hybridsocial)"
 
   @doc """
   Issues a signed GET. `opts` are passed through to Req.get/3
@@ -49,7 +48,7 @@ defmodule Hybridsocial.Federation.SignedFetch do
 
     base_headers = [
       {"Accept", @ap_accept},
-      {"User-Agent", @user_agent}
+      {"User-Agent", Hybridsocial.Instance.user_agent()}
     ]
 
     headers = base_headers ++ signature_headers(url) ++ extra_headers

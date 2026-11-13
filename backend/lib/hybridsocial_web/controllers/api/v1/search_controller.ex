@@ -173,7 +173,7 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
 
       headers = [
         {"Accept", "application/json"},
-        {"User-Agent", "HybridSocial/0.1.0"}
+        {"User-Agent", Hybridsocial.Instance.user_agent()}
       ]
 
       case Hybridsocial.HTTP.get(url, headers, recv_timeout: 10_000, timeout: 10_000) do
@@ -237,7 +237,7 @@ defmodule HybridsocialWeb.Api.V1.SearchController do
   defp probe_actor_json(url) do
     headers = [
       {"Accept", "application/activity+json, application/ld+json"},
-      {"User-Agent", "HybridSocial/0.1.0"}
+      {"User-Agent", Hybridsocial.Instance.user_agent()}
     ]
 
     case Hybridsocial.HTTP.get(url, headers,

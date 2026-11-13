@@ -47,7 +47,7 @@ defmodule HybridsocialWeb.Helpers.UserAgent do
     "vkshare",
     "w3c_validator",
     # Other HybridSocial instances fetching our URLs for link previews
-    # send `HybridSocial/1.0 (LinkPreview)`. Treat them as crawlers so
+    # send `HybridSocial LinkPreview/<version> (+<url>)`. Treat them as crawlers so
     # they get server-rendered OG instead of the SPA handoff redirect.
     "hybridsocial"
   ]

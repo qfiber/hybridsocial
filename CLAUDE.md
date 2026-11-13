@@ -290,6 +290,12 @@ Cross-cutting systems worth knowing before editing UI:
   `Process.sleep/1`.
 - Commits: **Conventional Commits in English** with scopes, e.g. `feat(web): …`,
   `fix(federation): …`, referencing the issue/PR number when relevant.
+- Versioning: **CalVer `YYYY.MM.N`** (`N` = release within the month, from 0). The version
+  lives in `backend/mix.exs` (what the footer, About page, admin panel and NodeInfo show) and
+  `frontend/package.json` + its lock root; bump all three together in a release PR, add a
+  `CHANGELOG.md` entry, and tag `vYYYY.MM.N`. The commit SHA is already shown next to it.
+  The Mastodon-compatible `version` stays `2.7.2 (compatible; …; HybridSocial X)`, so client
+  feature detection is unaffected.
 
 ## Ongoing responsive/mobile work
 
