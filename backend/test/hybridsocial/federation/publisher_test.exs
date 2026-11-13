@@ -126,6 +126,50 @@ defmodule Hybridsocial.Federation.PublisherTest do
       assert {:ok, 0} = Publisher.publish(activity, identity)
       assert Hybridsocial.Repo.aggregate(Hybridsocial.Federation.Delivery, :count) == 0
     end
+
+    test "writes no queue row for a peer whose circuit is open, until its probe is due" do
+      identity = create_user("opencircuit", "opencircuit@example.com")
+
+      {:ok, follower} =
+        create_user("downfollower", "downfollower@example.com")
+        |> Ecto.Changeset.cast(
+          %{
+            is_local: false,
+            ap_actor_url: "https://down.example/users/downfollower",
+            inbox_url: "https://down.example/users/downfollower/inbox"
+          },
+          [:is_local, :ap_actor_url, :inbox_url]
+        )
+        |> Hybridsocial.Repo.update()
+
+      {:ok, _follow} = Hybridsocial.Social.follow(follower.id, identity.id)
+
+      activity = %{
+        "type" => "Create",
+        "id" => "http://localhost:4002/activities/open-circuit",
+        "to" => [@public],
+        "cc" => ["http://localhost:4002/actors/#{identity.id}/followers"]
+      }
+
+      # Five hard failures open the circuit with a reopen time in the future.
+      for _ <- 1..5,
+          do:
+            Hybridsocial.Federation.CircuitBreaker.record_result(
+              "https://down.example/inbox",
+              :hard
+            )
+
+      assert {:ok, 0} = Publisher.publish(activity, identity)
+      assert Hybridsocial.Repo.aggregate(Hybridsocial.Federation.Delivery, :count) == 0
+
+      # Once the probe is due, the next activity goes out as the probe.
+      Hybridsocial.Repo.update_all(
+        Hybridsocial.Federation.RemoteInstance,
+        set: [circuit_reopen_at: DateTime.add(DateTime.utc_now(), -60, :second)]
+      )
+
+      assert {:ok, 1} = Publisher.publish(activity, identity)
+    end
   end
 
   describe "deliver/3 — refuses to send unsigned" do

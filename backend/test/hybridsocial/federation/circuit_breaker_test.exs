@@ -1,6 +1,8 @@
 defmodule Hybridsocial.Federation.CircuitBreakerTest do
   use Hybridsocial.DataCase, async: true
 
+  import Ecto.Query, only: [from: 2]
+
   alias Hybridsocial.Federation.{CircuitBreaker, RemoteInstance}
   alias Hybridsocial.Repo
 
@@ -119,6 +121,26 @@ defmodule Hybridsocial.Federation.CircuitBreakerTest do
 
       assert CircuitBreaker.allow?("https://live.example/inbox")
       refute CircuitBreaker.delivery_disabled?("live.example")
+    end
+  end
+
+  describe "blocked_domains/0" do
+    test "covers admin-disabled peers and open circuits, not due or healthy ones" do
+      :ok = CircuitBreaker.disable_delivery("off.example")
+      for _ <- 1..5, do: CircuitBreaker.record_result(@inbox, :hard)
+      for _ <- 1..5, do: CircuitBreaker.record_result("https://due.example/inbox", :hard)
+      CircuitBreaker.record_result("https://fine.example/inbox", :ok)
+
+      Repo.update_all(
+        from(r in RemoteInstance, where: r.domain == "due.example"),
+        set: [circuit_reopen_at: DateTime.add(DateTime.utc_now(), -60, :second)]
+      )
+
+      blocked = CircuitBreaker.blocked_domains()
+      assert MapSet.member?(blocked, "off.example")
+      assert MapSet.member?(blocked, "dead.example")
+      refute MapSet.member?(blocked, "due.example")
+      refute MapSet.member?(blocked, "fine.example")
     end
   end
 end
