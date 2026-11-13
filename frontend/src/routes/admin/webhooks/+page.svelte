@@ -496,7 +496,7 @@
   }
 
   .status-pending {
-    background: var(--color-warning-soft, #fef3c7);
+    background: var(--color-warning-soft);
     color: var(--color-on-warning-soft);
   }
 

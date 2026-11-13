@@ -18,9 +18,9 @@
   const canManage = $derived(hasPermission('roles.manage'));
 
   const roleColors: Record<string, string> = {
-    owner: '#d97706',
+    owner: 'var(--color-warning)',
     admin: 'var(--color-primary)',
-    moderator: '#6366f1',
+    moderator: 'var(--color-info)',
   };
 
   onMount(async () => {
@@ -326,8 +326,8 @@
     width: 100%;
   }
 
-  .role-card:hover { border-color: var(--color-primary-soft, rgba(108,62,221,0.3)); }
-  .role-card.active { border-color: var(--color-primary); background: var(--color-primary-soft, rgba(108,62,221,0.06)); }
+  .role-card:hover { border-color: var(--color-primary-soft); }
+  .role-card.active { border-color: var(--color-primary); background: var(--color-primary-soft); }
 
   .role-indicator {
     width: 4px;
@@ -347,8 +347,8 @@
     text-transform: uppercase;
     padding: 1px 5px;
     border-radius: var(--radius-full);
-    background: var(--color-info-soft, #dbeafe);
-    color: var(--color-info, #2563eb);
+    background: var(--color-info-soft);
+    color: var(--color-info);
   }
 
   .role-desc { font-size: 0.7rem; color: var(--color-text-tertiary); display: block; margin-block-start: 1px; }
@@ -367,7 +367,7 @@
   }
 
   .role-card:hover .role-delete { opacity: 1; }
-  .role-delete:hover { color: var(--color-danger); background: var(--color-danger-soft, rgba(239,68,68,0.1)); }
+  .role-delete:hover { color: var(--color-danger); background: var(--color-danger-soft); }
 
   /* Permissions panel */
   .perms-panel {
@@ -394,7 +394,7 @@
   .perms-readonly {
     font-size: var(--text-sm);
     color: var(--color-text-secondary);
-    background: var(--color-surface-container-low, #f5f5f5);
+    background: var(--color-surface-container-low);
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
     margin-block-end: var(--space-4);
@@ -431,8 +431,8 @@
     transition: background 0.1s ease;
   }
 
-  .perm-row:hover { background: var(--color-surface-container-low, #f5f5f5); }
-  .perm-row.checked { background: var(--color-primary-soft, rgba(108,62,221,0.04)); }
+  .perm-row:hover { background: var(--color-surface-container-low); }
+  .perm-row.checked { background: var(--color-primary-soft); }
 
   .perm-row input[type='checkbox'] {
     margin-block-start: 2px;
