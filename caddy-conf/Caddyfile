@@ -84,7 +84,10 @@
 		# (`ap_id`). Peers dereference them to verify a Create, walk reply
 		# chains and resolve quotes; sent to the frontend they 404'd. The
 		# backend redirects browsers on to the /post/:id page.
-		@api path /api/* /.well-known/* /nodeinfo/* /inbox /users/* /actors/* /activities/* /posts/* /dm/* /oauth/* /media/* /proxy/* /robots.txt /sitemap.xml /sitemap/*
+		# /actor is the instance actor: the keyId of every signed GET we make.
+		# A secure-mode peer fetches it to verify us; served by the frontend it
+		# returned an HTML page and every signed fetch we made was refused.
+		@api path /api/* /.well-known/* /nodeinfo/* /inbox /actor /users/* /actors/* /activities/* /posts/* /dm/* /oauth/* /media/* /proxy/* /robots.txt /sitemap.xml /sitemap/*
 		handle @api {
 			reverse_proxy backend:4000
 		}
