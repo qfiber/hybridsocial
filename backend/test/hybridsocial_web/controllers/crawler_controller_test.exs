@@ -99,7 +99,15 @@ defmodule HybridsocialWeb.CrawlerControllerTest do
       conn = get(crawler_conn(), "/post/#{post.id}")
       body = response(conn, 200)
 
-      assert body =~ "MyCustomInstance"
+      # Flaky in full-suite runs only (#266) and not yet reproducible on
+      # demand: on failure, say what the store held and what was rendered.
+      assert body =~ "MyCustomInstance", """
+      instance name missing from the crawler page (#266)
+        Config.get("instance_name") now: #{inspect(Hybridsocial.Config.get("instance_name"))}
+        Config.Store alive: #{inspect(Process.whereis(Hybridsocial.Config.Store))}
+        settings table: #{inspect(:ets.whereis(:hybridsocial_settings))}
+        rendered title/site_name: #{inspect(Regex.scan(~r/<title>[^<]*<\/title>|og:site_name" content="[^"]*"/, body))}
+      """
     end
   end
 

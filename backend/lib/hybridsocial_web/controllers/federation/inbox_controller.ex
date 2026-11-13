@@ -154,12 +154,12 @@ defmodule HybridsocialWeb.Federation.InboxController do
 
     cond do
       is_nil(actor_origin) or is_nil(object_id) ->
-        log_forward_reject("no dereferenceable object", actor)
+        log_forward_reject("no dereferenceable object", activity)
         {:error, :signature_invalid}
 
       origin(object_id) != actor_origin ->
         # The object isn't hosted on the claimed author's server.
-        log_forward_reject("object #{object_id} off actor origin #{actor_origin}", actor)
+        log_forward_reject("object #{object_id} off actor origin #{actor_origin}", activity)
         {:error, :signature_invalid}
 
       true ->
@@ -172,12 +172,12 @@ defmodule HybridsocialWeb.Federation.InboxController do
               # Trust ONLY the freshly-fetched object, not the forwarder's.
               Inbox.process(Map.put(activity, "object", obj))
             else
-              log_forward_reject("fetched object attributedTo mismatch (#{object_id})", actor)
+              log_forward_reject("fetched object attributedTo mismatch (#{object_id})", activity)
               {:error, :signature_invalid}
             end
 
           other ->
-            log_forward_reject("dereference failed #{inspect(other)} (#{object_id})", actor)
+            log_forward_reject("dereference failed #{inspect(other)} (#{object_id})", activity)
             {:error, :signature_invalid}
         end
     end
@@ -188,8 +188,25 @@ defmodule HybridsocialWeb.Federation.InboxController do
   defp actor_id(%{"id" => id}) when is_binary(id), do: id
   defp actor_id(_), do: nil
 
-  defp log_forward_reject(why, actor) do
-    Logger.warning("Inbox: forwarded activity rejected — #{why} (actor #{inspect(actor)})")
+  # `ld_signed` and `public` measure whether verifying Linked Data
+  # signatures (RsaSignature2017, which Mastodon attaches to forwarded
+  # activities) would recover these: an unsigned or non-public activity
+  # can't be recovered that way.
+  defp log_forward_reject(why, activity) do
+    actor = Containment.get_actor(activity)
+    ld_signed = is_map(activity["signature"])
+
+    public =
+      [activity["to"], activity["cc"]]
+      |> Enum.flat_map(&List.wrap/1)
+      |> Enum.any?(
+        &(&1 in ["https://www.w3.org/ns/activitystreams#Public", "as:Public", "Public"])
+      )
+
+    Logger.warning(
+      "Inbox: forwarded activity rejected — #{why} (actor #{inspect(actor)}) " <>
+        "ld_signed=#{ld_signed} public=#{public} type=#{activity["type"]}"
+    )
   end
 
   defp origin(url) do

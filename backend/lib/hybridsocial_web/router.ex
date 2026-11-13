@@ -37,6 +37,21 @@ defmodule HybridsocialWeb.Router do
     plug HybridsocialWeb.Plugs.FederationRateLimiter
   end
 
+  # Object ids (`/posts/:id`, `/dm/:id`) are also links people open in a
+  # browser. Their controllers redirect a `text/html` request to the human
+  # page; the plain federation pipeline 406'd it before they could.
+  pipeline :federation_object do
+    plug :accepts, ["json", "activity+json", "ld+json", "html"]
+    # It answers browsers only with a redirect (and peers with JSON), so
+    # send the browser security headers with a CSP that allows nothing,
+    # like the other redirect-only html pipeline below.
+    plug :put_secure_browser_headers,
+         %{"content-security-policy" => "default-src 'none'; frame-ancestors 'none'"}
+
+    plug HybridsocialWeb.Plugs.IpBan
+    plug HybridsocialWeb.Plugs.FederationRateLimiter
+  end
+
   pipeline :admin do
     plug HybridsocialWeb.Plugs.Auth
     plug HybridsocialWeb.Plugs.RequireAuth
@@ -1235,6 +1250,10 @@ defmodule HybridsocialWeb.Router do
     pipe_through :federation
 
     post "/inbox", InboxController, :shared_inbox
+  end
+
+  scope "/", HybridsocialWeb.Federation do
+    pipe_through :federation_object
 
     # Dereferenceable AP Note object for each post. Mastodon follows
     # `object.id` from Create activities to this URL to verify +
