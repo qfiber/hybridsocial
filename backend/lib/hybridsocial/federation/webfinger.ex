@@ -114,12 +114,37 @@ defmodule Hybridsocial.Federation.WebFinger do
 
         cond do
           domain != local_domain -> {:error, :not_local}
-          handle == local_domain -> {:ok, :instance_actor}
+          instance_actor_username?(handle, local_domain) -> {:ok, :instance_actor}
           true -> resolve_local_handle(handle)
         end
 
       :error ->
         {:error, :invalid_resource}
+    end
+  end
+
+  # The instance actor's username is our host, so it changes when the
+  # instance moves domain, and peers that cached the actor still look it up
+  # by the old name (mastodon.social asks for acct:<old host>@<our host>).
+  # `instance_actor_legacy_usernames` lists those old names; we answer with
+  # the current subject and Mastodon follows that rename.
+  defp instance_actor_username?(handle, local_domain) do
+    handle = String.downcase(handle)
+    handle == String.downcase(local_domain) or handle in legacy_instance_actor_usernames()
+  end
+
+  defp legacy_instance_actor_usernames do
+    case Hybridsocial.Config.get("instance_actor_legacy_usernames", []) do
+      names when is_list(names) ->
+        Enum.map(names, &(&1 |> to_string() |> String.downcase()))
+
+      names when is_binary(names) ->
+        names
+        |> String.split(",", trim: true)
+        |> Enum.map(&(&1 |> String.trim() |> String.downcase()))
+
+      _ ->
+        []
     end
   end
 
