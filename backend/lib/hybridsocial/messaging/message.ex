@@ -55,6 +55,9 @@ defmodule Hybridsocial.Messaging.Message do
     ])
     |> validate_required([:conversation_id, :sender_id, :ciphertext, :nonce, :encryption_version])
     |> validate_inclusion(:content_type, @valid_content_types)
+    # A remote ChatMessage id is unbounded; cap it so an absurd one is a
+    # changeset error, not a database error (#267).
+    |> validate_length(:ap_id, max: 2048, count: :bytes)
     |> foreign_key_constraint(:conversation_id)
     |> foreign_key_constraint(:sender_id)
     |> foreign_key_constraint(:media_id)

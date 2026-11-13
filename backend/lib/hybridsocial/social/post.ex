@@ -124,6 +124,10 @@ defmodule Hybridsocial.Social.Post do
     |> validate_length(:content, max: char_limit)
     |> validate_length(:spoiler_text, max: 500)
     |> validate_length(:language, max: 5)
+    # Remote ids are unbounded; cap them so an absurd one is a changeset
+    # error, not a database error (a btree index entry tops out near 2.7 KB).
+    |> validate_length(:ap_id, max: 2048, count: :bytes)
+    |> validate_length(:parent_ap_id, max: 2048, count: :bytes)
     |> generate_content_html()
     |> foreign_key_constraint(:identity_id)
     |> foreign_key_constraint(:parent_id)
