@@ -15,7 +15,9 @@ defmodule Hybridsocial.Federation.RemoteMediaOnlyTest do
         "type" => "Note",
         "content" => "",
         "attributedTo" => @actor,
-        "published" => "2026-11-13T10:00:00Z",
+        # Relative to now: remote posts get a 24h edit window from `published`,
+        # so a fixed date made the edit test fail a day after it was written.
+        "published" => DateTime.utc_now() |> DateTime.to_iso8601(),
         "to" => ["https://www.w3.org/ns/activitystreams#Public"]
       },
       extra
