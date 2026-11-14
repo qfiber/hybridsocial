@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { getAdminSettings, updateAdminSettings } from '$lib/api/admin.js';
+  import { getAdminSettings } from '$lib/api/admin.js';
   import { listDeletedGroups, restoreGroup } from '$lib/api/groups.js';
   import { listDeletedPages, restorePage } from '$lib/api/pages.js';
   import type { Group } from '$lib/api/types.js';
   import { addToast } from '$lib/stores/toast.js';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import StatusPill from '$lib/components/admin/StatusPill.svelte';
   import { t } from '$lib/stores/i18n.js';
   import { t as ti } from '$lib/utils/i18n.js';
 
@@ -15,7 +16,6 @@
   // turns it on, appealed/un-appealed takedowns are kept indefinitely and
   // only the pre-deletion reminder fires.
   let settingsLoading = $state(true);
-  let savingSettings = $state(false);
   let purgeEnabled = $state(false);
   let retentionDays = $state(60);
   let reminderLeadDays = $state(7);
@@ -43,22 +43,7 @@
     }
   }
 
-  async function saveSettings() {
-    if (savingSettings) return;
-    savingSettings = true;
-    try {
-      await updateAdminSettings([
-        { key: 'takedown_purge_enabled', value: purgeEnabled },
-        { key: 'takedown_retention_days', value: Math.max(1, Math.round(retentionDays)) },
-        { key: 'takedown_reminder_lead_days', value: Math.max(0, Math.round(reminderLeadDays)) },
-      ]);
-      addToast(ti('admin_takedowns.toast_saved'), 'success');
-    } catch {
-      addToast(ti('admin_takedowns.toast_save_error'), 'error');
-    } finally {
-      savingSettings = false;
-    }
-  }
+
 
   // ── Deleted content — restore ───────────────────────────────────────
   let groupsLoading = $state(true);
@@ -130,46 +115,31 @@
     <p class="tk-lead">{$t('admin_takedowns.lead')}</p>
   </header>
 
-  <!-- Auto-purge safety controls -->
+  <!-- Auto-deletion settings live in Settings; this is a read-only summary. -->
   <section class="tk-card">
     <h2 class="tk-card-title">{$t('admin_takedowns.auto_delete_title')}</h2>
     {#if settingsLoading}
       <div class="tk-center"><Spinner /></div>
     {:else}
-      <label class="tk-toggle">
-        <input type="checkbox" bind:checked={purgeEnabled} />
-        <span>
-          <strong>{$t('admin_takedowns.toggle_label')}</strong>
-          <span class="tk-toggle-hint">
-            {$t('admin_takedowns.toggle_hint_pre')} <em>{$t('admin_takedowns.toggle_hint_em')}</em> {$t('admin_takedowns.toggle_hint_post')}
-          </span>
-        </span>
-      </label>
-
-      {#if purgeEnabled}
-        <p class="tk-warning" role="alert">
-          ⚠ {$t('admin_takedowns.warning')}
-        </p>
-      {/if}
-
-      <div class="tk-fields">
-        <label class="tk-field">
-          <span>{$t('admin_takedowns.retention_label')}</span>
-          <input type="number" min="1" bind:value={retentionDays} />
-          <span class="tk-field-hint">{$t('admin_takedowns.retention_hint')}</span>
-        </label>
-        <label class="tk-field">
-          <span>{$t('admin_takedowns.reminder_label')}</span>
-          <input type="number" min="0" bind:value={reminderLeadDays} />
-          <span class="tk-field-hint">{$t('admin_takedowns.reminder_hint')}</span>
-        </label>
-      </div>
-
-      <div class="tk-actions">
-        <button type="button" class="btn btn-primary" onclick={saveSettings} disabled={savingSettings}>
-          {savingSettings ? $t('admin_takedowns.saving') : $t('admin_takedowns.save')}
-        </button>
-      </div>
+      <dl class="tk-summary">
+        <div>
+          <dt>{$t('admin_takedowns.toggle_label')}</dt>
+          <dd><StatusPill tone={purgeEnabled ? 'warning' : 'neutral'} label={purgeEnabled ? $t('admin_settings.on') : $t('admin_settings.off')} /></dd>
+        </div>
+        <div>
+          <dt>{$t('admin_takedowns.retention_label')}</dt>
+          <dd>{$t('admin_takedowns.days', { count: retentionDays })}</dd>
+        </div>
+        <div>
+          <dt>{$t('admin_takedowns.reminder_label')}</dt>
+          <dd>{$t('admin_takedowns.days', { count: reminderLeadDays })}</dd>
+        </div>
+      </dl>
+      <p class="tk-settings-links">
+        {$t('admin_takedowns.settings_moved')}
+        <a href="/admin/settings/moderation">{$t('admin_settings.group.moderation')}</a> ·
+        <a href="/admin/settings/retention">{$t('admin_settings.group.retention')}</a>
+      </p>
     {/if}
   </section>
 
@@ -273,80 +243,6 @@
     padding: var(--space-4, 16px);
   }
 
-  .tk-toggle {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-3, 12px);
-    cursor: pointer;
-  }
-
-  .tk-toggle input {
-    margin-top: 3px;
-    flex-shrink: 0;
-  }
-
-  .tk-toggle > span {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1, 4px);
-  }
-
-  .tk-toggle-hint {
-    font-size: var(--text-sm, 0.875rem);
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-  }
-
-  .tk-warning {
-    margin: 0;
-    padding: var(--space-3, 12px);
-    border-radius: var(--radius-md, 8px);
-    background: color-mix(in srgb, var(--color-danger) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-danger) 30%, transparent);
-    color: var(--color-danger);
-    font-size: var(--text-sm, 0.875rem);
-    line-height: 1.5;
-  }
-
-  .tk-fields {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4, 16px);
-  }
-
-  .tk-field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1, 4px);
-    flex: 1 1 220px;
-  }
-
-  .tk-field > span:first-child {
-    font-size: var(--text-sm, 0.875rem);
-    font-weight: 600;
-  }
-
-  .tk-field input {
-    padding: var(--space-2, 8px) var(--space-3, 12px);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md, 8px);
-    background: var(--color-surface);
-    color: var(--color-text);
-    font: inherit;
-    max-width: 8rem;
-  }
-
-  .tk-field-hint {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--color-text-tertiary);
-    line-height: 1.4;
-  }
-
-  .tk-actions {
-    display: flex;
-    justify-content: flex-end;
-  }
-
   .tk-empty {
     margin: 0;
     color: var(--color-text-tertiary);
@@ -386,5 +282,28 @@
 
   .tk-footnote a {
     color: var(--color-primary);
+  }
+
+  .tk-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+  }
+
+  .tk-summary dt {
+    font-size: var(--text-xs);
+    color: var(--color-text-secondary);
+  }
+
+  .tk-summary dd {
+    margin: 2px 0 0;
+    font-weight: 600;
+  }
+
+  .tk-settings-links {
+    margin: var(--space-3) 0 0;
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
   }
 </style>

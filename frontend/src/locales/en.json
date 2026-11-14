@@ -444,7 +444,7 @@
   "admin_takedowns.toast_page_restore_error": "Could not restore page",
   "admin_takedowns.untitled_page": "Untitled page",
   "admin_takedowns.title": "Takedowns",
-  "admin_takedowns.lead": "When staff remove a group or page, the owner is notified and can appeal. Restore appealed or mistaken removals here, and control whether un-appealed takedowns are ever permanently deleted.",
+  "admin_takedowns.lead": "When staff remove a group or page, the owner is notified and can appeal. Restore appealed or mistaken removals here.",
   "admin_takedowns.auto_delete_title": "Automatic permanent deletion",
   "admin_takedowns.toggle_label": "Permanently delete un-appealed takedowns",
   "admin_takedowns.toggle_hint_pre": "When on, content still under a takedown past its window is",
@@ -1269,5 +1269,18 @@
   "admin_settings.metrics_retention_days": "Service metrics",
   "admin_settings.backup_retention_days": "Backups",
   "admin_settings.federation_delivery_retention_days": "Federation delivery log",
-  "admin_settings.federation_delivery_retention_days_help": "0 keeps it forever."
+  "admin_settings.federation_delivery_retention_days_help": "0 keeps it forever.",
+  "admin_blocklists.title": "Blocklists",
+  "admin_blocklists.description": "Content filters, blocked IPs, banned email domains, banned media and blocked hashtags. They apply to new content and sign-ups as soon as they're added.",
+  "admin_invites.title": "Invites",
+  "admin_invites.mode_note": "Invite codes are only used when sign-ups are set to Invite only.",
+  "admin_invites.mode_link": "Change it in Sign-up & access",
+  "admin_takedowns.days.one": "{count} day",
+  "admin_takedowns.days.other": "{count} days",
+  "admin_takedowns.settings_moved": "Change these in",
+  "admin.email.report_emails.moved": "Staff emails about new reports are set up in",
+  "admin.federation.retention_forever": "Delivery rows are kept forever.",
+  "admin.federation.retention_days.one": "Delivered and failed rows are pruned after {count} day. Pending deliveries are never touched.",
+  "admin.federation.retention_days.other": "Delivered and failed rows are pruned after {count} days. Pending deliveries are never touched.",
+  "admin.federation.retention_change": "Change in Data retention"
 }

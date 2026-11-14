@@ -224,4 +224,10 @@ Gates for each: `mix precommit`, `npm run check` (0 errors), `node scripts/check
   from the schema; dedicated editors become hidden nav items under their group;
   `/admin/instance/general` redirects. Still unmanaged and needing editors: `mrf_policies`,
   `mrf_keyword_replace`, `upload_filters`.
+- PR 4 (`refactor/admin-move-editors`): Blocklists (content filters, IPs, email domains,
+  media hashes, hashtags) split out of Moderation into `/admin/moderation/blocklists`, with
+  old `?tab=` links redirected; Registration reduced to Invites (mode and bot protection live
+  in Sign-up & access); Takedowns, Federation delivery and Email show read-only summaries
+  linking to the settings pages instead of duplicate editors. Also fixes the rail lighting up
+  "Reports & queue" on every `/admin/moderation/*` page.
 
