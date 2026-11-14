@@ -69,9 +69,13 @@
     if (open) {
       previouslyFocused = document.activeElement as HTMLElement;
       requestAnimationFrame(() => {
-        const focusable = dialogEl?.querySelector<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        );
+        // Content can name its own first stop (e.g. a search box) with
+        // data-autofocus; otherwise the first focusable, the close button.
+        const focusable =
+          dialogEl?.querySelector<HTMLElement>('[data-autofocus]') ??
+          dialogEl?.querySelector<HTMLElement>(
+            'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+          );
         focusable?.focus();
       });
     }

@@ -75,3 +75,6 @@ mobile/.flutter-plugins-dependencies
 *.zip
 .claude/
 claude-project-id.txt
+
+# graphify knowledge graph output
+graphify-out/

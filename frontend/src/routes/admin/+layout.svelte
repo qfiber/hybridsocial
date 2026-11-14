@@ -8,6 +8,7 @@
   import { api } from '$lib/api/client.js';
   import AdminSidebar from '$lib/components/admin/AdminSidebar.svelte';
   import AdminTopBar from '$lib/components/admin/AdminTopBar.svelte';
+  import AdminCommandPalette from '$lib/components/admin/AdminCommandPalette.svelte';
   import { page } from '$app/state';
   import SudoGate from '$lib/components/admin/SudoGate.svelte';
   import Toast from '$lib/components/ui/Toast.svelte';
@@ -39,8 +40,15 @@
     navOpen = false;
   });
 
+  let paletteOpen = $state(false);
+
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && navOpen) navOpen = false;
+    // Ctrl/Cmd+K opens search, but only once the panel is unlocked.
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && sudoOk && !needsOtp) {
+      e.preventDefault();
+      paletteOpen = true;
+    }
   }
 
   function onSudoRequired() {
@@ -134,7 +142,11 @@
   <div class="admin-layout">
     <AdminSidebar open={navOpen} onclose={() => (navOpen = false)} />
     <div class="admin-main">
-      <AdminTopBar menuOpen={navOpen} onmenu={() => (navOpen = !navOpen)} />
+      <AdminTopBar
+        menuOpen={navOpen}
+        onmenu={() => (navOpen = !navOpen)}
+        onsearch={sudoOk && !needsOtp ? () => (paletteOpen = true) : undefined}
+      />
       <main class="admin-content">
         {#if needsOtp}
           <div class="otp-gate" role="alert">
@@ -171,6 +183,9 @@
       </main>
     </div>
   </div>
+  {#if sudoOk && !needsOtp}
+    <AdminCommandPalette bind:open={paletteOpen} />
+  {/if}
   <Toast />
 {:else}
   <div class="admin-loading">

@@ -1282,5 +1282,17 @@
   "admin.federation.retention_forever": "Delivery rows are kept forever.",
   "admin.federation.retention_days.one": "Delivered and failed rows are pruned after {count} day. Pending deliveries are never touched.",
   "admin.federation.retention_days.other": "Delivered and failed rows are pruned after {count} days. Pending deliveries are never touched.",
-  "admin.federation.retention_change": "Change in Data retention"
+  "admin.federation.retention_change": "Change in Data retention",
+  "admin_palette.title": "Search the admin panel",
+  "admin_palette.open": "Search",
+  "admin_palette.placeholder": "Search pages and settings, e.g. retention or captcha",
+  "admin_palette.page": "Page",
+  "admin_palette.setting": "Setting",
+  "admin_palette.empty": "Nothing matches.",
+  "admin_palette.hint": "↑ ↓ to move, Enter to open, Esc to close",
+  "admin_changed.title": "Changed settings",
+  "admin_changed.description": "Every setting that differs from its default, across all groups. A quick record of how this server is configured.",
+  "admin_changed.none": "Every setting is on its default.",
+  "admin_changed.count.one": "{count} setting differs from its default.",
+  "admin_changed.count.other": "{count} settings differ from their defaults."
 }

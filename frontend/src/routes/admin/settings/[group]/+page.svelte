@@ -2,6 +2,7 @@
   // One settings group, rendered from the backend registry. Everything here
   // is generic: adding a setting to Config.Registry (plus its en.json label)
   // is all it takes for it to appear on the right page.
+  import { tick } from 'svelte';
   import { page } from '$app/state';
   import { t } from '$lib/stores/i18n.js';
   import { t as ti } from '$lib/utils/i18n.js';
@@ -76,6 +77,25 @@
 
   $effect(() => {
     if (groupId) load(groupId);
+  });
+
+  // Deep link (#setting-<key>) from search or the Changed view: open its
+  // Advanced section if needed, scroll to the row and flash it.
+  $effect(() => {
+    const hash = page.url.hash;
+    if (!group || !hash.startsWith('#setting-')) return;
+    const id = decodeURIComponent(hash.slice(1));
+    tick().then(() => {
+      const control = document.getElementById(id);
+      const row = control?.closest<HTMLElement>('.setting-row');
+      const details = control?.closest('details');
+      if (details) details.open = true;
+      if (!row) return;
+      row.scrollIntoView({ block: 'center' });
+      control?.focus({ preventScroll: true });
+      row.classList.add('setting-flash');
+      setTimeout(() => row.classList.remove('setting-flash'), 2000);
+    });
   });
 
   async function save() {
@@ -295,5 +315,10 @@
 
   .advanced > :global(.setting-row + .setting-row) {
     border-block-start: 1px solid var(--color-border);
+  }
+
+  :global(.setting-row.setting-flash) {
+    background: var(--color-primary-soft);
+    transition: background 0.6s ease;
   }
 </style>
