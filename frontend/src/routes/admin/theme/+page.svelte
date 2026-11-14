@@ -4,7 +4,7 @@
   import { t } from '$lib/stores/i18n.js';
   import { t as tr } from '$lib/utils/i18n.js';
   import { getAdminTheme, saveAdminTheme, uploadLogo, uploadFavicon, uploadOgImage } from '$lib/api/admin.js';
-  import { applyTheme, liftForDark, resolveFontFamily } from '$lib/stores/theme.js';
+  import { withHueOf, applyTheme, liftForDark, resolveFontFamily } from '$lib/stores/theme.js';
   import type { AdminThemeConfig } from '$lib/api/types.js';
 
   // Auto dark values, keyed by theme key. Mirrors what applyTheme() renders
@@ -40,6 +40,10 @@
   function darkAuto(key: string): string {
     const r = theme as unknown as Record<string, string>;
     if (DARK_LIFT_FROM[key]) return liftForDark(r[DARK_LIFT_FROM[key]] || '#000000');
+    // Hover/Soft keep the designed dark shade but take the primary's hue,
+    // matching applyTheme().
+    if (key === 'color_primary_hover' || key === 'color_primary_soft')
+      return withHueOf(DARK_RAMP[key], darkValue('color_primary'));
     return DARK_RAMP[key] ?? r[key] ?? '#000000';
   }
 
@@ -255,8 +259,17 @@
   }
 
   function setColorValue(key: keyof AdminThemeConfig, value: string) {
-    const field = previewMode === 'dark' ? 'dark_' + (key as string) : (key as string);
-    (theme as unknown as Record<string, unknown>)[field] = value;
+    const r = theme as unknown as Record<string, unknown>;
+    const prefix = previewMode === 'dark' ? 'dark_' : '';
+    r[prefix + (key as string)] = value;
+    // Hover and Soft follow Primary's hue, keeping their own lightness. In
+    // dark mode they only follow when pinned; unpinned ones derive anyway.
+    if (key === 'color_primary') {
+      for (const k of ['color_primary_hover', 'color_primary_soft']) {
+        const current = r[prefix + k];
+        if (typeof current === 'string' && current) r[prefix + k] = withHueOf(current, value);
+      }
+    }
     theme = { ...theme };
   }
 

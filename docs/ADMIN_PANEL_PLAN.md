@@ -252,5 +252,6 @@ All seven PRs are done. Follow-ups found along the way:
 - Done (`feat/admin-structured-settings`): editors for `mrf_policies` (checklist), `mrf_keyword_replace`
   (find/replace rows) and `upload_filters` (checklist). Every `Config.get` tunable now has an editor.
   Also fixed: multi-word MRF policies never resolved; EXIF stripping is now always on.
-- Open: "Primary soft" is not re-derived when Primary changes in the theme editor.
+- Done (`fix/theme-primary-soft`): Hover and Soft follow Primary's hue (keeping their own
+  lightness) in the editor, and in dark mode on the live site unless a dark override is pinned.
 
