@@ -248,7 +248,9 @@ Gates for each: `mix precommit`, `npm run check` (0 errors), `node scripts/check
   are tokens since PR 2, and the editor already shows WCAG contrast badges per colour. Derived
   `--admin-*` tokens were dropped as unneeded: the panel already uses the global tokens directly.
 
-All seven PRs are done. Follow-ups found along the way: editors for `mrf_policies`,
-`mrf_keyword_replace` and `upload_filters`; "Primary soft" is not re-derived when Primary changes
-in the theme editor.
+All seven PRs are done. Follow-ups found along the way:
+- Done (`feat/admin-structured-settings`): editors for `mrf_policies` (checklist), `mrf_keyword_replace`
+  (find/replace rows) and `upload_filters` (checklist). Every `Config.get` tunable now has an editor.
+  Also fixed: multi-word MRF policies never resolved; EXIF stripping is now always on.
+- Open: "Primary soft" is not re-derived when Primary changes in the theme editor.
 

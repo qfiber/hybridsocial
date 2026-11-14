@@ -11,7 +11,8 @@ defmodule Hybridsocial.Config.Registry do
   Entry fields:
 
     * `:type` - `:string`, `:integer`, `:number`, `:boolean`, `:string_list`,
-      or `{:enum, values}`
+      `{:enum, values}`, `{:multi_enum, values}` (a subset, in the given
+      order), or `:replacement_list` (`[%{"pattern", "replacement"}]`)
     * `:group` / `:section` - where the setting lives in the admin panel; each
       group is guarded by its own permission (`permission_for/1`)
     * `:default` - the value readers fall back to when nothing is stored, shown
@@ -146,6 +147,7 @@ defmodule Hybridsocial.Config.Registry do
     {:posting, :rate, "bot_posts_per_day", :integer, 0, min: 0, page: :posting_limits},
 
     # --- Media & storage -----------------------------------------------------
+    {:media, :uploads, "upload_filters", {:multi_enum, ~w(Dedupe Anonymize)}, ["Dedupe"], []},
     {:media, :uploads, "max_image_size_mb", :integer, 10, min: 1, max: 1000, unit: :mb},
     {:media, :uploads, "max_video_size_mb", :integer, 100, min: 1, max: 10_000, unit: :mb},
     {:media, :uploads, "max_avatar_size", :integer, 2_000_000, min: 1, unit: :bytes},
@@ -261,7 +263,10 @@ defmodule Hybridsocial.Config.Registry do
     {:federation, :dead_actors, "federation_dead_actor_failure_threshold", :integer, 5,
      min: 1, max: 100},
     {:federation, :dead_actors, "federation_dead_actor_purge_content", :boolean, false, []},
+    {:federation, :filters, "mrf_policies",
+     {:multi_enum, ~w(keyword hellthread activity_expiration anti_link_spam no_empty)}, [], []},
     {:federation, :filters, "mrf_keyword_reject", :string_list, [], []},
+    {:federation, :filters, "mrf_keyword_replace", :replacement_list, [], []},
     {:federation, :filters, "mrf_hellthread_threshold", :integer, 10, min: 1, max: 1000},
     {:federation, :filters, "mrf_activity_expiration_days", :integer, 365, min: 1, unit: :days},
     {:federation, :filters, "instance_actor_legacy_usernames", :string_list, [], @adv},
@@ -383,7 +388,7 @@ defmodule Hybridsocial.Config.Registry do
   # own editor. A test checks every `Config.get("...")` key in lib/ is either
   # registered or matched here, so new tunables can't silently skip the panel.
   @unmanaged_prefixes ~w(theme_ email_ translation_ vapid_ instance_og_image)
-  @unmanaged ~w(app_icon_source instance_rules mrf_policies mrf_keyword_replace upload_filters)
+  @unmanaged ~w(app_icon_source instance_rules)
 
   @doc "Whether `key` is intentionally managed outside the registry."
   @spec unmanaged?(String.t()) :: boolean()
@@ -485,6 +490,34 @@ defmodule Hybridsocial.Config.Registry do
   end
 
   defp cast_entry(%{type: :string_list}, _), do: {:error, :invalid_list}
+
+  defp cast_entry(%{type: {:multi_enum, values}}, value) when is_list(value) do
+    if Enum.all?(value, &(&1 in values)),
+      do: {:ok, Enum.uniq(value)},
+      else: {:error, :invalid_option}
+  end
+
+  defp cast_entry(%{type: {:multi_enum, _}}, _), do: {:error, :invalid_option}
+
+  defp cast_entry(%{type: :replacement_list}, value)
+       when is_list(value) and length(value) <= 200 do
+    # A fully blank row (Add clicked, nothing typed) is dropped, not an error.
+    pairs =
+      value
+      |> Enum.reject(&(&1 == %{"pattern" => "", "replacement" => ""}))
+      |> Enum.map(fn
+        %{"pattern" => p, "replacement" => r} when is_binary(p) and is_binary(r) ->
+          if p != "" and String.length(p) <= 500 and String.length(r) <= 500,
+            do: %{"pattern" => p, "replacement" => r}
+
+        _ ->
+          nil
+      end)
+
+    if Enum.all?(pairs), do: {:ok, pairs}, else: {:error, :invalid_list}
+  end
+
+  defp cast_entry(%{type: :replacement_list}, _), do: {:error, :invalid_list}
 
   defp cast_entry(%{type: {:enum, values}}, value) when is_binary(value) do
     if value in values, do: {:ok, value}, else: {:error, :invalid_option}

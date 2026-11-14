@@ -84,6 +84,8 @@ defmodule Hybridsocial.Config.RegistryTest do
           :number -> Map.get(entry, :min, 0)
           :string -> ""
           :string_list -> []
+          :replacement_list -> []
+          {:multi_enum, [first | _]} -> [first]
           {:enum, [first | _]} -> first
         end
 
@@ -150,8 +152,11 @@ defmodule Hybridsocial.Config.RegistryTest do
       for entry <- Registry.entries(), not Map.has_key?(entry, :page), uniq: true do
         options =
           case entry.type do
-            {:enum, values} -> Enum.map(values, &"admin_settings.option.#{entry.key}.#{&1}")
-            _ -> []
+            {kind, values} when kind in [:enum, :multi_enum] ->
+              Enum.map(values, &"admin_settings.option.#{entry.key}.#{&1}")
+
+            _ ->
+              []
           end
 
         ["admin_settings.#{entry.key}", "admin_settings.section.#{entry.section}" | options]
@@ -163,5 +168,34 @@ defmodule Hybridsocial.Config.RegistryTest do
       (List.flatten(wanted) ++ groups) |> Enum.uniq() |> Enum.reject(&Map.has_key?(en, &1))
 
     assert missing == [], "missing en.json labels: #{Enum.join(missing, ", ")}"
+  end
+
+  describe "structured settings" do
+    test "multi_enum accepts a subset of its options, deduped" do
+      assert Registry.cast("mrf_policies", ["keyword", "anti_link_spam", "keyword"]) ==
+               {:ok, ["keyword", "anti_link_spam"]}
+
+      assert Registry.cast("mrf_policies", []) == {:ok, []}
+      # Drop rejects all federation; it is not offered as a checkbox.
+      assert Registry.cast("mrf_policies", ["drop"]) == {:error, :invalid_option}
+      assert Registry.cast("upload_filters", ["ExifStrip"]) == {:error, :invalid_option}
+    end
+
+    test "replacement_list needs a non-empty pattern per pair" do
+      pairs = [%{"pattern" => "badword", "replacement" => "***"}]
+      assert Registry.cast("mrf_keyword_replace", pairs) == {:ok, pairs}
+
+      assert Registry.cast("mrf_keyword_replace", [%{"pattern" => "", "replacement" => "x"}]) ==
+               {:error, :invalid_list}
+
+      assert Registry.cast("mrf_keyword_replace", [%{"pattern" => "x"}]) ==
+               {:error, :invalid_list}
+
+      blank = %{"pattern" => "", "replacement" => ""}
+
+      assert Registry.cast("mrf_keyword_replace", [blank | pairs]) == {:ok, pairs}
+
+      assert Registry.cast("mrf_keyword_replace", "x") == {:error, :invalid_list}
+    end
   end
 end

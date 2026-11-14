@@ -7,6 +7,7 @@ defmodule Hybridsocial.Media.Filter do
   """
 
   alias Hybridsocial.Config
+  alias Hybridsocial.Media.Filters.{Anonymize, Dedupe, ExifStrip}
 
   require Logger
 
@@ -31,32 +32,26 @@ defmodule Hybridsocial.Media.Filter do
     end)
   end
 
-  defp configured_filters do
-    case Config.get("upload_filters", []) do
-      [_ | _] = filters ->
-        filters
-        |> Enum.map(&resolve_filter_module/1)
-        |> Enum.reject(&is_nil/1)
+  # Metadata stripping always runs first: it removes location and device data
+  # from photos, so it must not be one checkbox away from being switched off.
+  # `upload_filters` picks the optional ones; unset keeps the old default
+  # (Dedupe), an empty list means none.
+  @optional %{"Dedupe" => Dedupe, "Anonymize" => Anonymize}
 
-      _ ->
-        # Default filter pipeline
-        [
-          Hybridsocial.Media.Filters.ExifStrip,
-          Hybridsocial.Media.Filters.Dedupe
-        ]
-    end
+  @doc "The filter modules to run, in order."
+  def configured_filters do
+    optional =
+      case Config.get("upload_filters") do
+        nil ->
+          [Dedupe]
+
+        names when is_list(names) ->
+          names |> Enum.map(&Map.get(@optional, &1)) |> Enum.reject(&is_nil/1)
+
+        _ ->
+          [Dedupe]
+      end
+
+    Enum.uniq([ExifStrip | optional])
   end
-
-  defp resolve_filter_module(name) when is_binary(name) do
-    module_name = "Elixir.Hybridsocial.Media.Filters.#{name}"
-
-    try do
-      String.to_existing_atom(module_name)
-    rescue
-      ArgumentError -> nil
-    end
-  end
-
-  defp resolve_filter_module(module) when is_atom(module), do: module
-  defp resolve_filter_module(_), do: nil
 end

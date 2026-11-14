@@ -67,15 +67,25 @@ defmodule Hybridsocial.Federation.MRF do
     |> Map.new()
   end
 
-  defp resolve_policy_module(name) when is_binary(name) do
-    module_name = "Elixir.Hybridsocial.Federation.MRF.#{String.capitalize(name)}Policy"
+  # Setting names -> modules. An explicit map instead of building a module name
+  # from the string: `String.capitalize("anti_link_spam")` gave
+  # "Anti_link_spam", so multi-word policies could never be enabled, and
+  # config input never becomes an atom. Names are matched in snake_case, so
+  # "noOp" and "no_op" both work.
+  @policies %{
+    "simple" => Hybridsocial.Federation.MRF.SimplePolicy,
+    "blocked_hashtag" => Hybridsocial.Federation.MRF.BlockedHashtagPolicy,
+    "keyword" => Hybridsocial.Federation.MRF.KeywordPolicy,
+    "hellthread" => Hybridsocial.Federation.MRF.HellthreadPolicy,
+    "activity_expiration" => Hybridsocial.Federation.MRF.ActivityExpirationPolicy,
+    "anti_link_spam" => Hybridsocial.Federation.MRF.AntiLinkSpamPolicy,
+    "no_empty" => Hybridsocial.Federation.MRF.NoEmptyPolicy,
+    "drop" => Hybridsocial.Federation.MRF.DropPolicy,
+    "no_op" => Hybridsocial.Federation.MRF.NoOpPolicy
+  }
 
-    try do
-      String.to_existing_atom(module_name)
-    rescue
-      ArgumentError -> nil
-    end
-  end
+  defp resolve_policy_module(name) when is_binary(name),
+    do: Map.get(@policies, Macro.underscore(name))
 
   defp resolve_policy_module(module) when is_atom(module), do: module
   defp resolve_policy_module(_), do: nil
