@@ -7,7 +7,14 @@
   import { sudoExpiresAt } from '$lib/stores/admin-sudo.js';
   import { t } from '$lib/stores/i18n.js';
 
-  let { menuOpen = false, onmenu }: { menuOpen?: boolean; onmenu?: () => void } = $props();
+  let {
+    menuOpen = false,
+    onmenu,
+    onsearch,
+  }: { menuOpen?: boolean; onmenu?: () => void; onsearch?: () => void } = $props();
+
+  // Show the platform's own shortcut in the hint.
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
   let item = $derived(adminItemForPath(page.url.pathname));
   let section = $derived(item ? adminSectionForItem(item) : null);
@@ -65,6 +72,16 @@
       {/if}
     </ol>
   </nav>
+
+  {#if onsearch}
+  <button type="button" class="admin-search" onclick={onsearch} aria-keyshortcuts="Control+K Meta+K">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+    </svg>
+    <span class="admin-search-label">{$t('admin_palette.open')}</span>
+    <kbd class="admin-search-kbd">{isMac ? '⌘' : 'Ctrl'} K</kbd>
+  </button>
+  {/if}
 
   {#if minutesLeft !== null}
     <span
@@ -164,6 +181,47 @@
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .admin-search {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-shrink: 0;
+    height: 34px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    background: var(--color-surface-raised);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .admin-search:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+  }
+
+  .admin-search-kbd {
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    background: var(--color-surface-container);
+    font-family: inherit;
+    font-size: var(--text-xs);
+  }
+
+  @media (max-width: 560px) {
+    .admin-search-label,
+    .admin-search-kbd {
+      display: none;
+    }
+
+    .admin-search {
+      width: 40px;
+      padding: 0;
+      justify-content: center;
+    }
   }
 
   .admin-sudo-chip {

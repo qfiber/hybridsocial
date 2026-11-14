@@ -230,4 +230,10 @@ Gates for each: `mix precommit`, `npm run check` (0 errors), `node scripts/check
   in Sign-up & access); Takedowns, Federation delivery and Email show read-only summaries
   linking to the settings pages instead of duplicate editors. Also fixes the rail lighting up
   "Reports & queue" on every `/admin/moderation/*` page.
+- PR 5 (`feat/admin-command-palette`): Ctrl/Cmd+K search over every admin page (hidden editors
+  included) and every registry setting by label, help text, raw key or group; picking a setting
+  deep-links to `/admin/settings/<group>#setting-<key>`, which opens its Advanced section,
+  scrolls to it, focuses it and flashes the row. New `/admin/settings/changed` lists every
+  stored (non-default) setting with value, default, a link and reset. `Modal` now honours
+  `data-autofocus` for its initial focus.
 
