@@ -279,6 +279,30 @@ defmodule Hybridsocial.Federation.MRFTest do
       assert MRF.configured_policies() == [SimplePolicy, BlockedHashtagPolicy, DropPolicy]
     end
 
+    # Names used to be capitalised into a module name, so multi-word
+    # policies ("anti_link_spam" -> "Anti_link_spam") never resolved.
+    test "resolves multi-word policy names" do
+      :ok = Config.set("mrf_policies", ["anti_link_spam", "activity_expiration", "no_empty"])
+
+      assert MRF.configured_policies() == [
+               SimplePolicy,
+               BlockedHashtagPolicy,
+               Hybridsocial.Federation.MRF.AntiLinkSpamPolicy,
+               Hybridsocial.Federation.MRF.ActivityExpirationPolicy,
+               Hybridsocial.Federation.MRF.NoEmptyPolicy
+             ]
+    end
+
+    test "ignores unknown policy names" do
+      :ok = Config.set("mrf_policies", ["keyword", "Elixir.File", "nonsense"])
+
+      assert MRF.configured_policies() == [
+               SimplePolicy,
+               BlockedHashtagPolicy,
+               Hybridsocial.Federation.MRF.KeywordPolicy
+             ]
+    end
+
     test "halts on first rejection" do
       :ok = Config.set("mrf_policies", ["drop", "noOp"])
       assert {:reject, _} = MRF.filter_pipeline(create_activity())

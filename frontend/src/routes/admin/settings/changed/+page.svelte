@@ -56,7 +56,13 @@
   function show(entry: SettingSchemaEntry, v: SettingValue): string {
     if (v === null || v === '' || (Array.isArray(v) && !v.length)) return tr('admin_settings.empty', 'empty');
     if (typeof v === 'boolean') return v ? $t('admin_settings.on') : $t('admin_settings.off');
-    if (Array.isArray(v)) return v.join(', ');
+    if (Array.isArray(v)) {
+      if (entry.type === 'multi_enum')
+        return (v as string[]).map((o) => tr(`admin_settings.option.${entry.key}.${o}`, o)).join(', ');
+      if (entry.type === 'replacement_list')
+        return (v as { pattern: string; replacement: string }[]).map((p) => `${p.pattern} → ${p.replacement}`).join(', ');
+      return v.join(', ');
+    }
     if (entry.type === 'enum') return tr(`admin_settings.option.${entry.key}.${v}`, String(v));
     const unit = entry.unit ? tr(`admin_settings.unit.${entry.unit}`, entry.unit) : '';
     return unit ? `${v} ${unit}` : String(v);

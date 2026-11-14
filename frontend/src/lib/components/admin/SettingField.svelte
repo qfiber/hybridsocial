@@ -3,7 +3,7 @@
   // its unit, default, "changed" state and reset action. The settings page
   // owns the form state; this component only edits `value`.
   import { t } from '$lib/stores/i18n.js';
-  import type { SettingSchemaEntry, SettingValue } from '$lib/api/types.js';
+  import type { ReplacementPair, SettingSchemaEntry, SettingValue } from '$lib/api/types.js';
   import Toggle from '$lib/components/ui/Toggle.svelte';
   import SettingRow from './SettingRow.svelte';
   import StatusPill from './StatusPill.svelte';
@@ -51,10 +51,30 @@
   function formatValue(v: SettingValue): string {
     if (v === null || v === '') return tr('admin_settings.empty', 'empty');
     if (typeof v === 'boolean') return v ? tr('admin_settings.on', 'On') : tr('admin_settings.off', 'Off');
-    if (Array.isArray(v)) return v.length ? v.join(', ') : tr('admin_settings.empty', 'empty');
+    if (Array.isArray(v)) {
+      if (!v.length) return tr('admin_settings.empty', 'empty');
+      if (entry.type === 'multi_enum') return (v as string[]).map(optionLabel).join(', ');
+      if (entry.type === 'replacement_list')
+        return (v as ReplacementPair[]).map((p) => `${p.pattern} → ${p.replacement}`).join(', ');
+      return v.join(', ');
+    }
     if (entry.type === 'enum') return optionLabel(String(v));
     if (entry.unit === 'bytes' && typeof v === 'number') return formatBytes(v);
     return entry.unit ? `${v} ${unitLabel}` : String(v);
+  }
+
+  // Multi-choice: keep the options' own order whatever order they're ticked in.
+  function toggleOption(option: string, on: boolean) {
+    const current = new Set(Array.isArray(value) ? (value as string[]) : []);
+    if (on) current.add(option);
+    else current.delete(option);
+    value = (entry.options ?? []).filter((o) => current.has(o));
+  }
+
+  let pairs = $derived<ReplacementPair[]>(Array.isArray(value) ? (value as ReplacementPair[]) : []);
+
+  function setPair(i: number, field: keyof ReplacementPair, text: string) {
+    value = pairs.map((p, j) => (j === i ? { ...p, [field]: text } : p));
   }
 
   let unitLabel = $derived(entry.unit ? tr(`admin_settings.unit.${entry.unit}`, entry.unit) : '');
@@ -92,7 +112,7 @@
 
   let errorText = $derived(
     error
-      ? tr(`admin_settings.error.${error}`, error, {
+      ? tr(`admin_settings.error.${entry.type === 'replacement_list' && error === 'invalid_list' ? 'invalid_pairs' : error}`, error, {
           min: entry.min ?? '',
           max: entry.max ?? '',
         })
@@ -148,6 +168,69 @@
           {disabled}
         />
         {#if unitLabel}<span class="unit">{unitLabel}</span>{/if}
+      </div>
+    {:else if entry.type === 'multi_enum'}
+      <fieldset {id} class="choices" {disabled}>
+        <legend class="visually-hidden">{label}</legend>
+        {#each entry.options ?? [] as option (option)}
+          {@const optionHelp = tr(`admin_settings.option.${entry.key}.${option}_help`, '')}
+          <label class="choice">
+            <input
+              type="checkbox"
+              checked={Array.isArray(value) && (value as string[]).includes(option)}
+              onchange={(e) => toggleOption(option, (e.target as HTMLInputElement).checked)}
+            />
+            <span class="choice-text">
+              <span class="choice-label">{optionLabel(option)}</span>
+              {#if optionHelp}<span class="choice-help">{optionHelp}</span>{/if}
+            </span>
+          </label>
+        {/each}
+      </fieldset>
+    {:else if entry.type === 'replacement_list'}
+      <div {id} class="pairs">
+        {#each pairs as pair, i (i)}
+          <div class="pair">
+            <input
+              class="input"
+              type="text"
+              maxlength="500"
+              value={pair.pattern}
+              oninput={(e) => setPair(i, 'pattern', (e.target as HTMLInputElement).value)}
+              placeholder={$t('admin_settings.pair_pattern')}
+              aria-label={$t('admin_settings.pair_pattern')}
+              {disabled}
+            />
+            <span class="pair-arrow" aria-hidden="true">→</span>
+            <input
+              class="input"
+              type="text"
+              maxlength="500"
+              value={pair.replacement}
+              oninput={(e) => setPair(i, 'replacement', (e.target as HTMLInputElement).value)}
+              placeholder={$t('admin_settings.pair_replacement')}
+              aria-label={$t('admin_settings.pair_replacement')}
+              {disabled}
+            />
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost"
+              onclick={() => (value = pairs.filter((_, j) => j !== i))}
+              aria-label={$t('admin_settings.pair_remove')}
+              {disabled}
+            >
+              ✕
+            </button>
+          </div>
+        {/each}
+        <button
+          type="button"
+          class="btn btn-sm btn-outline pair-add"
+          onclick={() => (value = [...pairs, { pattern: '', replacement: '' }])}
+          {disabled}
+        >
+          {$t('admin_settings.pair_add')}
+        </button>
       </div>
     {:else if entry.type === 'string_list'}
       <textarea
@@ -212,6 +295,12 @@
 
   .field.stacked {
     width: 100%;
+    justify-content: flex-start;
+  }
+
+  .field.stacked > :global(*) {
+    flex: 1;
+    min-width: 0;
   }
 
   .secret {
@@ -241,6 +330,81 @@
   .unit {
     font-size: var(--text-xs);
     color: var(--color-text-secondary);
+    white-space: nowrap;
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+  }
+
+  .choice {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    cursor: pointer;
+  }
+
+  .choice input {
+    margin-block-start: 3px;
+    accent-color: var(--color-primary);
+  }
+
+  .choice-text {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .choice-label {
+    font-size: var(--text-sm);
+    font-weight: 600;
+  }
+
+  .choice-help {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  .pairs {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .pair {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .pair .input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .pair-arrow {
+    color: var(--color-text-tertiary);
+  }
+
+  :global([dir='rtl']) .pair-arrow {
+    transform: scaleX(-1);
+  }
+
+  .pair-add {
+    align-self: flex-start;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
     white-space: nowrap;
   }
 

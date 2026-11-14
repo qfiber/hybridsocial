@@ -817,13 +817,18 @@ export interface AdminSetting {
   set?: boolean;
 }
 
-export type SettingValue = string | number | boolean | string[] | null;
+export interface ReplacementPair {
+  pattern: string;
+  replacement: string;
+}
+
+export type SettingValue = string | number | boolean | string[] | ReplacementPair[] | null;
 
 /** One registered setting, as `GET /api/v1/admin/settings/schema` describes it. */
 export interface SettingSchemaEntry {
   key: string;
   section: string;
-  type: 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'enum';
+  type: 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'enum' | 'multi_enum' | 'replacement_list';
   options: string[] | null;
   default: SettingValue;
   /** The effective value: stored, or the default. `null` for a secret. */

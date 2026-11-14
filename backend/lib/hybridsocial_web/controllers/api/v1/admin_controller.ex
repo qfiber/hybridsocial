@@ -1048,6 +1048,7 @@ defmodule HybridsocialWeb.Api.V1.AdminController do
     {type, options} =
       case entry.type do
         {:enum, values} -> {"enum", values}
+        {:multi_enum, values} -> {"multi_enum", values}
         type -> {Atom.to_string(type), nil}
       end
 
