@@ -241,4 +241,14 @@ Gates for each: `mix precommit`, `npm run check` (0 errors), `node scripts/check
   sparklines plus all-time totals; service health; last 6 staff actions), each section gated on its
   permission; the nav-card hub is gone (sidebar + Ctrl+K cover it). `DataTable` stacks rows into
   labelled cards below 640px and hides blank cells.
+- PR 7 (`feat/theme-admin-preview`): the theme editor's Live Preview gains an App / Admin panel
+  switch; the admin mock (rail with active item and badge, top bar, attention tile, settings row
+  with toggle, status pill, save bar) uses the same preview variables, so every picker and the
+  Light/Dark toggle update it live. The other two PR 7 items were already done: chart colours
+  are tokens since PR 2, and the editor already shows WCAG contrast badges per colour. Derived
+  `--admin-*` tokens were dropped as unneeded: the panel already uses the global tokens directly.
+
+All seven PRs are done. Follow-ups found along the way: editors for `mrf_policies`,
+`mrf_keyword_replace` and `upload_filters`; "Primary soft" is not re-derived when Primary changes
+in the theme editor.
 

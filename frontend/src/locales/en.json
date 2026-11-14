@@ -1325,5 +1325,11 @@
   "admin_dashboard.recent": "Recent staff actions",
   "admin_dashboard.open_audit_log": "Open audit log",
   "admin_dashboard.system": "system",
-  "admin_dashboard.no_recent": "No staff actions yet."
+  "admin_dashboard.no_recent": "No staff actions yet.",
+  "admin_theme_preview.surface_label": "Preview surface",
+  "admin_theme_preview.app": "App",
+  "admin_theme_preview.admin": "Admin panel",
+  "admin_theme_preview.reports": "Reports & queue",
+  "admin_theme_preview.approvals": "Approvals",
+  "admin_theme_preview.crumb": "Overview / Dashboard"
 }

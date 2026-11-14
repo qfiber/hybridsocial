@@ -114,6 +114,12 @@
   // Which variant the Live Preview renders. Lets the admin review the
   // auto-generated dark theme without changing the instance mode.
   let previewMode = $state<'light' | 'dark'>('light');
+  // Which surface the preview shows. One theme drives both the app and the
+  // admin panel, so the admin can check both before saving.
+  let previewSurface = $state<'app' | 'admin'>('app');
+  let previewLogo = $derived(
+    previewMode === 'dark' ? theme.dark_logo_url || theme.logo_url : theme.logo_url || theme.dark_logo_url,
+  );
 
   interface ColorEntry {
     key: keyof AdminThemeConfig;
@@ -676,6 +682,20 @@
     <div class="theme-preview-panel">
       <div class="preview-head">
         <h2 class="preview-title">Live Preview</h2>
+        <div class="preview-mode-toggle" role="radiogroup" aria-label={$t('admin_theme_preview.surface_label')}>
+          {#each ['app', 'admin'] as ps (ps)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={previewSurface === ps}
+              class="preview-mode-btn"
+              class:active={previewSurface === ps}
+              onclick={() => (previewSurface = ps as 'app' | 'admin')}
+            >
+              {ps === 'app' ? $t('admin_theme_preview.app') : $t('admin_theme_preview.admin')}
+            </button>
+          {/each}
+        </div>
         <div class="preview-mode-toggle" role="radiogroup" aria-label="Preview mode">
           {#each ['light', 'dark'] as pm (pm)}
             <button
@@ -698,6 +718,55 @@
         </p>
       {/if}
       <div class="preview-frame" style={previewVars} data-preview-mode={previewMode}>
+        {#if previewSurface === 'admin'}
+          <!-- Admin panel: the same tokens, as the panel uses them. -->
+          <div class="ap-shell">
+            <aside class="ap-rail">
+              <div class="ap-brand">
+                {#if previewLogo}
+                  <img src={previewLogo} alt="" class="ap-logo" />
+                {:else}
+                  <span class="ap-mark">{(theme.instance_name || 'H').trim()[0]?.toUpperCase()}</span>
+                  <span class="ap-name">{theme.instance_name || 'HybridSocial'}</span>
+                {/if}
+                <span class="ap-sub">{$t('admin_shell.admin')}</span>
+              </div>
+              <span class="ap-cluster">{$t('admin_shell.cluster_operate')}</span>
+              <span class="ap-item ap-item-active">{$t('admin_dashboard.title')}</span>
+              <span class="ap-item">{$t('admin_theme_preview.reports')}</span>
+              <span class="ap-item">{$t('admin_theme_preview.approvals')} <span class="ap-badge">3</span></span>
+              <span class="ap-cluster">{$t('admin_shell.cluster_configure')}</span>
+              <span class="ap-item">{$t('admin_settings.group.general')}</span>
+            </aside>
+            <div class="ap-main">
+              <div class="ap-topbar">
+                <span class="ap-crumb">{$t('admin_theme_preview.crumb')}</span>
+                <span class="ap-search">{$t('admin_palette.open')}</span>
+              </div>
+              <div class="ap-content">
+                <div class="ap-title">{$t('admin_dashboard.title')}</div>
+                <div class="ap-tile">
+                  <span class="ap-tile-count">3</span>
+                  <span>{$t('admin_dashboard.queue.approvals', { count: 3 })}</span>
+                </div>
+                <div class="ap-card">
+                  <div class="ap-row">
+                    <span>{$t('admin_settings.require_email_confirmation')}</span>
+                    <span class="ap-toggle" aria-hidden="true"></span>
+                  </div>
+                  <div class="ap-row">
+                    <span>{$t('admin_settings.registration_mode')}</span>
+                    <span class="ap-pill">{$t('admin_dashboard.all_clear')}</span>
+                  </div>
+                </div>
+                <div class="ap-savebar">
+                  <span>{$t('admin_shell.unsaved_changes')}</span>
+                  <span class="ap-save">{$t('admin_shell.save')}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        {:else}
         <!-- Header -->
         <div class="preview-header">
           <span class="preview-logo">{theme.instance_name || 'HybridSocial'}</span>
@@ -752,6 +821,7 @@
         <div class="preview-input-wrapper">
           <input type="text" class="preview-input" placeholder="Type something..." readonly />
         </div>
+        {/if}
       </div>
     </div>
   </div>
@@ -1251,5 +1321,219 @@
       position: static;
       order: -1;
     }
+  }
+
+  /* Admin panel preview */
+  .ap-shell {
+    display: flex;
+    min-height: 340px;
+  }
+
+  .ap-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 38%;
+    padding: 10px 8px;
+    background: var(--p-surface);
+    border-inline-end: 1px solid var(--p-border);
+  }
+
+  .ap-brand {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 6px;
+    padding: 2px 4px 8px;
+    margin-block-end: 4px;
+    border-block-end: 1px solid var(--p-border);
+  }
+
+  .ap-logo {
+    height: 20px;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .ap-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: var(--p-primary);
+    color: var(--p-primary-contrast);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .ap-name {
+    font-weight: 700;
+    font-size: 12px;
+  }
+
+  .ap-sub {
+    flex-basis: 100%;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--p-primary);
+  }
+
+  .ap-cluster {
+    margin-block-start: 6px;
+    padding: 0 6px;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .ap-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 6px;
+    border-radius: var(--p-radius);
+    font-size: 11px;
+    color: var(--p-text-secondary);
+  }
+
+  .ap-item-active {
+    background: var(--p-primary-soft);
+    color: var(--p-primary);
+    font-weight: 600;
+  }
+
+  .ap-badge {
+    padding: 0 5px;
+    border-radius: 9999px;
+    background: var(--p-danger);
+    color: var(--p-primary-contrast);
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .ap-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ap-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 8px 10px;
+    border-block-end: 1px solid var(--p-border);
+    font-size: 11px;
+  }
+
+  .ap-crumb {
+    color: var(--p-text-secondary);
+  }
+
+  .ap-search {
+    padding: 2px 8px;
+    border: 1px solid var(--p-border);
+    border-radius: 9999px;
+    color: var(--p-text-secondary);
+    font-size: 10px;
+  }
+
+  .ap-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .ap-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .ap-tile {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: var(--p-radius);
+    border-inline-start: 3px solid var(--p-warning);
+    background: var(--p-surface);
+    font-size: 11px;
+  }
+
+  .ap-tile-count {
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .ap-card {
+    border: 1px solid var(--p-border);
+    border-radius: var(--p-radius);
+    background: var(--p-surface);
+  }
+
+  .ap-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+
+  .ap-row + .ap-row {
+    border-block-start: 1px solid var(--p-border);
+  }
+
+  .ap-toggle {
+    position: relative;
+    width: 26px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--p-primary);
+  }
+
+  .ap-toggle::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 2px;
+    inset-inline-end: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--p-primary-contrast);
+  }
+
+  .ap-pill {
+    padding: 1px 8px;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--p-success) 18%, transparent);
+    color: var(--p-success);
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .ap-savebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--p-border);
+    border-radius: var(--p-radius);
+    background: var(--p-surface);
+    font-size: 11px;
+  }
+
+  .ap-save {
+    white-space: nowrap;
+    padding: 3px 10px;
+    border-radius: var(--p-radius);
+    background: var(--p-primary);
+    color: var(--p-primary-contrast);
+    font-weight: 600;
   }
 </style>
