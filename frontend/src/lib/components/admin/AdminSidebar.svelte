@@ -12,10 +12,20 @@
   } from '$lib/admin-nav.js';
   import BrandMark from '$lib/components/ui/BrandMark.svelte';
   import { instanceName } from '$lib/stores/instance.js';
+  import { themeStore, resolvedMode } from '$lib/stores/theme.js';
   import { t } from '$lib/stores/i18n.js';
 
   // `open` only matters below the drawer breakpoint, where the rail is an
   // off-canvas drawer the top bar's menu button opens.
+  // Same rule as the app header: an uploaded logo is usually a wordmark that
+  // already carries the name, so it stands alone at full width. Without one,
+  // show the initial mark next to the instance name.
+  let logo = $derived(
+    $resolvedMode === 'dark'
+      ? $themeStore?.dark_logo_url || $themeStore?.logo_url
+      : $themeStore?.logo_url || $themeStore?.dark_logo_url,
+  );
+
   let { open = false, onclose }: { open?: boolean; onclose?: () => void } = $props();
 
   function itemVisible(item: AdminItem): boolean {
@@ -105,12 +115,17 @@
 
 <aside class="admin-sidebar" class:open id="admin-sidebar">
   <div class="admin-sidebar-header">
-    <a href="/admin" class="admin-brand">
-      <span class="admin-brand-mark"><BrandMark size={28} /></span>
-      <span class="admin-brand-text">
-        <span class="admin-brand-name">{$instanceName}</span>
+    <a href="/admin" class="admin-brand" class:has-logo={!!logo} aria-label="{$instanceName} {$t('admin_shell.admin')}">
+      {#if logo}
+        <img src={logo} alt="" class="admin-brand-logo" />
         <span class="admin-brand-sub">{$t('admin_shell.admin')}</span>
-      </span>
+      {:else}
+        <span class="admin-brand-mark"><BrandMark size={28} /></span>
+        <span class="admin-brand-text">
+          <span class="admin-brand-name">{$instanceName}</span>
+          <span class="admin-brand-sub">{$t('admin_shell.admin')}</span>
+        </span>
+      {/if}
     </a>
   </div>
 
@@ -192,6 +207,26 @@
 
   .admin-brand:hover {
     text-decoration: none;
+  }
+
+  /* Logo on its own row, the "Admin" label under it. */
+  .admin-brand.has-logo {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .admin-brand-logo {
+    display: block;
+    height: 32px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    object-position: left center;
+  }
+
+  :global([dir='rtl']) .admin-brand-logo {
+    object-position: right center;
   }
 
   .admin-brand-mark {
