@@ -88,13 +88,17 @@
     return 0;
   }
 
-  // A dedicated editor (hidden item) highlights the settings page it belongs to.
-  let currentParent = $derived(adminItemForPath(page.url.pathname)?.parent ?? null);
+  // Exactly one rail item is active: the most specific catalog match for the
+  // current path, or the parent a dedicated (hidden) editor belongs to. A
+  // plain prefix test lit up "Reports & queue" on every /admin/moderation/*
+  // page alongside the page's own item.
+  let activeHref = $derived.by(() => {
+    const item = adminItemForPath(page.url.pathname);
+    return item ? (item.parent ?? item.href) : null;
+  });
 
   function isActive(href: string): boolean {
-    if (href === '/admin') return page.url.pathname === '/admin';
-    if (currentParent === href) return true;
-    return page.url.pathname === href || page.url.pathname.startsWith(href + '/');
+    return activeHref === href;
   }
 
   // A section is "current" when one of its items is active — used to tint

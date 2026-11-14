@@ -9,7 +9,7 @@
     getKnownInstances,
     getFederationPolicies, createFederationPolicy, deleteFederationPolicy,
     purgeInstancePreview, purgeInstanceContent,
-    getAdminSettings, updateAdminSettings
+    getAdminSettings
   } from '$lib/api/admin.js';
   import { api, ApiError } from '$lib/api/client.js';
   import { t } from '$lib/stores/i18n.js';
@@ -299,7 +299,6 @@
   // writes one row per recipient and nothing used to remove them, so
   // the dead-letter queue grew without bound.
   let retentionDays = $state<number | null>(null);
-  let retentionSaving = $state(false);
 
   async function loadRetention() {
     try {
@@ -308,26 +307,6 @@
       retentionDays = s ? Number(s.value) : 30;
     } catch {
       retentionDays = 30;
-    }
-  }
-
-  async function saveRetention() {
-    if (retentionDays === null || retentionDays < 0) return;
-    retentionSaving = true;
-    try {
-      await updateAdminSettings([
-        { key: 'federation_delivery_retention_days', value: Math.floor(retentionDays) },
-      ]);
-      addToast(
-        retentionDays === 0
-          ? 'Delivery rows will be kept forever'
-          : `Delivery rows older than ${retentionDays} days will be pruned hourly`,
-        'success',
-      );
-    } catch {
-      addToast('Failed to save retention', 'error');
-    } finally {
-      retentionSaving = false;
     }
   }
 
@@ -1035,31 +1014,13 @@
           <div class="delivery-section-head">
             <h3 class="delivery-section-title">Retention</h3>
           </div>
-          <div class="retention-row">
-            <label class="retention-label" for="delivery-retention">
-              Keep delivered / failed rows for
-            </label>
-            <input
-              id="delivery-retention"
-              class="input retention-input"
-              type="number"
-              min="0"
-              step="1"
-              bind:value={retentionDays}
-            />
-            <span class="retention-unit">days</span>
-            <button
-              class="btn btn-sm btn-primary"
-              type="button"
-              onclick={saveRetention}
-              disabled={retentionSaving || retentionDays === null}
-            >
-              {retentionSaving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
           <p class="delivery-section-note">
-            Older rows are pruned hourly. Pending and retrying deliveries are never touched.
-            Set to 0 to keep everything.
+            {retentionDays === null
+              ? '…'
+              : retentionDays === 0
+                ? $t('admin.federation.retention_forever')
+                : $t('admin.federation.retention_days', { count: retentionDays })}
+            <a href="/admin/settings/retention">{$t('admin.federation.retention_change')}</a>
           </p>
         </section>
 
@@ -1541,27 +1502,6 @@
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
     margin: var(--space-2) 0 0;
-  }
-
-  .retention-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-
-  .retention-label {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .retention-input {
-    width: 90px;
-  }
-
-  .retention-unit {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
   }
 
   .dl-list {
