@@ -151,6 +151,24 @@ export function liftForDark(hex: string, deltaL = DARK_BRAND_LIFT): string {
   return hslToHex(h, ns, nl);
 }
 
+// `target` recoloured to `source`'s hue, keeping target's own saturation
+// and lightness. Used so Hover/Soft follow Primary while keeping the shade
+// they were designed (or chosen) at. A near-grey source has no meaningful
+// hue, so the result goes grey too instead of picking up a stray red.
+export function withHueOf(target: string, source: string): string {
+  const t = parseHex(target);
+  const src = parseHex(source);
+  if (!t || !src) return target;
+  const [, ts, tl] = rgbToHsl(t.r, t.g, t.b);
+  const [sh, ss] = rgbToHsl(src.r, src.g, src.b);
+  return hslToHex(sh, ss < 0.08 ? ss : ts, tl);
+}
+
+// The designed dark primary-hover (app.css); recoloured to the brand below.
+const DARK_PRIMARY_HOVER = '#a78bfa';
+// The designed dark primary-soft is a 16% tint of the brand violet.
+const DARK_PRIMARY_SOFT_ALPHA = 0.16;
+
 function str(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
@@ -259,6 +277,16 @@ function render(cfg: Record<string, unknown>, mode: ThemeMode): void {
   const channels = activePrimary ? hexToRgbChannels(activePrimary) : null;
   if (channels) root.style.setProperty('--color-primary-rgb', channels);
   else root.style.removeProperty('--color-primary-rgb');
+
+  // Dark hover/soft fall back to the designed ramp, which is violet. With a
+  // custom primary and no pinned dark override, give them the brand's hue so
+  // active items and hovers don't stay purple on a green (etc.) theme.
+  if (dark && channels && str(cfg.color_primary)) {
+    if (!str(cfg.dark_color_primary_hover))
+      root.style.setProperty('--color-primary-hover', withHueOf(DARK_PRIMARY_HOVER, activePrimary));
+    if (!str(cfg.dark_color_primary_soft))
+      root.style.setProperty('--color-primary-soft', `rgba(${channels}, ${DARK_PRIMARY_SOFT_ALPHA})`);
+  }
 
   // Mobile browser chrome / URL bar. Follow the *configured* palette instead
   // of a baked-in brand colour: dark mode matches the page background, light
