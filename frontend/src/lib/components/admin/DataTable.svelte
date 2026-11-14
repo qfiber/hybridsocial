@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
+  import { tick, type Snippet } from 'svelte';
 
   interface Column {
     key: string;
@@ -30,6 +30,26 @@
     /** Optional per-row class hook (e.g. tint an unverified-email row). */
     rowClass?: (row: Record<string, unknown>) => string | undefined;
   } = $props();
+
+  // Cells come from the caller's snippet, so stamp each <td> with its
+  // column label; on narrow screens rows become cards and show it.
+  let tbody: HTMLTableSectionElement | undefined = $state();
+  $effect(() => {
+    void rows;
+    void loading;
+    const labels = columns.map((c) => c.label);
+    tick().then(() => {
+      for (const tr of tbody?.rows ?? []) {
+        Array.from(tr.cells).forEach((td, i) => {
+          if (td.colSpan !== 1 || !labels[i]) return;
+          td.dataset.label = labels[i];
+          // Blank cells (whitespace only) would be a label with nothing after it.
+          const blank = !td.textContent?.trim() && !td.querySelector('img, svg, button, input, a');
+          td.classList.toggle('cell-blank', blank);
+        });
+      }
+    });
+  });
 
   function handleSort(col: Column) {
     if (!col.sortable) return;
@@ -85,7 +105,7 @@
         {/each}
       </tr>
     </thead>
-    <tbody>
+    <tbody bind:this={tbody}>
       {#if loading}
         {#each Array(5) as _}
           <tr class="skeleton-row">
@@ -224,5 +244,63 @@
 
   .skeleton-row td {
     padding: var(--space-3) var(--space-4);
+  }
+
+  /* Phones: each row becomes a card, each cell a "label  value" line.
+     Sorting stays on wider screens, where the header is visible. */
+  @media (max-width: 640px) {
+    .data-table thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+    }
+
+    .data-table,
+    .data-table tbody,
+    :global(.data-table tbody tr),
+    :global(.data-table tbody td) {
+      display: block;
+      width: 100%;
+    }
+
+    :global(.data-table tbody tr) {
+      padding: var(--space-2) 0;
+      border-block-end: 1px solid var(--color-border);
+    }
+
+    :global(.data-table tbody tr:last-child) {
+      border-block-end: 0;
+    }
+
+    :global(.data-table tbody td[data-label]) {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-3);
+      min-width: 0 !important;
+      text-align: end;
+      border: 0;
+      padding-block: 6px;
+    }
+
+    :global(.data-table tbody td.cell-blank) {
+      display: none;
+    }
+
+    :global(.data-table tbody td[data-label]::before) {
+      content: attr(data-label);
+      flex-shrink: 0;
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-secondary);
+      text-align: start;
+    }
+
+    :global(.data-table tbody td[data-label] > *) {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
   }
 </style>

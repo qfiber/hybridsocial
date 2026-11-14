@@ -236,4 +236,9 @@ Gates for each: `mix precommit`, `npm run check` (0 errors), `node scripts/check
   scrolls to it, focuses it and flashes the row. New `/admin/settings/changed` lists every
   stored (non-default) setting with value, default, a link and reset. `Modal` now honours
   `data-autofocus` for its initial focus.
+- PR 6 (`feat/admin-dashboard-tables`): dashboard reordered by urgency (needs-attention tiles for
+  non-empty queues only, incl. failed deliveries and stopped peers; 14-day trends with zero-filled
+  sparklines plus all-time totals; service health; last 6 staff actions), each section gated on its
+  permission; the nav-card hub is gone (sidebar + Ctrl+K cover it). `DataTable` stacks rows into
+  labelled cards below 640px and hides blank cells.
 
