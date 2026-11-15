@@ -569,8 +569,16 @@
 
   .bubble {
     position: relative;
+    /* A flex item's automatic minimum width is its min-content width, and the
+       quoted-reply line is `nowrap` — so one long quoted message made the
+       bubble as wide as that whole line, pushing it (and the reply under it)
+       past the screen edge and making the chat scroll sideways. Let the
+       bubble shrink to the wrapper and break long words / URLs. */
+    min-width: 0;
+    max-width: 100%;
     padding: var(--space-2) var(--space-3);
     word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   /* Own messages: a solid accent bubble with on-primary text — a clear,
@@ -671,12 +679,16 @@
     text-overflow: ellipsis;
   }
 
+  /* Up to two lines of the quoted message — enough context for Arabic
+     prose, which a one-line ellipsis cut after a couple of words. */
   .reply-quote-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     font-size: 12px;
     color: var(--color-text-secondary);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .bubble-actions {
@@ -739,10 +751,25 @@
     border-color: var(--color-danger, #b00);
   }
 
-  /* Touch devices have no hover — show actions inline so users can tap them. */
+  /* Touch devices have no hover — show actions so users can tap them, but
+     under the bubble rather than beside it: four 28px buttons next to the
+     bubble left a narrow column of text on a phone. */
   @media (hover: none) {
-    .bubble-actions {
+    .bubble-wrapper {
+      flex-direction: column;
+      align-items: flex-start;
+      max-width: 85%;
+    }
+
+    .wrapper-own {
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .bubble-actions,
+    .wrapper-own .bubble-actions {
       opacity: 1;
+      transform: none;
     }
   }
 
@@ -910,6 +937,14 @@
   .message-body :global(li),
   .message-body :global(blockquote) {
     unicode-bidi: plaintext;
+  }
+
+  /* Wide markdown blocks scroll inside the bubble instead of widening it. */
+  .message-body :global(pre),
+  .message-body :global(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   .message-media {

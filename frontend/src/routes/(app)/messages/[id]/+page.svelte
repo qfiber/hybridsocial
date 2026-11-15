@@ -734,6 +734,8 @@
   .messages-container {
     flex: 1;
     overflow-y: auto;
+    /* Safety net: a message must never make the conversation pan sideways. */
+    overflow-x: hidden;
     padding: var(--space-4);
     display: flex;
     flex-direction: column;
