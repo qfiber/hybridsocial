@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { instanceName } from '$lib/stores/instance.js';
 </script>
 
@@ -20,8 +21,8 @@
   >
     <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
   </svg>
-  <p class="no-selection-text">Select a conversation</p>
-  <p class="no-selection-hint">Choose a conversation from the list to start messaging.</p>
+  <p class="no-selection-text">{$t('dm.select_conversation')}</p>
+  <p class="no-selection-hint">{$t('dm.select_conversation_hint')}</p>
 </div>
 
 <style>
