@@ -373,6 +373,7 @@
   "streams.aspect_all": "All aspect ratios on",
   "streams.aspect_portrait": "Vertical only (9:16)",
   "streams.aspect_hint": "Also show clips of every aspect ratio",
+  "streams.loading": "Loading video",
   "streams.loading_more": "Loading more…",
   "block.block_domain": "Block domain {domain}",
   "block.not_interested": "Not interested",
