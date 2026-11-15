@@ -244,7 +244,7 @@ defmodule Hybridsocial.Config.Registry do
      min: 1, advanced: true},
     {:discovery, :explore, "explore_trending_retired_ttl_hours", :number, 6,
      min: 0, unit: :hours, advanced: true},
-    {:discovery, :explore, "streams_trending_decay_seconds", :integer, 45_000,
+    {:discovery, :explore, "streams_trending_decay_seconds", :integer, 172_800,
      min: 60, unit: :seconds, advanced: true},
     {:discovery, :search, "search_backend", {:enum, ~w(postgresql meilisearch opensearch)},
      "postgresql", []},

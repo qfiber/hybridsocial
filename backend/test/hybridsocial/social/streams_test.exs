@@ -574,6 +574,80 @@ defmodule Hybridsocial.Social.StreamsTest do
                Enum.find_index(ids, &(&1 == new_quiet.id))
     end
 
+    test "sort: newest/oldest use the authoring time, not when a remote clip arrived" do
+      # A federated clip published in 2019 but fetched today must sort as a 2019
+      # clip. Ordered by inserted_at it landed at the "new" end, so Oldest only
+      # ever showed local clips.
+      local = create_user("sfeed_pub_l", "sfeed_pub_l@example.com")
+      remote = create_user("sfeed_pub_r", "sfeed_pub_r@example.com") |> make_remote()
+
+      local_clip = create_post(local, %{content: "Local 2020"}) |> attach_video(local)
+      remote_clip = create_post(remote, %{content: "Remote 2019"}) |> attach_video(remote)
+
+      Repo.update_all(from(p in Post, where: p.id == ^local_clip.id),
+        set: [published_at: ~U[2020-01-01 00:00:00.000000Z]]
+      )
+
+      # Arrived "now" (inserted_at untouched), authored in 2019.
+      Repo.update_all(from(p in Post, where: p.id == ^remote_clip.id),
+        set: [published_at: ~U[2019-01-01 00:00:00.000000Z]]
+      )
+
+      oldest =
+        Streams.streams_feed(nil, sort: "oldest", include_federated: true)
+        |> Enum.map(& &1.id)
+
+      assert Enum.find_index(oldest, &(&1 == remote_clip.id)) <
+               Enum.find_index(oldest, &(&1 == local_clip.id))
+
+      # And the min_id cursor continues from the remote clip's authoring time.
+      [first | _] = oldest
+
+      rest =
+        Streams.streams_feed(nil, sort: "oldest", include_federated: true, min_id: first)
+        |> Enum.map(& &1.id)
+
+      refute first in rest
+      assert local_clip.id in rest
+    end
+
+    test "sort: trending counts replies and boosts, not only reactions" do
+      alice = create_user("sfeed_hot_mix", "sfeed_hot_mix@example.com")
+
+      liked = create_post(alice, %{content: "Liked"}) |> attach_video(alice)
+      discussed = create_post(alice, %{content: "Discussed"}) |> attach_video(alice)
+
+      # Same age; 10 reactions vs 8 replies + 4 boosts (weighted 16 + 12).
+      Repo.update_all(from(p in Post, where: p.id == ^liked.id),
+        set: [reaction_count: 10, inserted_at: ~U[2020-01-01 00:00:00.000000Z]]
+      )
+
+      Repo.update_all(from(p in Post, where: p.id == ^discussed.id),
+        set: [
+          reply_count: 8,
+          boost_count: 4,
+          inserted_at: ~U[2020-01-01 00:00:00.000000Z]
+        ]
+      )
+
+      ids = Streams.streams_feed(nil) |> Enum.map(& &1.id)
+
+      assert Enum.find_index(ids, &(&1 == discussed.id)) <
+               Enum.find_index(ids, &(&1 == liked.id))
+    end
+
+    test "a scheduled clip that hasn't been published yet stays out of the feed" do
+      alice = create_user("sfeed_sched", "sfeed_sched@example.com")
+
+      scheduled = create_post(alice, %{content: "Later"}) |> attach_video(alice)
+
+      Repo.update_all(from(p in Post, where: p.id == ^scheduled.id),
+        set: [scheduled_at: ~U[2099-01-01 00:00:00.000000Z], published_at: nil]
+      )
+
+      refute scheduled.id in (Streams.streams_feed(nil) |> Enum.map(& &1.id))
+    end
+
     test "q: filters by phrase or hashtag in the post body" do
       alice = create_user("sfeed_q", "sfeed_q@example.com")
 
