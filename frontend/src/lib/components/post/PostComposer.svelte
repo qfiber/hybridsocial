@@ -2420,8 +2420,18 @@
        `overflow: visible` let the tile grid spill outside the rounded
        card on mobile when 8–10 attachments stacked vertically. */
     overflow-y: auto;
+    /* Never pan sideways: anything too wide must wrap instead (on a phone
+       the tool row overflowed and the whole card scrolled horizontally,
+       cutting off NSFW and the character count). */
+    overflow-x: hidden;
     overscroll-behavior: contain;
     animation: pop-in 0.2s ease both;
+  }
+
+  @media (max-width: 600px) {
+    .composer-panel {
+      padding: 16px;
+    }
   }
 
   .composer-panel.composer-opened {
@@ -2585,6 +2595,14 @@
   .composer-body {
     display: flex;
     gap: 16px;
+    /* Keep the text clear of the close button in the card's corner. */
+    padding-inline-end: 24px;
+  }
+
+  @media (max-width: 600px) {
+    .composer-body {
+      gap: 12px;
+    }
   }
 
   .composer-avatar {
@@ -3044,7 +3062,18 @@
   .composer-tools {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
     gap: 4px;
+  }
+
+  /* Narrow screens: the tools get their own full-width row and the
+     count / draft / post controls sit on the row below, end-aligned. */
+  @media (max-width: 600px) {
+    .composer-tools,
+    .composer-right {
+      flex: 1 1 100%;
+    }
   }
 
   .tool-btn {
