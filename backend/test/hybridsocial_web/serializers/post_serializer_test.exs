@@ -244,4 +244,58 @@ defmodule HybridsocialWeb.Serializers.PostSerializerTest do
       serialized |> Jason.encode!() |> Jason.decode!()
     end
   end
+
+  describe "expires_at (#278)" do
+    setup do
+      user = create_user("autodel", "autodel@example.com")
+      {:ok, post} = Hybridsocial.Social.Posts.create_post(user.id, %{"content" => "hi"})
+      %{user: user, post: post}
+    end
+
+    defp reload(post),
+      do: Hybridsocial.Repo.preload(Hybridsocial.Repo.reload!(post), :identity, force: true)
+
+    defp set_auto_delete(user, months, enabled_at) do
+      Hybridsocial.Repo.update_all(
+        from(i in Hybridsocial.Accounts.Identity, where: i.id == ^user.id),
+        set: [auto_delete_after_months: months, auto_delete_enabled_at: enabled_at]
+      )
+    end
+
+    test "nil when neither a timer nor account auto-delete applies", %{post: post} do
+      assert PostSerializer.serialize(reload(post)).expires_at == nil
+    end
+
+    test "account auto-delete gives published_at + months, in both paths", %{
+      user: user,
+      post: post
+    } do
+      set_auto_delete(user, 3, ~U[2020-01-01 00:00:00.000000Z])
+      post = reload(post)
+      want = DateTime.shift(post.published_at, month: 3)
+
+      assert PostSerializer.serialize(post).expires_at == want
+      assert [%{expires_at: ^want}] = PostSerializer.serialize_many([post])
+    end
+
+    test "posts from before the setting was switched on are kept", %{user: user, post: post} do
+      set_auto_delete(user, 3, DateTime.add(DateTime.utc_now(), 3600))
+      assert PostSerializer.serialize(reload(post)).expires_at == nil
+    end
+
+    test "the earlier of the post timer and account auto-delete wins", %{
+      user: user,
+      post: post
+    } do
+      set_auto_delete(user, 3, ~U[2020-01-01 00:00:00.000000Z])
+      soon = DateTime.add(DateTime.utc_now(), 3600)
+
+      Hybridsocial.Repo.update_all(
+        from(p in Hybridsocial.Social.Post, where: p.id == ^post.id),
+        set: [expires_at: soon]
+      )
+
+      assert PostSerializer.serialize(reload(post)).expires_at == soon
+    end
+  end
 end

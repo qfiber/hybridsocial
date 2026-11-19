@@ -131,8 +131,8 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
       last_activity_at: post.last_activity_at,
       edited_at: post.edited_at,
       edit_expires_at: Map.get(post, :edit_expires_at),
-      # Timed post (#261): when the post deletes itself. nil = never.
-      expires_at: Map.get(post, :expires_at),
+      # When the post deletes itself (#261 timer or #254 account auto-delete).
+      expires_at: expires_at(post),
       account: account,
       parent_id: post.parent_id,
       root_id: post.root_id,
@@ -309,7 +309,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
         last_activity_at: post.last_activity_at,
         edited_at: post.edited_at,
         edit_expires_at: Map.get(post, :edit_expires_at),
-        expires_at: Map.get(post, :expires_at),
+        expires_at: expires_at(post),
         account: account,
         parent_id: post.parent_id,
         root_id: post.root_id,
@@ -457,6 +457,30 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
   end
 
   defp patch_poll_votes(post, _id, _viewer_id), do: post
+
+  # The earlier of the post's own timer (#261) and the author's account-wide
+  # auto-delete (#254), mirroring `AutoDeleteWorker`: only posts published
+  # after the setting was switched on are eligible.
+  defp expires_at(post) do
+    [Map.get(post, :expires_at), auto_delete_at(post)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.min(DateTime, fn -> nil end)
+  end
+
+  defp auto_delete_at(%{
+         published_at: %DateTime{} = published_at,
+         identity: %Hybridsocial.Accounts.Identity{
+           is_local: true,
+           auto_delete_after_months: months,
+           auto_delete_enabled_at: %DateTime{} = enabled_at
+         }
+       })
+       when is_integer(months) do
+    if DateTime.compare(published_at, enabled_at) != :lt,
+      do: DateTime.shift(published_at, month: months)
+  end
+
+  defp auto_delete_at(_), do: nil
 
   @doc "Serialize a tombstone placeholder for unavailable posts."
   def serialize_tombstone(id) do
