@@ -13,10 +13,10 @@ defmodule Hybridsocial.Social.Streams do
   # Default minimum clip length (seconds) for the streams feed when the
   # `streams_min_duration_seconds` setting isn't configured.
   @default_min_duration 10
-  # Trending "hot" score scale: every 10x in reactions is worth this many
-  # seconds of recency (45_000s = 12.5h). DB-backed via
+  # Trending "hot" score scale: every 10x in engagement is worth this many
+  # seconds of recency (172_800s = 2 days). DB-backed via
   # `streams_trending_decay_seconds`.
-  @default_trending_decay_seconds 45_000
+  @default_trending_decay_seconds 172_800
 
   @doc """
   Records a view event for a video stream post.
@@ -91,8 +91,13 @@ defmodule Hybridsocial.Social.Streams do
 
   @doc """
   Returns the video streams feed: any public post carrying a qualifying
-  video attachment, ordered by engagement (reaction_count) then recency,
-  cursor paginated.
+  video attachment, ordered by the viewer's `sort` (trending "hot" score,
+  newest or oldest), cursor paginated.
+
+  Time is the post's *authoring* time, `COALESCE(published_at, inserted_at)`:
+  a federated clip is inserted when it reaches this instance, which can be
+  months after it was published, so ordering by `inserted_at` filed every
+  remote clip at the "new" end — Oldest only ever showed local clips.
   """
   def streams_feed(viewer_id, opts \\ []) do
     # Read once so the ORDER BY and the keyset cursor use the same score.
@@ -139,6 +144,8 @@ defmodule Hybridsocial.Social.Streams do
       |> where([p], is_nil(p.deleted_at))
       |> where([p], p.sensitive == false)
       |> where([p], is_nil(p.spoiler_text) or p.spoiler_text == "")
+      # A scheduled post that hasn't gone out yet is not public content.
+      |> where([p], is_nil(p.scheduled_at) or not is_nil(p.published_at))
       |> Hybridsocial.Feeds.Visibility.apply_suspension_filter()
       |> Hybridsocial.Feeds.Visibility.exclude_locked_for_anonymous(viewer_id)
       |> Hybridsocial.Feeds.Visibility.apply_silence_filter()
@@ -286,7 +293,7 @@ defmodule Hybridsocial.Social.Streams do
     case Repo.one(
            from(p in Post,
              where: p.id == ^cursor_id,
-             select: {p.reaction_count, p.inserted_at, p.id}
+             select: {fragment("COALESCE(?, ?)", p.published_at, p.inserted_at), p.id}
            )
          ) do
       nil -> query
@@ -297,38 +304,56 @@ defmodule Hybridsocial.Social.Streams do
   # Keyset compares mirror `apply_sort` exactly (same key, same direction, same
   # id tiebreak) so pagination is accurate — post ids are random UUIDv4, so the
   # old `p.id < max_id` returned an arbitrary slice and the feed froze.
-  defp keyset_where(query, "newest", {_rc, ia, id}, _decay) do
+  defp keyset_where(query, "newest", {ts, id}, _decay) do
     where(
       query,
       [p],
-      fragment("(?, ?) < (?, ?)", p.inserted_at, p.id, ^ia, type(^id, Ecto.UUID))
+      fragment(
+        "(COALESCE(?, ?), ?) < (?, ?)",
+        p.published_at,
+        p.inserted_at,
+        p.id,
+        ^ts,
+        type(^id, Ecto.UUID)
+      )
     )
   end
 
-  defp keyset_where(query, "oldest", {_rc, ia, id}, _decay) do
+  defp keyset_where(query, "oldest", {ts, id}, _decay) do
     where(
       query,
       [p],
-      fragment("(?, ?) > (?, ?)", p.inserted_at, p.id, ^ia, type(^id, Ecto.UUID))
+      fragment(
+        "(COALESCE(?, ?), ?) > (?, ?)",
+        p.published_at,
+        p.inserted_at,
+        p.id,
+        ^ts,
+        type(^id, Ecto.UUID)
+      )
     )
   end
 
   # The boundary's score is computed in SQL from the boundary row itself, with
   # the very expression `apply_sort` orders by, so the compare is exact — no
   # float round-trip through Elixir.
-  defp keyset_where(query, _trending, {_rc, _ia, id}, decay) do
+  defp keyset_where(query, _trending, {_ts, id}, decay) do
     where(
       query,
       [p],
       fragment(
         """
-        (LOG(GREATEST(?, 1)::double precision) + EXTRACT(EPOCH FROM ?)::double precision / ?::double precision, ?, ?) <
-        (SELECT LOG(GREATEST(b.reaction_count, 1)::double precision) + EXTRACT(EPOCH FROM b.inserted_at)::double precision / ?::double precision, b.inserted_at, b.id
+        (LOG(GREATEST(? + 2 * ? + 3 * ?, 1)::double precision) + EXTRACT(EPOCH FROM COALESCE(?, ?))::double precision / ?::double precision, COALESCE(?, ?), ?) <
+        (SELECT LOG(GREATEST(b.reaction_count + 2 * b.reply_count + 3 * b.boost_count, 1)::double precision) + EXTRACT(EPOCH FROM COALESCE(b.published_at, b.inserted_at))::double precision / ?::double precision, COALESCE(b.published_at, b.inserted_at), b.id
          FROM posts b WHERE b.id = ?)
         """,
         p.reaction_count,
+        p.reply_count,
+        p.boost_count,
+        p.published_at,
         p.inserted_at,
         ^decay,
+        p.published_at,
         p.inserted_at,
         p.id,
         ^decay,
@@ -341,29 +366,42 @@ defmodule Hybridsocial.Social.Streams do
   # oldest. The `id` tiebreak makes the order total and matches the keyset
   # cursor above.
   #
-  # Trending is a "hot" score — log10(reactions) + post time / decay — not the
-  # all-time reaction count. Ranking by raw count buried every new clip under
+  # Trending is a "hot" score — log10(engagement) + post time / decay — not the
+  # all-time reaction count. Engagement weighs what it costs the viewer:
+  # reaction 1, reply 2, boost 3 — ranking by reactions alone ignored clips
+  # that drew a long discussion or were widely shared. Ranking by raw count buried every new clip under
   # any older one with a reaction or two; that hit federated clips hardest
   # (they arrive with ~0 local reactions), so with the fediverse toggle on,
   # Trending still looked local-only. The score is fixed per post (it doesn't
   # depend on "now"), so keyset pagination stays exact across requests.
   defp apply_sort(query, "newest", _decay),
-    do: order_by(query, [p], desc: p.inserted_at, desc: p.id)
+    do:
+      order_by(query, [p],
+        desc: fragment("COALESCE(?, ?)", p.published_at, p.inserted_at),
+        desc: p.id
+      )
 
   defp apply_sort(query, "oldest", _decay),
-    do: order_by(query, [p], asc: p.inserted_at, asc: p.id)
+    do:
+      order_by(query, [p],
+        asc: fragment("COALESCE(?, ?)", p.published_at, p.inserted_at),
+        asc: p.id
+      )
 
   defp apply_sort(query, _trending, decay),
     do:
       order_by(query, [p],
         desc:
           fragment(
-            "LOG(GREATEST(?, 1)::double precision) + EXTRACT(EPOCH FROM ?)::double precision / ?::double precision",
+            "LOG(GREATEST(? + 2 * ? + 3 * ?, 1)::double precision) + EXTRACT(EPOCH FROM COALESCE(?, ?))::double precision / ?::double precision",
             p.reaction_count,
+            p.reply_count,
+            p.boost_count,
+            p.published_at,
             p.inserted_at,
             ^decay
           ),
-        desc: p.inserted_at,
+        desc: fragment("COALESCE(?, ?)", p.published_at, p.inserted_at),
         desc: p.id
       )
 
