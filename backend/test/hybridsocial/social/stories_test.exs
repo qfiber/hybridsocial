@@ -142,7 +142,7 @@ defmodule Hybridsocial.Social.StoriesTest do
 
   defp register(handle) do
     Hybridsocial.Accounts.register_user(%{
-      "handle" => "#{handle}_#{:erlang.unique_integer([:positive])}",
+      "handle" => "#{handle}_#{unique_suffix()}",
       "email" => "#{handle}_#{:erlang.unique_integer([:positive])}@test.com",
       "password" => "password123456789",
       "password_confirmation" => "password123456789"

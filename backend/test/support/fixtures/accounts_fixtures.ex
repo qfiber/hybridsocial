@@ -25,6 +25,19 @@ defmodule Hybridsocial.AccountsFixtures do
   def valid_password, do: @password
 
   @doc """
+  A short suffix for making test handles unique: at most 4 characters.
+  Handles cap at 20 characters, and `:erlang.unique_integer/1` isn't a dense
+  counter (it reached 8 digits in a full-suite run), so appending it raw
+  pushed long prefixes past the limit at random (#266).
+  """
+  def unique_suffix do
+    :erlang.unique_integer([:positive])
+    |> rem(36 ** 4)
+    |> Integer.to_string(36)
+    |> String.downcase()
+  end
+
+  @doc """
   Register a confirmed user and return its identity. `email` defaults to
   `<handle>@test.com`.
   """
