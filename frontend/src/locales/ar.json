@@ -55,6 +55,7 @@
   "streams.aspect_all": "جميع الأبعاد مفعّلة",
   "streams.aspect_portrait": "عمودي فقط (9:16)",
   "streams.aspect_hint": "أظهِر أيضاً مقاطع بجميع الأبعاد",
+  "streams.loading": "جارٍ تحميل المقطع",
   "streams.loading_more": "جارٍ تحميل المزيد…",
   "block.block_domain": "حجب النطاق {domain}",
   "block.not_interested": "لا يهمّني",

@@ -129,9 +129,22 @@
 
   function onPlayEvt() {
     playing = true;
+    // Remote clips can take a while to arrive from their origin server;
+    // without a cue the frame just sat black and looked broken.
+    if (videoEl && videoEl.readyState < 3) buffering = true;
   }
   function onPauseEvt() {
     playing = false;
+    buffering = false;
+  }
+
+  // --- Loading indicator ---------------------------------------------------
+  let buffering = $state(false);
+  function onWaiting() {
+    if (videoEl && !videoEl.paused) buffering = true;
+  }
+  function onReady() {
+    buffering = false;
   }
   function onEndedEvt() {
     if (!videoEl) return;
@@ -216,9 +229,27 @@
     return a / (2 * Math.PI);
   }
 
+  // The ring is a dial, not an endless wheel: dragging the handle past
+  // 12 o'clock used to jump from the end straight back to the start (and the
+  // other way), so the clip looped while scrubbing. Crossing 12 o'clock now
+  // pins the handle at that end until the finger comes back.
+  let scrubLast = 0;
+  function dialProgress(raw: number): number {
+    const prev = scrubLast;
+    let p = raw;
+    if (prev > 0.75 && raw < 0.25) p = 1;
+    else if (prev < 0.25 && raw > 0.75) p = 0;
+    else if (prev === 1 && raw < 0.5) p = 1;
+    else if (prev === 0 && raw > 0.5) p = 0;
+    scrubLast = p;
+    return p;
+  }
+
   function seekTo(p: number) {
     if (!videoEl || duration <= 0) return;
-    const t = Math.max(0, Math.min(duration, p * duration));
+    // Stop a hair short of the end so pinning the dial there doesn't fire
+    // `ended` and report a completed view.
+    const t = Math.max(0, Math.min(Math.max(0, duration - 0.1), p * duration));
     videoEl.currentTime = t;
     currentTime = t;
   }
@@ -230,12 +261,13 @@
     showTime = true;
     clearTimeout(showTimeTimer);
     (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-    seekTo(progressFromPointer(e.clientX, e.clientY));
+    scrubLast = progress;
+    seekTo(dialProgress(progressFromPointer(e.clientX, e.clientY)));
   }
 
   function onRingPointerMove(e: PointerEvent) {
     if (!scrubbing) return;
-    seekTo(progressFromPointer(e.clientX, e.clientY));
+    seekTo(dialProgress(progressFromPointer(e.clientX, e.clientY)));
   }
 
   function onRingPointerUp(e: PointerEvent) {
@@ -278,10 +310,20 @@
       onplay={onPlayEvt}
       onpause={onPauseEvt}
       onended={onEndedEvt}
+      onwaiting={onWaiting}
+      onplaying={onReady}
+      oncanplay={onReady}
+      onerror={onReady}
     >
       <track kind="captions" />
     </video>
   </button>
+
+  {#if buffering}
+    <div class="stream-loading" role="status" aria-label={$t('streams.loading')}>
+      <span class="stream-loading-spinner" aria-hidden="true"></span>
+    </div>
+  {/if}
 
   {#if tapGlyph}
     <div class="tap-glyph" aria-hidden="true">
@@ -522,6 +564,51 @@
 
   .stream-icon-btn.on {
     background: var(--color-primary, #6c3edd);
+  }
+
+  .stream-loading {
+    position: absolute;
+    inset-block-start: 50%;
+    /* Physical `left` — see .tap-glyph. */
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    /* Only show for a real wait — a quick start doesn't flash a spinner. */
+    opacity: 0;
+    animation: stream-loading-in 200ms ease 300ms forwards;
+  }
+
+  .stream-loading-spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    animation: stream-spin 0.8s linear infinite;
+  }
+
+  @keyframes stream-loading-in {
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes stream-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stream-loading-spinner {
+      animation-duration: 2s;
+    }
   }
 
   .tap-glyph {
