@@ -1109,6 +1109,55 @@ defmodule Hybridsocial.Messaging do
     end
   end
 
+  @doc """
+  Marks a conversation unread for an identity (#299): the read pointer moves
+  to just before the latest message someone else sent, so it counts as one
+  unread message again. Read receipts already sent are left alone.
+  """
+  def mark_unread(conversation_id, identity_id) do
+    with %Participant{} = participant <- active_participant(conversation_id, identity_id) do
+      case latest_incoming_message(conversation_id, identity_id) do
+        nil ->
+          {:ok, :no_messages}
+
+        latest ->
+          previous_id =
+            Message
+            |> where([m], m.conversation_id == ^conversation_id and is_nil(m.deleted_at))
+            |> where([m], m.created_at < ^latest.created_at)
+            |> order_by([m], desc: m.created_at)
+            |> limit(1)
+            |> select([m], m.id)
+            |> Repo.one()
+
+          participant
+          |> Ecto.Changeset.change(last_read_message_id: previous_id)
+          |> Repo.update()
+      end
+    else
+      nil -> {:error, :not_found}
+    end
+  end
+
+  defp active_participant(conversation_id, identity_id) do
+    Participant
+    |> where(
+      [p],
+      p.conversation_id == ^conversation_id and p.identity_id == ^identity_id and
+        is_nil(p.left_at)
+    )
+    |> Repo.one()
+  end
+
+  defp latest_incoming_message(conversation_id, identity_id) do
+    Message
+    |> where([m], m.conversation_id == ^conversation_id and is_nil(m.deleted_at))
+    |> where([m], m.sender_id != ^identity_id)
+    |> order_by([m], desc: m.created_at)
+    |> limit(1)
+    |> Repo.one()
+  end
+
   @doc "Count unread messages in a conversation for an identity."
   def unread_count(conversation_id, identity_id) do
     participant =

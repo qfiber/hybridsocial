@@ -9,13 +9,14 @@
     getMessages,
     sendMessage,
     markConversationRead,
+    markConversationUnread,
     sendTyping,
     deleteConversation,
     deleteMessage as apiDeleteMessage,
     addMessageReaction,
     editMessage as apiEditMessage,
   } from '$lib/api/conversations.js';
-  import { markConversationReadLocal } from '$lib/stores/dm-unread.js';
+  import { markConversationReadLocal, markConversationUnreadLocal } from '$lib/stores/dm-unread.js';
   import { currentUser } from '$lib/stores/auth.js';
   import MessageBubble from '$lib/components/dm/MessageBubble.svelte';
   import MessageInput from '$lib/components/dm/MessageInput.svelte';
@@ -355,6 +356,27 @@
     goto('/messages');
   }
 
+  let markingUnread = $state(false);
+
+  // Leave the thread afterwards: staying would mark it read again on the
+  // next incoming message, undoing what the user just asked for.
+  async function handleMarkUnread() {
+    if (markingUnread) return;
+    markingUnread = true;
+    try {
+      await markConversationUnread(conversationId);
+      markConversationUnreadLocal(conversationId);
+      window.dispatchEvent(
+        new CustomEvent('conversation-unread', { detail: { id: conversationId } }),
+      );
+      goto('/messages');
+    } catch {
+      addToast($t('dm.mark_unread_failed'), 'error');
+    } finally {
+      markingUnread = false;
+    }
+  }
+
   let confirmingDeleteConv = $state(false);
   let deletingConv = $state(false);
 
@@ -470,6 +492,17 @@
     </div>
 
     <div class="detail-header-actions">
+      <button
+        type="button"
+        class="header-action"
+        onclick={handleMarkUnread}
+        disabled={markingUnread}
+        title={$t('dm.mark_unread')}
+        aria-label={$t('dm.mark_unread')}
+      >
+        <span class="material-symbols-outlined">mark_chat_unread</span>
+        <span class="header-action-label">{$t('dm.mark_unread_short')}</span>
+      </button>
       <button
         type="button"
         class="header-action header-action-danger"

@@ -551,6 +551,7 @@ defmodule HybridsocialWeb.Router do
     put "/:id/messages/:mid", ConversationController, :edit_message
     delete "/:id/messages/:mid", ConversationController, :delete_message
     post "/:id/read", ConversationController, :mark_read
+    post "/:id/unread", ConversationController, :mark_unread
     post "/:id/typing", ConversationController, :typing
     patch "/:id/settings", ConversationController, :update_settings
     post "/:id/accept", ConversationController, :accept

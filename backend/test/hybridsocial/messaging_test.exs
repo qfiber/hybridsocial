@@ -400,6 +400,60 @@ defmodule Hybridsocial.MessagingTest do
     end
   end
 
+  describe "mark_unread/2 (#299)" do
+    setup do
+      alice = create_trusted_user("mu_alice", "mu_alice@example.com")
+      bob = create_trusted_user("mu_bob", "mu_bob@example.com")
+      {:ok, conv} = Messaging.find_or_create_direct(alice.id, bob.id)
+      %{alice: alice, bob: bob, conv: conv}
+    end
+
+    # The count the conversation list (and the DM badge) shows.
+    defp listed_unread(conv_id, identity_id) do
+      identity_id
+      |> Messaging.list_conversations()
+      |> Enum.find(&(&1.id == conv_id))
+      |> Map.fetch!(:unread_count)
+    end
+
+    test "a read conversation counts its latest incoming message as unread again", %{
+      alice: alice,
+      bob: bob,
+      conv: conv
+    } do
+      {:ok, _} = Messaging.send_message(conv.id, alice.id, %{"content" => "one"})
+      {:ok, _} = Messaging.send_message(conv.id, alice.id, %{"content" => "two"})
+      {:ok, _} = Messaging.send_message(conv.id, bob.id, %{"content" => "my reply"})
+      {:ok, _} = Messaging.mark_read(conv.id, bob.id)
+      assert 0 == listed_unread(conv.id, bob.id)
+
+      assert {:ok, _} = Messaging.mark_unread(conv.id, bob.id)
+      assert 1 == listed_unread(conv.id, bob.id)
+
+      assert {:ok, _} = Messaging.mark_read(conv.id, bob.id)
+      assert 0 == listed_unread(conv.id, bob.id)
+    end
+
+    test "works when the only message is the incoming one", %{alice: alice, bob: bob, conv: conv} do
+      {:ok, _} = Messaging.send_message(conv.id, alice.id, %{"content" => "hi"})
+      {:ok, _} = Messaging.mark_read(conv.id, bob.id)
+
+      assert {:ok, _} = Messaging.mark_unread(conv.id, bob.id)
+      assert 1 == listed_unread(conv.id, bob.id)
+    end
+
+    test "no incoming messages is a no-op", %{alice: alice, conv: conv} do
+      {:ok, _} = Messaging.send_message(conv.id, alice.id, %{"content" => "hi"})
+      assert {:ok, :no_messages} = Messaging.mark_unread(conv.id, alice.id)
+      assert 0 == listed_unread(conv.id, alice.id)
+    end
+
+    test "a non-participant gets not_found", %{conv: conv} do
+      eve = create_trusted_user("mu_eve", "mu_eve@example.com")
+      assert {:error, :not_found} = Messaging.mark_unread(conv.id, eve.id)
+    end
+  end
+
   describe "unread_count/2" do
     test "counts unread messages" do
       alice = create_trusted_user("uc_alice", "uc_alice@example.com")

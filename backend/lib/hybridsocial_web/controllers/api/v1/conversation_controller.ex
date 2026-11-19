@@ -271,6 +271,19 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
     end
   end
 
+  # POST /api/v1/conversations/:id/unread — the viewer marks it unread (#299).
+  def mark_unread(conn, %{"id" => conversation_id}) do
+    identity = conn.assigns.current_identity
+
+    case Messaging.mark_unread(conversation_id, identity.id) do
+      {:ok, _} ->
+        json(conn, %{message: "conversation.marked_unread"})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "conversation.not_found"})
+    end
+  end
+
   # POST /api/v1/conversations/:id/typing — fire-and-forget typing ping.
   def typing(conn, %{"id" => conversation_id}) do
     identity = conn.assigns.current_identity

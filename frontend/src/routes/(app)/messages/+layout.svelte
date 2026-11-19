@@ -55,7 +55,9 @@
 
     window.addEventListener('chat-event', handleChatEvent as EventListener);
     window.addEventListener('conversation-deleted', handleConversationDeleted as EventListener);
+    window.addEventListener('conversation-unread', handleConversationUnread as EventListener);
     return () => {
+      window.removeEventListener('conversation-unread', handleConversationUnread as EventListener);
       window.removeEventListener('chat-event', handleChatEvent as EventListener);
       window.removeEventListener(
         'conversation-deleted',
@@ -136,6 +138,14 @@
     const detail = (ev as CustomEvent<{ id: string }>).detail;
     if (!detail?.id) return;
     conversations = conversations.filter((c) => c.id !== detail.id);
+  }
+
+  function handleConversationUnread(ev: Event) {
+    const id = (ev as CustomEvent<{ id: string }>).detail?.id;
+    if (!id) return;
+    conversations = conversations.map((c) =>
+      c.id === id ? { ...c, unread_count: Math.max(c.unread_count ?? 0, 1) } : c,
+    );
   }
 
   async function refreshConversations() {
