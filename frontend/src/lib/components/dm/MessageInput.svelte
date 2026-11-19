@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { onDestroy } from 'svelte';
   import { uploadMedia } from '$lib/api/media.js';
+  import VoicePlayer from '$lib/components/dm/VoicePlayer.svelte';
   import type { MediaAttachment } from '$lib/api/types.js';
   import { addToast } from '$lib/stores/toast.js';
   import { currentUser } from '$lib/stores/auth.js';
@@ -124,7 +126,7 @@
         if (r.status === 'fulfilled') {
           uploaded = [...uploaded, r.value];
         } else {
-          addToast('An attachment failed to upload', 'error');
+          addToast($t('dm.upload_failed'), 'error');
         }
       }
     } finally {
@@ -192,7 +194,7 @@
           'error',
         );
       } else if (name === 'NotFoundError' || name === 'NotReadableError' || name === 'OverconstrainedError') {
-        addToast('No microphone was found on this device', 'error');
+        addToast($t('dm.no_microphone'), 'error');
       } else {
         addToast('Microphone access was denied — allow it in your browser to record voice messages', 'error');
       }
@@ -276,7 +278,7 @@
     if (!replyingTo) return '';
     const text = (replyingTo.content || '').trim();
     if (text) return text;
-    if ((replyingTo.media_attachments || []).length > 0) return 'Attachment';
+    if ((replyingTo.media_attachments || []).length > 0) return $t('dm.attachment');
     return '';
   });
   let replyAuthor = $derived(
@@ -334,7 +336,7 @@
     <div class="reply-banner" role="status">
       <span class="reply-banner-bar" aria-hidden="true"></span>
       <div class="reply-banner-body">
-        <span class="reply-banner-label">Replying to {replyAuthor || 'message'}</span>
+        <span class="reply-banner-label">{$t('dm.replying_to', { name: replyAuthor || $t('dm.message') })}</span>
         {#if replyPreviewText}
           <span class="reply-banner-preview" dir="auto">{replyPreviewText}</span>
         {/if}
@@ -343,7 +345,7 @@
         type="button"
         class="reply-banner-cancel"
         onclick={() => oncancelreply?.()}
-        aria-label="Cancel reply"
+        aria-label={$t('dm.cancel_reply')}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18" />
@@ -356,7 +358,11 @@
     <div class="attachment-row">
       {#each uploaded as m (m.id)}
         {@const kind = previewKind(m)}
-        <div class="attachment-tile" title={m.description ?? m.id}>
+        <div
+          class="attachment-tile"
+          class:attachment-tile-audio={kind === 'audio'}
+          title={m.description ?? m.id}
+        >
           {#if kind === 'image' && (m.preview_url || m.url)}
             <img src={m.preview_url ?? m.url} alt="" />
           {:else if kind === 'video'}
@@ -367,13 +373,8 @@
               </svg>
             </div>
           {:else if kind === 'audio'}
-            <div class="attachment-icon">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M9 18V5l12-2v13" />
-                <circle cx="6" cy="18" r="3" />
-                <circle cx="18" cy="16" r="3" />
-              </svg>
-            </div>
+            <!-- Listen back before sending, not just a music-note icon. -->
+            <VoicePlayer src={m.url} />
           {:else}
             <div class="attachment-icon">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -386,7 +387,7 @@
             type="button"
             class="attachment-remove"
             onclick={() => removeAttachment(m.id)}
-            aria-label="Remove attachment"
+            aria-label={$t('dm.remove_attachment')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -396,7 +397,7 @@
         </div>
       {/each}
       {#each Array(uploadingCount) as _, i (i)}
-        <div class="attachment-tile attachment-tile-loading" aria-label="Uploading">
+        <div class="attachment-tile attachment-tile-loading" aria-label={$t('dm.uploading')}>
           <div class="attachment-spinner"></div>
         </div>
       {/each}
@@ -406,14 +407,14 @@
   {#if recording}
     <div class="recording-bar" role="status">
       <span class="recording-dot" aria-hidden="true"></span>
-      <span class="recording-time">Recording… {recordLabel}</span>
+      <span class="recording-time">{$t('dm.recording')} <span dir="ltr">{recordLabel}</span></span>
       <div class="recording-actions">
-        <button type="button" class="recording-cancel" onclick={cancelRecording} aria-label="Cancel recording">
+        <button type="button" class="recording-cancel" onclick={cancelRecording} aria-label={$t('dm.cancel_recording')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
-        <button type="button" class="recording-send" onclick={stopRecording} aria-label="Stop and attach recording">
+        <button type="button" class="recording-send" onclick={stopRecording} aria-label={$t('dm.stop_recording')}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
           </svg>
@@ -438,7 +439,7 @@
       type="button"
       class="attach-btn"
       onclick={triggerFileInput}
-      aria-label="Attach media"
+      aria-label={$t('dm.attach')}
       disabled={disabled || uploaded.length + uploadingCount >= maxAttachments}
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -451,7 +452,7 @@
         type="button"
         class="mic-btn"
         onclick={startRecording}
-        aria-label="Record voice message"
+        aria-label={$t('dm.record_voice')}
         disabled={disabled || recording || uploaded.length + uploadingCount >= maxAttachments}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -466,7 +467,7 @@
       bind:this={textareaEl}
       bind:value={content}
       class="message-textarea"
-      placeholder="Write a message..."
+      placeholder={$t('dm.placeholder')}
       rows="1"
       dir="auto"
       onkeydown={handleKeydown}
@@ -481,7 +482,7 @@
         class:active={showEmoji}
         bind:this={emojiBtnEl}
         onclick={() => (showEmoji = !showEmoji)}
-        aria-label="Insert emoji"
+        aria-label={$t('dm.insert_emoji')}
         aria-expanded={showEmoji}
         {disabled}
       >
@@ -503,7 +504,7 @@
       class:active={canSend}
       onclick={handleSubmit}
       disabled={!canSend}
-      aria-label="Send message"
+      aria-label={$t('dm.send')}
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="22" y1="2" x2="11" y2="13" />
@@ -838,6 +839,23 @@
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     flex-shrink: 0;
+  }
+
+  /* A voice note gets a full player instead of a 64px square; the end
+     padding keeps the remove button (physically top-right) off the time
+     label — physical, because the player row is LTR in every locale. */
+  .attachment-tile-audio {
+    display: flex;
+    align-items: center;
+    width: 260px;
+    max-width: 100%;
+    height: auto;
+    min-height: 56px;
+    padding-block: var(--space-1);
+    padding-left: var(--space-2);
+    padding-right: 28px;
+    color: var(--color-text);
+    flex-shrink: 1;
   }
 
   .attachment-tile img {

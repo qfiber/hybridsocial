@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
@@ -164,9 +165,9 @@
 </script>
 
 <div class="messages-layout" class:has-selection={hasSelection}>
-  <aside class="conversations-panel" aria-label="Conversations list">
+  <aside class="conversations-panel" aria-label={$t('dm.conversations')}>
     <div class="panel-header">
-      <h1 class="panel-title">Messages</h1>
+      <h1 class="panel-title">{$t('dm.title')}</h1>
       <button
         type="button"
         class="btn btn-primary btn-sm"
@@ -186,7 +187,7 @@
           <line x1="12" y1="8" x2="12" y2="14" />
           <line x1="9" y1="11" x2="15" y2="11" />
         </svg>
-        New
+        {$t('dm.new')}
       </button>
     </div>
 
@@ -196,11 +197,11 @@
       </div>
     {:else if conversations.length === 0}
       <div class="panel-empty">
-        <p class="empty-text">No conversations yet</p>
-        <p class="empty-hint">Start a new conversation to message someone.</p>
+        <p class="empty-text">{$t('dm.no_conversations')}</p>
+        <p class="empty-hint">{$t('dm.no_conversations_hint')}</p>
       </div>
     {:else}
-      <div class="conversation-list" role="listbox" aria-label="Conversations">
+      <div class="conversation-list" role="listbox" aria-label={$t('dm.conversations')}>
         {#each conversations as conversation (conversation.id)}
           <ConversationItem
             {conversation}

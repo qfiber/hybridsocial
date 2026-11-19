@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import { authStore } from '$lib/stores/auth.js';
@@ -41,7 +42,7 @@
 
 <div class="picker" role="dialog" aria-label="React with emoji">
   {#if loading}
-    <div class="picker-loading">Loading…</div>
+    <div class="picker-loading">{$t('dm.loading')}</div>
   {:else}
     <div class="picker-row">
       {#each catalog?.defaults ?? [] as code (code)}

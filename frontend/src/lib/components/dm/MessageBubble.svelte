@@ -2,6 +2,10 @@
   import type { Message } from '$lib/api/types.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import MessageReactionPicker from '$lib/components/dm/MessageReactionPicker.svelte';
+  import VoicePlayer from '$lib/components/dm/VoicePlayer.svelte';
+  import ImageLightbox from '$lib/components/ui/ImageLightbox.svelte';
+  import { t } from '$lib/stores/i18n.js';
+  import { addToast } from '$lib/stores/toast.js';
   import { loadReactionCatalog, resolveReaction } from '$lib/utils/message-reactions.js';
   import { onMount } from 'svelte';
   import { fly, scale } from 'svelte/transition';
@@ -78,7 +82,7 @@
     if (!replyTo) return null;
     const text = (replyTo.content || '').trim();
     if (text) return text;
-    if ((replyTo.media_attachments || []).length > 0) return 'Attachment';
+    if ((replyTo.media_attachments || []).length > 0) return $t('dm.attachment');
     return '';
   });
   let replyAuthor = $derived(
@@ -184,7 +188,144 @@
 
   function handleReact(emoji: string) {
     pickerOpen = false;
+    setActionsOpen(false);
     onreact?.(message.id, emoji);
+  }
+
+  // ---- Touch: actions on tap, swipe to reply -------------------------------
+  // Phones have no hover, and four always-visible buttons under every
+  // message cluttered the thread. Like other messengers, a tap on the bubble
+  // opens its action bar (one bubble at a time; a tap elsewhere closes it),
+  // and swiping a bubble toward the reading direction starts a reply.
+  const ACTIONS_EVENT = 'hs-dm-actions-open';
+  let rowEl: HTMLDivElement | undefined = $state();
+  let actionsOpen = $state(false);
+
+  function isTouchUi(): boolean {
+    return typeof window !== 'undefined' && window.matchMedia('(hover: none)').matches;
+  }
+
+  function setActionsOpen(open: boolean) {
+    actionsOpen = open;
+    if (open) {
+      window.dispatchEvent(new CustomEvent(ACTIONS_EVENT, { detail: message.id }));
+    } else {
+      pickerOpen = false;
+      confirmingDelete = false;
+    }
+  }
+
+  $effect(() => {
+    if (!actionsOpen) return;
+    const onOther = (e: Event) => {
+      if ((e as CustomEvent).detail !== message.id) setActionsOpen(false);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (rowEl && !rowEl.contains(e.target as Node)) setActionsOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActionsOpen(false);
+    };
+    window.addEventListener(ACTIONS_EVENT, onOther);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener(ACTIONS_EVENT, onOther);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  });
+
+  const SWIPE_TRIGGER = 56;
+  const SWIPE_MAX = 72;
+  let swipeX = $state(0);
+  let swiping = $state(false);
+  let swipeStartX = 0;
+  let swipeStartY = 0;
+  let swipeRtl = $state(false);
+  let swipeConsumed = false;
+
+  function onTouchStart(e: TouchEvent) {
+    swipeConsumed = false;
+    if (!onreply || isPending || editing || e.touches.length !== 1) return;
+    swipeStartX = e.touches[0].clientX;
+    swipeStartY = e.touches[0].clientY;
+    swipeRtl = !!rowEl && getComputedStyle(rowEl).direction === 'rtl';
+    swiping = true;
+    swipeX = 0;
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (!swiping) return;
+    const dx = e.touches[0].clientX - swipeStartX;
+    const dy = e.touches[0].clientY - swipeStartY;
+    // A vertical gesture is a scroll — let it go.
+    if (Math.abs(dy) > 12 && Math.abs(dy) > Math.abs(dx)) {
+      swiping = false;
+      swipeX = 0;
+      return;
+    }
+    // Toward the reading direction only: right in LTR, left in RTL.
+    const forward = swipeRtl ? -dx : dx;
+    swipeX = forward > 0 ? Math.min(forward, SWIPE_MAX) : 0;
+  }
+
+  function onTouchEnd() {
+    if (!swiping) return;
+    swiping = false;
+    if (swipeX >= SWIPE_TRIGGER) {
+      swipeConsumed = true;
+      navigator.vibrate?.(10);
+      onreply?.(message);
+    }
+    swipeX = 0;
+  }
+
+  function onBubbleClick(e: MouseEvent) {
+    if (swipeConsumed) {
+      swipeConsumed = false;
+      return;
+    }
+    if (!isTouchUi() || isPending || editing) return;
+    // Taps on links, the voice player, images etc. keep their own meaning.
+    if ((e.target as HTMLElement).closest('a, button, input, textarea, video, audio, img, .voice-player')) {
+      return;
+    }
+    setActionsOpen(!actionsOpen);
+  }
+
+  function replyFromActions() {
+    setActionsOpen(false);
+    onreply?.(message);
+  }
+
+  let canCopy = $derived(!!(message.content || '').trim());
+
+  async function copyText() {
+    setActionsOpen(false);
+    try {
+      await navigator.clipboard.writeText(message.content || '');
+      addToast($t('dm.copied'), 'success');
+    } catch {
+      addToast($t('dm.copy_failed'), 'error');
+    }
+  }
+
+  // ---- Image viewer ----------------------------------------------------------
+  let imageAttachments = $derived(mediaAttachments.filter((a) => a.type === 'image'));
+  let lightboxOpen = $state(false);
+  let lightboxIndex = $state(0);
+
+  function openImage(id: string) {
+    lightboxIndex = Math.max(0, imageAttachments.findIndex((a) => a.id === id));
+    lightboxOpen = true;
+  }
+
+  // Message rows carry `will-change` (the ripple), which traps a
+  // position:fixed overlay inside the row — mount the viewer on <body>.
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
   }
 
   function requestDelete(e: MouseEvent) {
@@ -243,6 +384,7 @@
   class="message-row"
   class:own={isOwn}
   class:pending={isPending}
+  bind:this={rowEl}
   in:fly={{ y: 24, duration: 280, easing: cubicOut }}
 >
   {#if !isOwn && showAvatar}
@@ -257,8 +399,20 @@
     <div class="avatar-spacer"></div>
   {/if}
 
-  <div class="bubble-wrapper" class:wrapper-own={isOwn}>
-    <div class="bubble" class:bubble-own={isOwn} class:bubble-other={!isOwn}>
+  <div class="bubble-wrapper" class:wrapper-own={isOwn} class:actions-open={actionsOpen}>
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div
+      class="bubble"
+      class:bubble-own={isOwn}
+      class:bubble-other={!isOwn}
+      class:bubble-swiping={swiping}
+      style:--swipe-x="{swipeRtl ? -swipeX : swipeX}px"
+      onclick={onBubbleClick}
+      ontouchstart={onTouchStart}
+      ontouchmove={onTouchMove}
+      ontouchend={onTouchEnd}
+      ontouchcancel={onTouchEnd}
+    >
       {#if message.reply_to_id}
         <button
           type="button"
@@ -270,7 +424,7 @@
           <span class="reply-quote-bar" aria-hidden="true"></span>
           <span class="reply-quote-body">
             <span class="reply-quote-author">
-              {replyTo ? replyAuthor || 'Unknown' : 'Original message unavailable'}
+              {replyTo ? replyAuthor || $t('dm.unknown_sender') : $t('dm.original_unavailable')}
             </span>
             {#if replyPreview}
               <span class="reply-quote-text" dir="auto">{replyPreview}</span>
@@ -289,7 +443,7 @@
             onkeydown={handleEditKeydown}
             disabled={savingEdit}
             rows="2"
-            aria-label="Edit message"
+            aria-label={$t('dm.edit_message')}
             autofocus
           ></textarea>
           <div class="edit-actions">
@@ -299,7 +453,7 @@
               onclick={cancelEdit}
               disabled={savingEdit}
             >
-              Cancel
+              {$t('common.cancel')}
             </button>
             <button
               type="button"
@@ -307,10 +461,10 @@
               onclick={saveEdit}
               disabled={savingEdit || editDraft.trim() === ''}
             >
-              {savingEdit ? 'Saving…' : 'Save'}
+              {savingEdit ? $t('dm.saving') : $t('common.save')}
             </button>
           </div>
-          <span class="edit-hint">Enter to save, Esc to cancel.</span>
+          <span class="edit-hint">{$t('dm.edit_hint')}</span>
         </div>
       {:else if message.content_html}
         <div class="message-body" dir="auto">
@@ -324,12 +478,19 @@
         <div class="message-media">
           {#each mediaAttachments as attachment (attachment.id)}
             {#if attachment.type === 'image'}
-              <img
-                src={attachment.preview_url || attachment.url}
-                alt={attachment.description || 'Attached image'}
-                class="media-image"
-                loading="lazy"
-              />
+              <button
+                type="button"
+                class="media-image-btn"
+                onclick={() => openImage(attachment.id)}
+                aria-label={$t('dm.view_image')}
+              >
+                <img
+                  src={attachment.preview_url || attachment.url}
+                  alt={attachment.description || ''}
+                  class="media-image"
+                  loading="lazy"
+                />
+              </button>
             {:else if attachment.type === 'gifv'}
               <!-- Looping muted clip, GIF-style. -->
               <video
@@ -345,7 +506,7 @@
                 <track kind="captions" />
               </video>
             {:else if attachment.type === 'audio'}
-              <audio src={attachment.url} controls preload="metadata" class="media-audio"></audio>
+              <VoicePlayer src={attachment.url} />
             {:else}
               <!-- Any other attachment (generic file) — a download chip so
                    it never renders as an empty bubble. -->
@@ -356,7 +517,7 @@
                 rel="noopener noreferrer"
               >
                 <span class="material-symbols-outlined media-file-icon" aria-hidden="true">description</span>
-                <span class="media-file-name">{attachment.description || 'Attachment'}</span>
+                <span class="media-file-name">{attachment.description || $t('dm.attachment')}</span>
                 <span class="material-symbols-outlined media-file-dl" aria-hidden="true">download</span>
               </a>
             {/if}
@@ -367,10 +528,10 @@
       <div class="message-meta">
         <time class="message-time" datetime={message.created_at}>{formattedTime}</time>
         {#if message.edited_at}
-          <span class="message-edited">edited</span>
+          <span class="message-edited">{$t('dm.edited')}</span>
         {/if}
         {#if isPending}
-          <span class="message-pending">sending...</span>
+          <span class="message-pending">{$t('dm.sending')}</span>
         {:else if isOwn}
           <span
             class="read-receipt"
@@ -449,8 +610,8 @@
           <button
             type="button"
             class="bubble-action-btn"
-            title="Add reaction"
-            aria-label="Add reaction"
+            title={$t('dm.add_reaction')}
+            aria-label={$t('dm.add_reaction')}
             aria-expanded={pickerOpen}
             bind:this={reactionButtonEl}
             onclick={togglePickerClick}
@@ -478,11 +639,23 @@
           <button
             type="button"
             class="bubble-action-btn"
-            title="Reply"
-            aria-label="Reply to message"
-            onclick={() => onreply?.(message)}
+            title={$t('post.reply')}
+            aria-label={$t('post.reply')}
+            onclick={replyFromActions}
           >
             <span class="material-symbols-outlined rtl-mirror">reply</span>
+          </button>
+        {/if}
+
+        {#if canCopy}
+          <button
+            type="button"
+            class="bubble-action-btn"
+            title={$t('dm.copy')}
+            aria-label={$t('dm.copy')}
+            onclick={copyText}
+          >
+            <span class="material-symbols-outlined">content_copy</span>
           </button>
         {/if}
 
@@ -490,9 +663,12 @@
           <button
             type="button"
             class="bubble-action-btn"
-            title="Edit message (5 min window)"
-            aria-label="Edit message"
-            onclick={startEdit}
+            title={$t('dm.edit_message')}
+            aria-label={$t('dm.edit_message')}
+            onclick={(e) => {
+              setActionsOpen(false);
+              startEdit(e);
+            }}
           >
             <span class="material-symbols-outlined">edit</span>
           </button>
@@ -502,8 +678,8 @@
           <button
             type="button"
             class="bubble-action-btn bubble-action-danger"
-            title="Delete message"
-            aria-label="Delete message"
+            title={$t('dm.delete_message')}
+            aria-label={$t('dm.delete_message')}
             onclick={requestDelete}
           >
             <span class="material-symbols-outlined">delete</span>
@@ -518,11 +694,11 @@
           aria-live="polite"
           transition:fly={{ y: -6, duration: 180, easing: cubicOut }}
         >
-          <span class="delete-confirm-text">Delete this message?</span>
+          <span class="delete-confirm-text">{$t('dm.delete_confirm')}</span>
           <div class="delete-confirm-actions">
-            <button type="button" class="btn-mini" onclick={cancelDelete}>Cancel</button>
+            <button type="button" class="btn-mini" onclick={cancelDelete}>{$t('common.cancel')}</button>
             <button type="button" class="btn-mini btn-mini-danger" onclick={confirmDelete}>
-              Delete
+              {$t('common.delete')}
             </button>
           </div>
         </div>
@@ -530,6 +706,16 @@
     {/if}
   </div>
 </div>
+
+{#if lightboxOpen && imageAttachments.length > 0}
+  <div use:portal>
+    <ImageLightbox
+      images={imageAttachments.map((a) => ({ url: a.url, alt: a.description }))}
+      bind:index={lightboxIndex}
+      onclose={() => (lightboxOpen = false)}
+    />
+  </div>
+{/if}
 
 <style>
   .message-row {
@@ -569,8 +755,16 @@
 
   .bubble {
     position: relative;
+    /* A flex item's automatic minimum width is its min-content width, and the
+       quoted-reply line is `nowrap` — so one long quoted message made the
+       bubble as wide as that whole line, pushing it (and the reply under it)
+       past the screen edge and making the chat scroll sideways. Let the
+       bubble shrink to the wrapper and break long words / URLs. */
+    min-width: 0;
+    max-width: 100%;
     padding: var(--space-2) var(--space-3);
     word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   /* Own messages: a solid accent bubble with on-primary text — a clear,
@@ -671,12 +865,16 @@
     text-overflow: ellipsis;
   }
 
+  /* Up to two lines of the quoted message — enough context for Arabic
+     prose, which a one-line ellipsis cut after a couple of words. */
   .reply-quote-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     font-size: 12px;
     color: var(--color-text-secondary);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .bubble-actions {
@@ -739,11 +937,90 @@
     border-color: var(--color-danger, #b00);
   }
 
-  /* Touch devices have no hover — show actions inline so users can tap them. */
+  /* Touch devices have no hover. The actions live in a floating bar under
+     the bubble that a tap on the bubble opens (see onBubbleClick) — always
+     showing four buttons beside every bubble squeezed the text into a
+     narrow column and cluttered the thread. */
   @media (hover: none) {
-    .bubble-actions {
-      opacity: 1;
+    .bubble-wrapper {
+      flex-direction: column;
+      align-items: flex-start;
+      max-width: 85%;
     }
+
+    .wrapper-own {
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .bubble {
+      /* Let the browser keep vertical scrolling; horizontal moves are ours
+         (swipe to reply). */
+      touch-action: pan-y;
+      transform: translateX(var(--swipe-x, 0px));
+      transition: transform 0.2s ease-out;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .bubble.bubble-swiping {
+      transition: none;
+    }
+
+    .bubble-actions,
+    .wrapper-own .bubble-actions {
+      display: none;
+    }
+
+    .actions-open .bubble {
+      box-shadow: 0 0 0 2px var(--color-primary);
+    }
+
+    .actions-open .bubble-actions,
+    .actions-open.wrapper-own .bubble-actions {
+      display: flex;
+      opacity: 1;
+      transform: none;
+      gap: 2px;
+      /* Clear the reaction chips that hang half below the bubble. */
+      margin-block-start: 14px;
+      padding: 4px;
+      background: var(--color-surface-raised, var(--color-surface));
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-full);
+      box-shadow: var(--shadow-md);
+      animation: dm-actions-in 0.16s ease-out;
+    }
+
+    .actions-open .bubble-action-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: transparent;
+    }
+
+    .actions-open .bubble-action-btn .material-symbols-outlined {
+      font-size: 20px !important;
+    }
+  }
+
+  @keyframes dm-actions-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.96);
+    }
+  }
+
+  .media-image-btn {
+    display: block;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: zoom-in;
+    max-width: 100%;
+  }
+
+  .media-image-btn .media-image {
+    display: block;
   }
 
   .reaction-hover-zone {
@@ -912,6 +1189,14 @@
     unicode-bidi: plaintext;
   }
 
+  /* Wide markdown blocks scroll inside the bubble instead of widening it. */
+  .message-body :global(pre),
+  .message-body :global(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   .message-media {
     margin-block-start: var(--space-2);
     display: flex;
@@ -930,22 +1215,6 @@
     border-radius: var(--radius-lg);
     max-width: 100%;
     max-height: 320px;
-  }
-
-  .media-audio {
-    width: 260px;
-    max-width: 100%;
-    height: 40px;
-  }
-
-  /* On touch devices the native audio control has a taller intrinsic height,
-     so pinning it to 40px clipped the transport buttons (the "raw/cut" player
-     on mobile). Let it take its natural height and fill the bubble width. */
-  @media (pointer: coarse) {
-    .media-audio {
-      width: 100%;
-      height: auto;
-    }
   }
 
   /* Generic file / unknown attachment → a tappable download chip.

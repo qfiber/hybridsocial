@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import type { Conversation, Identity } from '$lib/api/types.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
 
@@ -35,7 +36,7 @@
       ? conversation.last_message.content.length > 60
         ? conversation.last_message.content.slice(0, 60) + '...'
         : conversation.last_message.content
-      : 'No messages yet'
+      : $t('dm.no_messages')
   );
 
   let timeAgo = $derived(formatRelativeTime(conversation.updated_at));
@@ -76,27 +77,27 @@
         {#if conversation.encryption_status === 'e2ee'}
           <span
             class="material-symbols-outlined encryption-icon encryption-e2ee"
-            title="End-to-end encrypted. Only participants can read."
-            aria-label="End-to-end encrypted"
+            title={$t('dm.e2ee_hint')}
+            aria-label={$t('dm.e2ee')}
           >lock</span>
         {:else if conversation.encryption_status === 'at_rest'}
           <span
             class="material-symbols-outlined encryption-icon encryption-at-rest"
-            title="Encrypted on disk. This is not end-to-end encryption"
-            aria-label="Encrypted at rest"
+            title={$t('dm.at_rest_hint')}
+            aria-label={$t('dm.at_rest')}
           >lock</span>
         {:else if conversation.encryption_status === 'federated'}
           <span
             class="material-symbols-outlined encryption-icon encryption-federated"
-            title="Not encrypted. DMs with remote users are not private/encrypted"
-            aria-label="Not encrypted (federated)"
+            title={$t('dm.unencrypted_hint')}
+            aria-label={$t('dm.unencrypted')}
           >lock_open</span>
         {/if}
       </span>
       <span class="conversation-time">{timeAgo}</span>
     </div>
     {#if !conversation.accepted}
-      <div class="conversation-pending">Message request</div>
+      <div class="conversation-pending">{$t('dm.message_request')}</div>
     {:else}
     <div class="conversation-preview">
       <span class="conversation-message">{lastMessagePreview}</span>

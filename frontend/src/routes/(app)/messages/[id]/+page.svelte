@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { onMount, tick } from 'svelte';
   import { page } from '$app/state';
   import { goto } from '$app/navigation';
@@ -113,7 +114,7 @@
       } catch (err) {
         if (token !== loadToken) return;
         console.error('[messages] load failed', err);
-        addToast('Could not load this conversation', 'error');
+        addToast($t('dm.load_failed'), 'error');
       } finally {
         if (token === loadToken) loading = false;
       }
@@ -287,7 +288,7 @@
       scrollToBottom();
     } catch (err) {
       console.error('[messages] send failed', err);
-      addToast('Could not send message. Please try again.', 'error');
+      addToast($t('dm.send_failed'), 'error');
     }
   }
 
@@ -304,8 +305,8 @@
     const now = new Date();
     const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
     const days = Math.round((startOf(now) - startOf(d)) / 86_400_000);
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Yesterday';
+    if (days === 0) return $t('dm.today');
+    if (days === 1) return $t('dm.yesterday');
     return d.toLocaleDateString(undefined, {
       weekday: 'long',
       month: 'short',
@@ -368,10 +369,10 @@
       window.dispatchEvent(
         new CustomEvent('conversation-deleted', { detail: { id: conversationId } }),
       );
-      addToast('Conversation deleted', 'success');
+      addToast($t('dm.conversation_deleted'), 'success');
       goto('/messages');
     } catch {
-      addToast('Failed to delete conversation', 'error');
+      addToast($t('dm.conversation_delete_failed'), 'error');
       deletingConv = false;
       confirmingDeleteConv = false;
     }
@@ -382,7 +383,7 @@
       await apiDeleteMessage(conversationId, messageId);
       messages = messages.filter((m) => m.id !== messageId);
     } catch {
-      addToast('Failed to delete message', 'error');
+      addToast($t('dm.delete_failed'), 'error');
     }
   }
 
@@ -395,7 +396,7 @@
       if (err?.body?.error === 'message.edit_window_expired') {
         addToast(err.body.message || 'Edit window has closed', 'error');
       } else {
-        addToast('Failed to edit message', 'error');
+        addToast($t('dm.edit_failed'), 'error');
       }
       throw e;
     }
@@ -419,7 +420,7 @@
       if (err?.body?.error === 'reaction.premium_required') {
         addToast(err.body.message || 'That reaction needs a premium tier', 'error');
       } else {
-        addToast('Failed to react', 'error');
+        addToast($t('dm.react_failed'), 'error');
       }
     }
   }
@@ -436,7 +437,7 @@
 
 <div class="conversation-detail">
   <div class="detail-header">
-    <button type="button" class="back-btn" onclick={goBack} aria-label="Back to messages">
+    <button type="button" class="back-btn" onclick={goBack} aria-label={$t('dm.back')}>
       <svg class="rtl-mirror" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="15 18 9 12 15 6" />
       </svg>
@@ -450,20 +451,20 @@
       {#if conversation?.encryption_status === 'e2ee'}
         <span
           class="material-symbols-outlined header-encryption header-e2ee"
-          title="End-to-end encrypted. Only participants can read."
-          aria-label="End-to-end encrypted"
+          title={$t('dm.e2ee_hint')}
+          aria-label={$t('dm.e2ee')}
         >lock</span>
       {:else if conversation?.encryption_status === 'at_rest'}
         <span
           class="material-symbols-outlined header-encryption header-at-rest"
-          title="Encrypted on disk. This is not end-to-end ecnryption"
-          aria-label="Encrypted at rest"
+          title={$t('dm.at_rest_hint')}
+          aria-label={$t('dm.at_rest')}
         >lock</span>
       {:else if conversation?.encryption_status === 'federated'}
         <span
           class="material-symbols-outlined header-encryption header-federated"
-          title="Not encrypted. DMs with remote users are not private/encrypted"
-          aria-label="Not encrypted (federated)"
+          title={$t('dm.unencrypted_hint')}
+          aria-label={$t('dm.unencrypted')}
         >lock_open</span>
       {/if}
     </div>
@@ -473,11 +474,11 @@
         type="button"
         class="header-action header-action-danger"
         onclick={() => (confirmingDeleteConv = true)}
-        title="Delete conversation"
-        aria-label="Delete conversation"
+        title={$t('dm.delete_conversation')}
+        aria-label={$t('dm.delete_conversation')}
       >
         <span class="material-symbols-outlined">delete</span>
-        <span class="header-action-label">Delete</span>
+        <span class="header-action-label">{$t('common.delete')}</span>
       </button>
     </div>
   </div>
@@ -519,10 +520,10 @@
       <Spinner />
     </div>
   {:else}
-    <div class="messages-container" class:rippling role="log" aria-label="Messages" bind:this={scrollEl} onscroll={handleScroll}>
+    <div class="messages-container" class:rippling role="log" aria-label={$t('dm.title')} bind:this={scrollEl} onscroll={handleScroll}>
       {#if hasMore && messages.length > 0}
         <button type="button" class="load-more-btn" onclick={loadMore} disabled={loadingMore}>
-          {loadingMore ? 'Loading...' : 'Load older messages'}
+          {loadingMore ? $t('dm.loading') : $t('dm.load_older')}
         </button>
       {/if}
 
@@ -533,8 +534,8 @@
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg>
           </div>
-          <p class="thread-empty-title">No messages yet</p>
-          <p class="thread-empty-text">Say hello — send the first message below.</p>
+          <p class="thread-empty-title">{$t('dm.no_messages')}</p>
+          <p class="thread-empty-text">{$t('dm.no_messages_hint')}</p>
         </div>
       {/if}
 
@@ -734,6 +735,8 @@
   .messages-container {
     flex: 1;
     overflow-y: auto;
+    /* Safety net: a message must never make the conversation pan sideways. */
+    overflow-x: hidden;
     padding: var(--space-4);
     display: flex;
     flex-direction: column;
