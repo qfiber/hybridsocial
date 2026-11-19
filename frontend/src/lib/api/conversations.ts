@@ -56,6 +56,10 @@ export function markConversationRead(id: string): Promise<void> {
   return api.post(`/api/v1/conversations/${id}/read`);
 }
 
+export function markConversationUnread(id: string): Promise<void> {
+  return api.post(`/api/v1/conversations/${id}/unread`);
+}
+
 /** Fire-and-forget "I'm typing" ping to the other participants. */
 export function sendTyping(id: string): Promise<void> {
   return api.post(`/api/v1/conversations/${id}/typing`);

@@ -72,6 +72,12 @@ export function markConversationReadLocal(conversationId: string): void {
   });
 }
 
+/** The viewer marked the thread unread (#299): it counts as one again. */
+export function markConversationUnreadLocal(conversationId: string): void {
+  if (!browser) return;
+  map.update((m) => ({ ...m, [conversationId]: Math.max(m[conversationId] ?? 0, 1) }));
+}
+
 function handleChatEvent(ev: Event): void {
   const detail = (ev as CustomEvent<{ type: string; data: Record<string, unknown> }>).detail;
   if (!detail) return;
