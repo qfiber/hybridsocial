@@ -10,7 +10,7 @@ defmodule HybridsocialWeb.Api.V1.DirectoryControllerTest do
 
     {:ok, identity} =
       Accounts.register_user(%{
-        "handle" => "#{handle}_#{:erlang.unique_integer([:positive])}",
+        "handle" => "#{handle}_#{unique_suffix()}",
         "email" => email,
         "display_name" => handle,
         "password" => "password1234567890",
