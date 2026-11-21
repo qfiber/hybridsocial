@@ -402,6 +402,9 @@ defmodule Hybridsocial.Notifications do
       tag: "notification-#{notification.id}",
       data: %{
         type: type,
+        # Lets the service worker word the notification in the viewer's own
+        # language (title/body above stay as the English fallback).
+        actor_name: if(actor, do: actor_name),
         target_type: attrs[:target_type] || attrs["target_type"],
         target_id: attrs[:target_id] || attrs["target_id"],
         url: "/notifications"

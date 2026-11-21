@@ -12,6 +12,7 @@ const OFFLINE_ASSETS = [OFFLINE_URL, '/icons/icon-192.png'];
 // per-instance /manifest.json while online. Public data only. Kept under
 // private keys in the same cache and refreshed at most once a day.
 const BRAND_KEY = '/__offline/brand';
+const LOCALE_KEY = '/__offline/locale';
 const LOGO_KEY = '/__offline/logo';
 const BRAND_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -40,11 +41,12 @@ async function refreshBrand(force) {
     if (!res.ok) return;
     const manifest = await res.json();
     const icon = pickIcon(manifest.icons);
+    const iconUrl = icon ? new URL(icon.src, self.location.origin).href : '';
     let hasLogo = false;
     if (icon) {
       // Instance icons usually live on a separate media host without CORS:
       // an opaque response is still cacheable and renders in an <img>.
-      const logo = await fetch(new URL(icon.src, self.location.origin).href, {
+      const logo = await fetch(iconUrl, {
         mode: 'no-cors',
         cache: 'no-cache',
       });
@@ -57,6 +59,9 @@ async function refreshBrand(force) {
       name: typeof manifest.name === 'string' ? manifest.name : '',
       theme_color: typeof manifest.theme_color === 'string' ? manifest.theme_color : '',
       has_logo: hasLogo,
+      // Absolute logo URL for notification icons (the browser fetches those
+      // itself, outside this worker, so the cached copy can't be used).
+      icon_url: iconUrl,
       saved_at: Date.now(),
     };
     await cache.put(
@@ -97,6 +102,67 @@ async function offlineResponse() {
     html = html.replace('</head>', `<style>:root{--brand:${brand.theme_color}}</style></head>`);
   }
   return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+}
+
+async function readJson(key) {
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const hit = await cache.match(key);
+    return hit ? await hit.json() : null;
+  } catch {
+    return null;
+  }
+}
+
+// The page tells the worker its interface language (routes/+layout.svelte).
+self.addEventListener('message', (event) => {
+  const msg = event.data;
+  if (!msg || msg.type !== 'hs-locale' || typeof msg.locale !== 'string') return;
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.put(
+        LOCALE_KEY,
+        new Response(JSON.stringify({ locale: msg.locale }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+    )
+  );
+});
+
+// Notification wording per type, for languages other than the server's
+// English. {name} is the actor. Types not listed keep the server's text.
+const PUSH_TEXT = {
+  ar: {
+    follow: ['{name} بدأ متابعتك', 'لديك متابِع جديد'],
+    follow_request: ['{name} طلب متابعتك', 'لديك طلب متابعة جديد'],
+    reaction: ['{name} تفاعل مع منشورك', 'تفاعل أحدهم مع منشورك'],
+    boost: ['{name} أعاد نشر منشورك', 'أُعيد نشر منشورك'],
+    quote: ['{name} اقتبس منشورك', 'اقتُبس منشورك'],
+    reply: ['{name} ردّ على منشورك', 'لديك ردّ جديد'],
+    mention: ['{name} أشار إليك', 'أُشير إليك في منشور'],
+    poll_ended: ['انتهى استطلاع', 'انتهى استطلاع شاركت فيه'],
+    group_invite: ['{name} دعاك إلى مجموعة', 'دُعيت للانضمام إلى مجموعة'],
+    group_application: ['طلب انضمام جديد إلى مجموعة', 'طلب أحدهم الانضمام إلى مجموعتك'],
+    page_invite: ['{name} دعاك لإدارة صفحة', 'دُعيت لإدارة صفحة'],
+    report: ['بلاغ جديد', 'قُدِّم بلاغ جديد'],
+    moderation_takedown: ['أُزيل محتوى لك', 'أُزيل محتوى لك بقرار من الإشراف'],
+  },
+};
+const PUSH_ACTIONS = {
+  ar: { open: 'فتح', dismiss: 'تجاهل' },
+  en: { open: 'Open', dismiss: 'Dismiss' },
+};
+
+function localizePush(data, lang) {
+  const table = PUSH_TEXT[lang];
+  const type = data.data && data.data.type;
+  const row = table && type ? table[type] : null;
+  if (!row) return { title: data.title, body: data.body };
+  const name = (data.data && data.data.actor_name) || '';
+  // A title that needs a name it doesn't have keeps the server's wording.
+  if (row[0].includes('{name}') && !name) return { title: data.title, body: data.body };
+  return { title: row[0].split('{name}').join(name), body: row[1] };
 }
 
 // Install - precache the offline fallback and the instance's branding
@@ -187,23 +253,31 @@ self.addEventListener('push', (event) => {
     data.body = event.data ? event.data.text() : 'New notification';
   }
 
-  const options = {
-    body: data.body,
-    // Android can't render SVG notification icons; the badge must be a
-    // monochrome (white on transparent) image.
-    icon: '/icons/icon-192.png',
-    badge: '/icons/badge-96.png',
-    tag: data.tag || 'default',
-    data: data.data || {},
-    vibrate: [200, 100, 200],
-    actions: [
-      { action: 'open', title: 'Open' },
-      { action: 'dismiss', title: 'Dismiss' }
-    ]
-  };
-
   event.waitUntil(
-    self.registration.showNotification(data.title, options)
+    (async () => {
+      const [brand, pref] = await Promise.all([readJson(BRAND_KEY), readJson(LOCALE_KEY)]);
+      const lang = ((pref && pref.locale) || self.navigator.language || 'en').split('-')[0];
+      const text = localizePush(data, lang);
+      const actions = PUSH_ACTIONS[lang] || PUSH_ACTIONS.en;
+      const rtl = lang === 'ar' || lang === 'he' || lang === 'fa';
+      return self.registration.showNotification(text.title, {
+        body: text.body,
+        dir: rtl ? 'rtl' : 'auto',
+        lang,
+        // The instance's own logo when known. Android can't render SVG
+        // notification icons; the badge must be a monochrome (white on
+        // transparent) image.
+        icon: (brand && brand.icon_url) || '/icons/icon-192.png',
+        badge: '/icons/badge-96.png',
+        tag: data.tag || 'default',
+        data: data.data || {},
+        vibrate: [200, 100, 200],
+        actions: [
+          { action: 'open', title: actions.open },
+          { action: 'dismiss', title: actions.dismiss },
+        ],
+      });
+    })()
   );
 });
 
