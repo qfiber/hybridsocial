@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import { api } from '$lib/api/client.js';
   import { authStore } from '$lib/stores/auth.js';
   import { get } from 'svelte/store';
@@ -216,9 +217,9 @@
   }
 
   function followLabel() {
-    if (isFollowing) return 'Unfollow';
-    if (isRequested) return 'Cancel follow request';
-    return 'Follow';
+    if (isFollowing) return $t('profile.unfollow');
+    if (isRequested) return $t('profile.cancel_follow_request');
+    return $t('profile.follow');
   }
 </script>
 
@@ -293,8 +294,8 @@
                   type="button"
                   class="hc-action-btn hc-action-mute"
                   class:hc-action-active={isMuting}
-                  title={isMuting ? 'Unmute' : 'Mute'}
-                  aria-label={isMuting ? 'Unmute' : 'Mute'}
+                  title={isMuting ? $t('profile.unmute') : $t('profile.mute')}
+                  aria-label={isMuting ? $t('profile.unmute') : $t('profile.mute')}
                   aria-pressed={isMuting}
                   disabled={busy !== null}
                   onclick={handleMute}
@@ -305,8 +306,8 @@
                   type="button"
                   class="hc-action-btn hc-action-block"
                   class:hc-action-active={isBlocking}
-                  title={isBlocking ? 'Unblock' : 'Block'}
-                  aria-label={isBlocking ? 'Unblock' : 'Block'}
+                  title={isBlocking ? $t('profile.unblock') : $t('profile.block')}
+                  aria-label={isBlocking ? $t('profile.unblock') : $t('profile.block')}
                   aria-pressed={isBlocking}
                   disabled={busy !== null}
                   onclick={handleBlock}
@@ -321,12 +322,12 @@
           </a>
 
           <div class="hc-stats">
-            <span><strong>{account.followers_count ?? 0}</strong> Followers</span>
-            <span><strong>{account.following_count ?? 0}</strong> Following</span>
+            <span><strong>{account.followers_count ?? 0}</strong> {$t('profile.followers')}</span>
+            <span><strong>{account.following_count ?? 0}</strong> {$t('profile.following')}</span>
           </div>
 
           {#if relationship?.followed_by}
-            <div class="hc-follows-you">Follows you</div>
+            <div class="hc-follows-you">{$t('profile.follows_you')}</div>
           {/if}
 
           {#if account.bio}

@@ -100,16 +100,16 @@
   let tabs = $derived(
     isOwnProfile
       ? [
-          { id: 'posts', label: 'Posts' },
-          { id: 'replies', label: 'Replies' },
-          { id: 'media', label: 'Media' },
-          { id: 'direct', label: 'Direct' },
-          { id: 'reactions', label: 'Reactions' },
+          { id: 'posts', label: $t('profile.posts') },
+          { id: 'replies', label: $t('profile.tab_replies') },
+          { id: 'media', label: $t('profile.tab_media') },
+          { id: 'direct', label: $t('profile.tab_direct') },
+          { id: 'reactions', label: $t('profile.tab_reactions') },
         ]
       : [
-          { id: 'posts', label: 'Posts' },
-          { id: 'replies', label: 'Replies' },
-          { id: 'media', label: 'Media' },
+          { id: 'posts', label: $t('profile.posts') },
+          { id: 'replies', label: $t('profile.tab_replies') },
+          { id: 'media', label: $t('profile.tab_media') },
         ]
   );
 
@@ -160,7 +160,7 @@
         setTimeout(() => loadProfile(), 2000);
         return;
       }
-      error = msg === 'Failed to fetch' ? 'Could not reach the server. Please try again.' : msg;
+      error = msg === 'Failed to fetch' ? $t('profile.unreachable') : msg;
     } finally {
       loading = false;
     }
@@ -281,11 +281,12 @@
     confirmAction = null;
   }
 
+  // Locale keys, resolved with $t where they're rendered.
   const confirmMessages: Record<string, { title: string; message: string; button: string }> = {
-    block: { title: 'Block this account?', message: 'They will not be able to see your posts or interact with you. You can unblock them at any time.', button: 'Block' },
-    unblock: { title: 'Unblock this account?', message: 'They will be able to see your posts and interact with you again.', button: 'Unblock' },
-    mute: { title: 'Mute this account?', message: 'Their posts will be hidden from your feeds. They will not be notified.', button: 'Mute' },
-    unmute: { title: 'Unmute this account?', message: 'Their posts will appear in your feeds again.', button: 'Unmute' },
+    block: { title: 'profile.confirm_block_title', message: 'profile.confirm_block_message', button: 'profile.block' },
+    unblock: { title: 'profile.confirm_unblock_title', message: 'profile.confirm_unblock_message', button: 'profile.unblock' },
+    mute: { title: 'profile.confirm_mute_title', message: 'profile.confirm_mute_message', button: 'profile.mute' },
+    unmute: { title: 'profile.confirm_unmute_title', message: 'profile.confirm_unmute_message', button: 'profile.unmute' },
   };
 
   function handleMessage() {
@@ -416,9 +417,9 @@
     </div>
   {:else if error}
     <div class="profile-error card">
-      <p class="error-title">Could not load profile</p>
+      <p class="error-title">{$t('profile.load_failed')}</p>
       <p class="error-message">{error}</p>
-      <button class="btn btn-outline" type="button" onclick={loadProfile}>Try again</button>
+      <button class="btn btn-outline" type="button" onclick={loadProfile}>{$t('common.retry')}</button>
     </div>
   {:else if account}
     {#if account.suspension}
@@ -466,13 +467,13 @@
           {/each}
         </div>
         <span class="familiar-text">
-          Followed by
+          {$t('profile.followed_by')}
           {#each familiarFollowers.slice(0, 2) as ff, i (ff.id)}
             {#if i > 0}, {/if}
             <a href="/@{ff.handle}" class="familiar-link">{ff.display_name || ff.handle}</a>
           {/each}
           {#if familiarFollowers.length > 2}
-            and {familiarFollowers.length - 2} more you follow
+            {$t('profile.more_you_follow', { count: familiarFollowers.length - 2 })}
           {/if}
         </span>
       </div>
@@ -483,15 +484,15 @@
         <div class="vouch-info">
           <span class="material-symbols-outlined vouch-icon">verified</span>
           <div>
-            <strong>{account.display_name || account.handle}</strong> is requesting peer verification
-            <span class="vouch-progress">{vouchStatus.count} / {vouchStatus.required} vouches</span>
+            <strong>{account.display_name || account.handle}</strong> {$t('profile.vouch_requesting')}
+            <span class="vouch-progress">{$t('profile.vouch_progress', { count: vouchStatus.count, required: vouchStatus.required })}</span>
           </div>
         </div>
         {#if hasVouched}
-          <span class="vouch-done">You vouched</span>
+          <span class="vouch-done">{$t('profile.vouched')}</span>
         {:else}
           <button class="btn btn-outline btn-sm" type="button" onclick={handleVouch} disabled={vouchLoading}>
-            {vouchLoading ? 'Vouching...' : 'Vouch for identity'}
+            {vouchLoading ? $t('profile.vouching') : $t('profile.vouch')}
           </button>
         {/if}
       </div>
@@ -508,10 +509,10 @@
             onloadmore={feed.loadMore}
             emptyMessage={
               activeTab === 'media'
-                ? 'No media posts yet'
+                ? $t('profile.empty_media')
                 : activeTab === 'reactions'
-                  ? "You haven't reacted to any posts yet."
-                  : 'No posts yet'
+                  ? $t('profile.empty_reactions')
+                  : $t('profile.empty_posts')
             }
           />
         {/if}
@@ -522,19 +523,19 @@
 
 <Modal
   bind:open={showConfirmModal}
-  title={confirmAction ? confirmMessages[confirmAction].title : ''}
+  title={confirmAction ? $t(confirmMessages[confirmAction].title) : ''}
   onclose={() => (confirmAction = null)}
 >
   {#if confirmAction}
-    <p class="dialog-message">{confirmMessages[confirmAction].message}</p>
+    <p class="dialog-message">{$t(confirmMessages[confirmAction].message)}</p>
     <div class="dialog-actions">
-      <button type="button" class="dialog-cancel" onclick={() => (showConfirmModal = false)}>Cancel</button>
+      <button type="button" class="dialog-cancel" onclick={() => (showConfirmModal = false)}>{$t('common.cancel')}</button>
       <button
         type="button"
         class={confirmAction === 'block' || confirmAction === 'mute' ? 'dialog-confirm-danger' : 'dialog-confirm'}
         onclick={executeConfirmedAction}
       >
-        {confirmMessages[confirmAction].button}
+        {$t(confirmMessages[confirmAction].button)}
       </button>
     </div>
   {/if}

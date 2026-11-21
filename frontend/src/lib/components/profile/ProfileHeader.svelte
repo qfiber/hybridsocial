@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '$lib/stores/i18n.js';
   import type { Identity, Relationship } from '$lib/api/types.js';
   import { relativeTime, fullDateTime } from '$lib/utils/time.js';
   import { api } from '$lib/api/client.js';
@@ -86,7 +87,7 @@
   let isMuting = $derived(relationship?.muting ?? false);
 
   let followLabel = $derived(
-    isRequested ? 'Requested' : isFollowing ? 'Following' : 'Follow'
+    isRequested ? $t('explore.requested') : isFollowing ? $t('explore.following') : $t('explore.follow')
   );
 
   // Report modal state
@@ -125,7 +126,7 @@
       });
       showReportModal = false;
     } catch {
-      reportError = 'Failed to submit report. Please try again.';
+      reportError = 'report.submit_failed';
     } finally {
       reportSubmitting = false;
     }
@@ -168,7 +169,7 @@
         type="button"
         class="banner-button"
         onclick={openBanner}
-        aria-label="View header image"
+        aria-label={$t('profile.view_header')}
       >
         <img src={account.header_url} alt="" class="banner-img" />
       </button>
@@ -185,7 +186,7 @@
           type="button"
           class="profile-avatar-wrapper avatar-button"
           onclick={openAvatar}
-          aria-label="View profile picture"
+          aria-label={$t('profile.view_avatar')}
         >
           <Avatar src={account.avatar_url} name={account.display_name || account.handle} size="2xl" />
         </button>
@@ -201,10 +202,10 @@
         {/if}
         {#if isOwnProfile}
           <button class="btn btn-outline" type="button" onclick={onedit}>
-            Edit profile
+            {$t('profile.edit')}
           </button>
         {:else}
-          <button class="btn btn-ghost action-icon-btn" type="button" onclick={onmessage} aria-label="Message">
+          <button class="btn btn-ghost action-icon-btn" type="button" onclick={onmessage} aria-label={$t('profile.message')}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
             </svg>
@@ -226,14 +227,14 @@
               </svg>
             {/snippet}
             <button type="button" onclick={onmute} role="menuitem">
-              {isMuting ? 'Unmute' : 'Mute'}
+              {isMuting ? $t('profile.unmute') : $t('profile.mute')}
             </button>
             <button type="button" class="dropdown-item-danger" onclick={onblock} role="menuitem">
-              {isBlocking ? 'Unblock' : 'Block'}
+              {isBlocking ? $t('profile.unblock') : $t('profile.block')}
             </button>
             <div class="dropdown-divider"></div>
             <button type="button" class="dropdown-item-danger" onclick={openReportModal} role="menuitem">
-              Report
+              {$t('profile.report')}
             </button>
           </Dropdown>
         {/if}
@@ -260,7 +261,7 @@
       </h1>
       <span class="profile-handle">@{account.acct || account.handle}</span>
       {#if relationship?.followed_by && !isOwnProfile}
-        <span class="follows-you-badge">Follows you</span>
+        <span class="follows-you-badge">{$t('profile.follows_you')}</span>
       {/if}
       {#if account.domain && account.url}
         <a
@@ -336,16 +337,16 @@
         {#if account.post_count != null}
           <div class="stat">
             <span class="stat-num">{compact(account.post_count)}</span>
-            <span class="stat-label">Posts</span>
+            <span class="stat-label">{$t('profile.posts')}</span>
           </div>
         {/if}
         <a href="/@{account.handle}/following" class="stat stat-link">
           <span class="stat-num">{compact(account.following_count)}</span>
-          <span class="stat-label">Following</span>
+          <span class="stat-label">{$t('profile.following')}</span>
         </a>
         <a href="/@{account.handle}/followers" class="stat stat-link">
           <span class="stat-num">{compact(account.followers_count)}</span>
-          <span class="stat-label">Followers</span>
+          <span class="stat-label">{$t('profile.followers')}</span>
         </a>
       </div>
     {/if}
@@ -360,35 +361,35 @@
   />
 {/if}
 
-<Modal bind:open={showReportModal} title={`Report @${account.acct || account.handle}`} onclose={cancelReport}>
-  <p class="report-subtitle">Why are you reporting this account?</p>
+<Modal bind:open={showReportModal} title={$t('profile.report_title', { handle: account.acct || account.handle })} onclose={cancelReport}>
+  <p class="report-subtitle">{$t('profile.report_reason')}</p>
 
   <div class="report-form">
-    <label class="report-label" for="profile-report-category">Category</label>
+    <label class="report-label" for="profile-report-category">{$t('report.category')}</label>
     <select id="profile-report-category" class="report-select" bind:value={reportCategory}>
       {#each reportCategories as cat (cat.value)}
-        <option value={cat.value}>{cat.label}</option>
+        <option value={cat.value}>{$t(`report.${cat.value}`)}</option>
       {/each}
     </select>
 
-    <label class="report-label" for="profile-report-description">Description (optional)</label>
+    <label class="report-label" for="profile-report-description">{$t('report.description')} {$t('report.optional')}</label>
     <textarea
       id="profile-report-description"
       class="report-textarea"
       bind:value={reportDescription}
-      placeholder="Provide additional details..."
+      placeholder={$t('profile.report_details_placeholder')}
       rows="3"
     ></textarea>
 
     {#if reportError}
-      <p class="report-error">{reportError}</p>
+      <p class="report-error">{$t(reportError)}</p>
     {/if}
   </div>
 
   <div class="report-actions">
-    <button type="button" class="report-cancel" onclick={cancelReport}>Cancel</button>
+    <button type="button" class="report-cancel" onclick={cancelReport}>{$t('common.cancel')}</button>
     <button type="button" class="report-submit" onclick={submitReport} disabled={reportSubmitting}>
-      {reportSubmitting ? 'Submitting...' : 'Submit report'}
+      {reportSubmitting ? $t('report.submitting') : $t('report.submit')}
     </button>
   </div>
 </Modal>
