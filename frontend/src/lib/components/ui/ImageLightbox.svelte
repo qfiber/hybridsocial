@@ -7,6 +7,10 @@
   import { getPostContext } from '$lib/api/statuses.js';
   import type { Post } from '$lib/api/types.js';
   import { relativeTime } from '$lib/utils/time.js';
+  import { api, ApiError } from '$lib/api/client.js';
+  import { currentUser } from '$lib/stores/auth.js';
+  import { t } from '$lib/stores/i18n.js';
+  import { tError } from '$lib/utils/i18n.js';
 
   interface Slide {
     url: string;
@@ -30,6 +34,7 @@
     onclose,
     onreply,
     onreact,
+    postVisibility,
   }: {
     images: Slide[];
     index?: number;
@@ -55,6 +60,11 @@
      * the slide's `currentReaction` / `reactionCount`.
      */
     onreact?: (mediaId: string, next: string | null) => void;
+    /**
+     * The parent post's visibility. A comment written in the panel keeps it
+     * (a public reply to a followers-only post would leak the thread).
+     */
+    postVisibility?: string;
   } = $props();
 
   // Pull the premium catalog so we can render the user's currently
@@ -96,7 +106,89 @@
   let currentReplies = $derived(
     current?.id ? (repliesByMedia[current.id] ?? []) : [],
   );
-  let showSidebar = $derived(currentReplies.length > 0);
+  // The panel also opens on demand (the comment button) so the first comment
+  // on an image can be written here too, not only further ones.
+  let panelOpen = $state(false);
+  let canComment = $derived(!!postId && !!current?.id && !!$currentUser);
+  let showSidebar = $derived(
+    !!postId && !!current?.id && (currentReplies.length > 0 || panelOpen),
+  );
+
+  // --- Writing a comment on this image ---------------------------------------
+  let draft = $state('');
+  let sending = $state(false);
+  let sendError = $state('');
+  let inputEl: HTMLTextAreaElement | undefined = $state();
+
+  function openPanel() {
+    panelOpen = true;
+    // Wait for the panel to mount, then focus its field.
+    setTimeout(() => inputEl?.focus(), 0);
+  }
+
+  function handleCommentButton() {
+    if (canComment) openPanel();
+    else if (onreply && current?.id) onreply(current.id, index + 1);
+  }
+
+  function autosize() {
+    if (!inputEl) return;
+    inputEl.style.height = 'auto';
+    inputEl.style.height = `${Math.min(inputEl.scrollHeight, 120)}px`;
+  }
+
+  function onInputKey(e: KeyboardEvent) {
+    // Keep the viewer's own shortcuts (Esc closes, arrows flip, Space/Z zoom)
+    // from firing while typing.
+    e.stopPropagation();
+    const touch = window.matchMedia('(pointer: coarse)').matches;
+    if (e.key === 'Enter' && !e.shiftKey && !touch) {
+      e.preventDefault();
+      sendComment();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      inputEl?.blur();
+    }
+  }
+
+  async function sendComment() {
+    const text = draft.trim();
+    const mediaId = current?.id;
+    if (!text || !postId || !mediaId || sending) return;
+    sending = true;
+    sendError = '';
+    const visibility =
+      postVisibility === 'followers' || postVisibility === 'direct' ? postVisibility : 'public';
+    try {
+      const reply = await api.post<Post>('/api/v1/statuses', {
+        content: text,
+        visibility,
+        parent_id: postId,
+        target_media_id: mediaId,
+      });
+      draft = '';
+      setTimeout(autosize, 0);
+      const existing = repliesByMedia[mediaId] ?? [];
+      if (!existing.some((r) => r.id === reply.id)) {
+        repliesByMedia = { ...repliesByMedia, [mediaId]: [...existing, reply] };
+      }
+      // Let the feed's thread and counters know, like the composer does.
+      window.dispatchEvent(new CustomEvent('new-post', { detail: reply }));
+      window.dispatchEvent(
+        new CustomEvent('reply-count-update', { detail: { postId, delta: 1 } }),
+      );
+    } catch (err) {
+      const code = err instanceof ApiError ? (err.body as { error?: string } | null)?.error : undefined;
+      sendError = code?.startsWith('trust.') ? tError(code) : $t('composer.publish_failed');
+    } finally {
+      sending = false;
+    }
+  }
+
+  // The full composer (media, formatting) for this image.
+  function openFullComposer() {
+    if (onreply && current?.id) onreply(current.id, index + 1);
+  }
 
   $effect(() => {
     const mediaId = current?.id;
@@ -265,7 +357,10 @@
   }
 
   function handleKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') {
+      if (panelOpen && currentReplies.length === 0) panelOpen = false;
+      else close();
+    }
     // The prev/next buttons sit on the start/end edges, so in an RTL locale
     // "previous" is on the right — map the arrow keys to match what's seen.
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
@@ -369,13 +464,13 @@
         {/if}
       </div>
     {/if}
-    {#if onreply && current?.id}
+    {#if (onreply || canComment) && current?.id}
       <button
         type="button"
         class="lightbox-btn"
-        onclick={() => onreply!(current.id!, index + 1)}
-        aria-label="Reply to this image"
-        title="Reply to this image"
+        onclick={handleCommentButton}
+        aria-label={$t('lightbox.comment_on_image')}
+        title={$t('lightbox.comment_on_image')}
       >
         <span class="material-symbols-outlined">comment</span>
       </button>
@@ -455,7 +550,20 @@
         >
           <path d="M8 10.5H16M8 14.5H11M21.0039 12C21.0039 16.9706 16.9745 21 12.0039 21C9.9675 21 3.00463 21 3.00463 21C3.00463 21 4.56382 17.2561 3.93982 16.0008C3.34076 14.7956 3.00391 13.4372 3.00391 12C3.00391 7.02944 7.03334 3 12.0039 3C16.9745 3 21.0039 7.02944 21.0039 12Z" />
         </svg>
-        <span>{currentReplies.length} {currentReplies.length === 1 ? 'reply' : 'replies'} on this image</span>
+        <span class="lightbox-sidebar-title">
+          {currentReplies.length > 0
+            ? $t('lightbox.image_comments', { count: currentReplies.length })
+            : $t('lightbox.no_image_comments')}
+        </span>
+        <button
+          type="button"
+          class="lightbox-sidebar-close"
+          onclick={() => (panelOpen = false)}
+          aria-label={$t('lightbox.hide_comments')}
+          hidden={currentReplies.length > 0}
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </header>
       <ul class="lightbox-reply-list">
         {#each currentReplies as reply (reply.id)}
@@ -487,6 +595,46 @@
           </li>
         {/each}
       </ul>
+      {#if canComment}
+        <div class="lightbox-comment">
+          {#if sendError}
+            <p class="lightbox-comment-error" role="alert">{sendError}</p>
+          {/if}
+          <div class="lightbox-comment-row">
+            <textarea
+              bind:this={inputEl}
+              bind:value={draft}
+              class="lightbox-comment-input"
+              rows="1"
+              dir="auto"
+              placeholder={$t('lightbox.comment_placeholder')}
+              aria-label={$t('lightbox.comment_placeholder')}
+              oninput={autosize}
+              onkeydown={onInputKey}
+            ></textarea>
+            {#if onreply}
+              <button
+                type="button"
+                class="lightbox-comment-btn"
+                onclick={openFullComposer}
+                aria-label={$t('lightbox.full_composer')}
+                title={$t('lightbox.full_composer')}
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="lightbox-comment-btn lightbox-comment-send"
+              onclick={sendComment}
+              disabled={!draft.trim() || sending}
+              aria-label={$t('lightbox.send')}
+            >
+              <span class="material-symbols-outlined rtl-mirror" aria-hidden="true">send</span>
+            </button>
+          </div>
+        </div>
+      {/if}
     </aside>
   {/if}
 </div>
@@ -668,10 +816,15 @@
   /* Picker pops down beneath the heart button (the lightbox tools live
      at the top-left of the viewport, so dropping is the only direction
      with room). */
+  /* The toolbar is pinned to the physical left edge in every locale, so the
+     picker opens rightward from it with a physical `left` — with
+     `inset-inline-start` an RTL page anchored it on the button's right edge
+     and it ran off the left side of the screen. */
   .lightbox-picker-anchor {
     position: absolute;
     inset-block-start: calc(100% + 8px);
-    inset-inline-start: 0;
+    left: 0;
+    max-width: calc(100vw - 32px);
     z-index: 4;
   }
 
@@ -842,10 +995,172 @@
     color: #9bd1ff;
   }
 
-  /* When the sidebar is open, give the stage room so the image
-     centres in the remaining space rather than under the panel. */
-  :global(.lightbox:has(.lightbox-sidebar)) .lightbox-stage,
-  :global(.lightbox:has(.lightbox-sidebar)) .lightbox-img {
-    max-width: calc(100vw - min(360px, 90vw) - 80px);
+  .lightbox-sidebar-title {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lightbox-sidebar-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .lightbox-sidebar-close[hidden] {
+    display: none;
+  }
+
+  .lightbox-comment {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-block-start: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .lightbox-comment-error {
+    margin: 0;
+    font-size: 0.75rem;
+    color: #ff8a9b;
+  }
+
+  .lightbox-comment-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+  }
+
+  .lightbox-comment-input {
+    flex: 1;
+    min-width: 0;
+    min-height: 38px;
+    max-height: 120px;
+    padding: 8px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 19px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #f3f3f5;
+    font: inherit;
+    /* 16px stops iOS from zooming the page on focus. */
+    font-size: 16px;
+    line-height: 1.35;
+    resize: none;
+    outline: none;
+    unicode-bidi: plaintext;
+  }
+
+  .lightbox-comment-input:focus {
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
+  .lightbox-comment-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .lightbox-comment-send {
+    background: var(--color-primary);
+    color: var(--color-on-primary, #fff);
+  }
+
+  .lightbox-comment-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .lightbox-comment-btn :global(.material-symbols-outlined) {
+    font-size: 20px;
+  }
+
+  /* With the panel open the image must fit beside (wide screens) or above
+     (phones) it, whatever its size or proportions — never under the panel
+     or past the screen edge. The lightbox reserves the panel's space and
+     the image is capped to what is left. */
+  @media (min-width: 769px) {
+    :global(.lightbox:has(.lightbox-sidebar)) {
+      padding-inline-end: min(360px, 90vw);
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-stage {
+      max-width: calc(100vw - min(360px, 90vw));
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-img:not(.lightbox-img-zoomed) {
+      max-width: calc(100vw - min(360px, 90vw) - 80px);
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-nav-next {
+      inset-inline-end: calc(min(360px, 90vw) + 16px);
+    }
+  }
+
+  /* Phones: the panel is a bottom sheet over the lower part of the screen;
+     the image fits in the part above it. */
+  @media (max-width: 768px) {
+    .lightbox-sidebar {
+      inset-block: auto 0;
+      inset-inline: 0;
+      width: auto;
+      height: 46vh;
+      height: 46dvh;
+      border-inline-start: none;
+      border-block-start: 1px solid rgba(255, 255, 255, 0.1);
+      border-start-start-radius: 16px;
+      border-start-end-radius: 16px;
+      animation-name: lightbox-sidebar-up;
+    }
+
+    :global([dir="rtl"]) .lightbox-sidebar {
+      animation-name: lightbox-sidebar-up;
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) {
+      align-items: flex-start;
+      padding-block-end: 46dvh;
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-stage {
+      width: 100%;
+      height: 54vh;
+      height: 54dvh;
+      padding: 64px 12px 12px;
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-img:not(.lightbox-img-zoomed) {
+      max-width: calc(100vw - 24px);
+      max-height: calc(54dvh - 76px);
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-nav {
+      top: 27dvh;
+    }
+
+    :global(.lightbox:has(.lightbox-sidebar)) .lightbox-counter {
+      bottom: calc(46dvh + 12px);
+    }
+  }
+
+  @keyframes lightbox-sidebar-up {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
   }
 </style>
