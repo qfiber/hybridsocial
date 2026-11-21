@@ -103,7 +103,7 @@
 </svelte:head>
 
 <div class="lists-page">
-  <div class="page-header">
+  <div class="sticky-section-head page-header">
     <h1 class="page-title">Lists</h1>
     <button type="button" class="btn btn-primary btn-sm" onclick={openCreate}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

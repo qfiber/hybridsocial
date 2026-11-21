@@ -179,51 +179,53 @@
 </svelte:head>
 
 <div class="pages-page">
-  <div class="page-header">
-    <h1 class="page-title">Pages</h1>
-    <button type="button" class="btn btn-primary" onclick={openCreateModal}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
-      Create Page
-    </button>
-  </div>
-
-  <div class="pages-toolbar">
-    <div class="search-bar">
-      <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-      <input
-        type="search"
-        class="search-input"
-        placeholder="Search pages…"
-        bind:value={query}
-        aria-label="Search pages"
-      />
-      {#if query}
-        <button type="button" class="search-clear" onclick={() => (query = '')} aria-label="Clear search">
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="4" y1="4" x2="16" y2="16" />
-            <line x1="16" y1="4" x2="4" y2="16" />
-          </svg>
-        </button>
-      {/if}
+  <div class="sticky-section-head">
+    <div class="page-header">
+      <h1 class="page-title">Pages</h1>
+      <button type="button" class="btn btn-primary" onclick={openCreateModal}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Create Page
+      </button>
     </div>
 
-    {#if availableCategories.length > 0}
-      <select
-        class="category-filter"
-        bind:value={categoryFilter}
-        aria-label="Filter by category"
-      >
-        <option value="">All categories</option>
-        {#each availableCategories as cat (cat)}
-          <option value={cat}>{cat}</option>
-        {/each}
-      </select>
-    {/if}
+    <div class="pages-toolbar">
+      <div class="search-bar">
+        <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+        </svg>
+        <input
+          type="search"
+          class="search-input"
+          placeholder="Search pages…"
+          bind:value={query}
+          aria-label="Search pages"
+        />
+        {#if query}
+          <button type="button" class="search-clear" onclick={() => (query = '')} aria-label="Clear search">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="4" x2="16" y2="16" />
+              <line x1="16" y1="4" x2="4" y2="16" />
+            </svg>
+          </button>
+        {/if}
+      </div>
+
+      {#if availableCategories.length > 0}
+        <select
+          class="category-filter"
+          bind:value={categoryFilter}
+          aria-label="Filter by category"
+        >
+          <option value="">All categories</option>
+          {#each availableCategories as cat (cat)}
+            <option value={cat}>{cat}</option>
+          {/each}
+        </select>
+      {/if}
+    </div>
   </div>
 
   {#if loading}

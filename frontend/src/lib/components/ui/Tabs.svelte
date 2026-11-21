@@ -9,11 +9,22 @@
   let {
     tabs,
     active = $bindable(''),
-    children
+    children,
+    header,
+    sticky = true,
+    stickyTop = 'var(--header-height)',
   }: {
     tabs: Tab[];
     active?: string;
     children?: Snippet;
+    /** Rendered inside the pinned bar, above the tab row (a section title,
+        search…), so it stays in view with the tabs. */
+    header?: Snippet;
+    /** Keep the tab row in view while the panel scrolls (default). */
+    sticky?: boolean;
+    /** Where the bar pins — below the app header by default; a page with
+        its own pinned title above passes that offset too. */
+    stickyTop?: string;
   } = $props();
 
   // Default to first tab
@@ -23,6 +34,8 @@
 </script>
 
 <div class="tabs-container">
+  <div class="tabs-bar" class:tabs-bar-sticky={sticky} style:--tabs-sticky-top={stickyTop}>
+  {#if header}{@render header()}{/if}
   <div class="tabs-list" role="tablist">
     {#each tabs as tab (tab.id)}
       <button
@@ -39,6 +52,7 @@
       </button>
     {/each}
   </div>
+  </div>
   <div
     class="tab-panel"
     role="tabpanel"
@@ -52,6 +66,16 @@
 <style>
   .tabs-container {
     width: 100%;
+  }
+
+  /* The section's options stay in view while its content scrolls: the tab
+     row (and any header passed in) pins under the app header on a solid
+     surface. */
+  .tabs-bar-sticky {
+    position: sticky;
+    inset-block-start: var(--tabs-sticky-top, var(--header-height));
+    z-index: var(--z-sticky);
+    background: var(--color-surface-base, var(--color-bg));
   }
 
   .tabs-list {

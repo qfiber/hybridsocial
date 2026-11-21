@@ -97,7 +97,7 @@
 </svelte:head>
 
 <div class="followers-page">
-  <div class="page-header">
+  <div class="sticky-section-head page-header">
     <a href="/@{handle}" class="back-link" aria-label="Back to profile">
       <svg class="rtl-mirror" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="15 18 9 12 15 6"/>
