@@ -8,6 +8,8 @@ declare global {
 		interface PageState {
 			// The mobile More sheet is open (shallow routing, BottomTabs.svelte).
 			moreSheet?: boolean;
+			// The comments sheet is open (shallow routing, CommentsSheet.svelte).
+			commentsSheet?: boolean;
 		}
 		// interface Platform {}
 	}

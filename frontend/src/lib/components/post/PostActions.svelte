@@ -313,7 +313,14 @@
       oncomment();
       return;
     }
-    window.dispatchEvent(new CustomEvent('open-composer', { detail: { replyTo: post } }));
+    // The post's own page already shows the whole thread inline, so the full
+    // composer is the reply surface there. Everywhere else the comments sheet
+    // opens: the conversation and a comment field together (CommentsSheet).
+    if (window.location.pathname.startsWith('/post/')) {
+      window.dispatchEvent(new CustomEvent('open-composer', { detail: { replyTo: post } }));
+      return;
+    }
+    window.dispatchEvent(new CustomEvent('open-comments', { detail: { post } }));
   }
 
   async function handleBoost(e: MouseEvent) {

@@ -16,6 +16,7 @@
   import { syncPushSubscription } from '$lib/utils/push.js';
   import { loadFilters } from '$lib/stores/content-filters.js';
   import PostComposer from '$lib/components/post/PostComposer.svelte';
+  import CommentsSheet from '$lib/components/post/CommentsSheet.svelte';
   import SudoModal from '$lib/components/admin/SudoModal.svelte';
   import KeyboardShortcutsModal from '$lib/components/ui/KeyboardShortcutsModal.svelte';
   import { installShortcuts } from '$lib/utils/shortcuts.js';
@@ -119,6 +120,7 @@
        an open-composer event from /messages/new (where the FAB is
        hidden). The FAB itself stays hidden on messages/admin/settings. -->
   <PostComposer showFab={showComposer} />
+  <CommentsSheet />
   <!-- Global step-up challenge: any admin-gated call outside /admin
        (moderation panel on profiles, etc.) that 403s with
        auth.sudo_required lands here so the user can unlock without

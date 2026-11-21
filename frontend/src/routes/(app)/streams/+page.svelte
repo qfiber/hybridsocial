@@ -2,10 +2,7 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import type { Post, MediaAttachment } from '$lib/api/types.js';
-  import Modal from '$lib/components/ui/Modal.svelte';
-  import ThreadedReplies from '$lib/components/post/ThreadedReplies.svelte';
   import StreamPlayer from '$lib/components/streams/StreamPlayer.svelte';
-  import { getPostContext } from '$lib/api/statuses.js';
   import { instanceName } from '$lib/stores/instance.js';
   import { t } from '$lib/stores/i18n.js';
   import { addToast } from '$lib/stores/toast.js';
@@ -219,75 +216,6 @@
     searchTimer = setTimeout(() => loadStreams(), 300);
   }
 
-  // --- Comments sheet (a full-bleed vertical feed has no room for an inline
-  // thread, so the comment button opens a sheet instead). -------------------
-  let commentsOpen = $state(false);
-  let commentsPost = $state<Post | null>(null);
-  let commentsDescendants = $state<Post[]>([]);
-  let commentsLoading = $state(false);
-  let commentsError = $state('');
-
-  async function openComments(post: Post) {
-    commentsPost = post;
-    commentsOpen = true;
-    commentsError = '';
-    commentsDescendants = [];
-    commentsLoading = true;
-    try {
-      const context = await getPostContext(post.id);
-      commentsDescendants = context.descendants ?? [];
-    } catch {
-      commentsError = 'Failed to load comments.';
-    } finally {
-      commentsLoading = false;
-    }
-  }
-
-  function closeComments() {
-    commentsOpen = false;
-    commentsPost = null;
-    commentsDescendants = [];
-  }
-
-  function addComment() {
-    if (!commentsPost) return;
-    window.dispatchEvent(
-      new CustomEvent('open-composer', { detail: { replyTo: commentsPost } }),
-    );
-  }
-
-  function handleNewComment(e: Event) {
-    const newPost = (e as CustomEvent<Post>).detail;
-    if (!newPost || !commentsPost) return;
-    const belongsHere =
-      newPost.parent_id === commentsPost.id ||
-      newPost.root_id === commentsPost.id ||
-      commentsDescendants.some((d) => d.id === newPost.parent_id);
-    if (belongsHere && !commentsDescendants.some((d) => d.id === newPost.id)) {
-      commentsDescendants = [...commentsDescendants, newPost];
-    }
-  }
-
-  // The composer shows a comment optimistically (`new-post`, flagged
-  // `pending` → "Posting…"), then swaps in the server's copy with
-  // `post-replace` — or drops it with `post-deleted` if publishing failed.
-  // Only `new-post` was handled here, so a comment stayed "Posting…" until
-  // the sheet was closed and reloaded, even though it had been published.
-  function handleCommentReplace(e: Event) {
-    const { oldId, post: real } = (e as CustomEvent<{ oldId: string; post: Post }>).detail ?? {};
-    if (!oldId || !real) return;
-    if (!commentsDescendants.some((d) => d.id === oldId)) return;
-    commentsDescendants = commentsDescendants
-      .filter((d) => d.id !== real.id)
-      .map((d) => (d.id === oldId ? real : d));
-  }
-
-  function handleCommentDeleted(e: Event) {
-    const id = (e as CustomEvent<{ id: string }>).detail?.id;
-    if (!id || !commentsDescendants.some((d) => d.id === id)) return;
-    commentsDescendants = commentsDescendants.filter((d) => d.id !== id);
-  }
-
   onMount(() => {
     try {
       const v = localStorage.getItem(AUTOPLAY_KEY);
@@ -303,14 +231,6 @@
       /* ignore */
     }
     loadStreams();
-    window.addEventListener('new-post', handleNewComment);
-    window.addEventListener('post-replace', handleCommentReplace);
-    window.addEventListener('post-deleted', handleCommentDeleted);
-    return () => {
-      window.removeEventListener('new-post', handleNewComment);
-      window.removeEventListener('post-replace', handleCommentReplace);
-      window.removeEventListener('post-deleted', handleCommentDeleted);
-    };
   });
 </script>
 
@@ -395,7 +315,6 @@
             onaspecttoggle={toggleAspect}
             onsearch={() => { sortOpen = false; searchOpen = !searchOpen; }}
             onsort={() => { searchOpen = false; sortOpen = !sortOpen; }}
-            oncomment={() => openComments(post)}
             onview={(w, t, c, r) => reportView(post.id, w, t, c, r)}
           />
         {/if}
@@ -410,26 +329,6 @@
   {/if}
 </div>
 
-<Modal open={commentsOpen} title="Comments" onclose={closeComments}>
-  <div class="comments-sheet">
-    <button type="button" class="comments-add" onclick={addComment}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-      Add a comment
-    </button>
-
-    {#if commentsLoading}
-      <p class="comments-status">Loading comments…</p>
-    {:else if commentsError}
-      <p class="comments-status">{commentsError}</p>
-    {:else if !commentsPost || commentsDescendants.length === 0}
-      <p class="comments-status">No comments yet. Be the first to comment.</p>
-    {:else}
-      <ThreadedReplies descendants={commentsDescendants} rootPostId={commentsPost.id} />
-    {/if}
-  </div>
-</Modal>
 
 <style>
   /* AppLayout's <main> already pads the content area (see AppLayout.svelte),
@@ -651,37 +550,4 @@
     font-size: var(--text-sm);
   }
 
-  .comments-sheet {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .comments-status {
-    color: var(--color-text-secondary);
-    text-align: center;
-    padding: var(--space-4);
-  }
-
-  .comments-add {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-2);
-    width: 100%;
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    background: transparent;
-    color: var(--color-text-secondary);
-    font: inherit;
-    font-size: var(--text-sm);
-    font-weight: 500;
-    cursor: pointer;
-  }
-
-  .comments-add:hover {
-    color: var(--color-text);
-    border-color: var(--color-text-tertiary);
-  }
 </style>
