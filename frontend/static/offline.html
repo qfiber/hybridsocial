@@ -4,7 +4,9 @@
   because the device is offline. It is precached at install, so it must be
   fully self-contained: inline styles, no app bundle, no i18n runtime (the
   copy is in both English and Arabic for that reason), and no instance name
-  (each instance brands itself; this file is shared).
+  (each instance brands itself; this file is shared). The service worker
+  fills in the instance's name (__INSTANCE_NAME__), logo and brand colour
+  from what it saved while online; opened any other way, the name line hides.
 -->
 <html lang="en">
 <head>
@@ -12,7 +14,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#6c3edd">
-  <title>Offline · غير متصل</title>
+  <title>__INSTANCE_NAME__ · Offline · غير متصل</title>
   <style>
     /* Mirrors the app's tokens in src/app.css (light :root and the designed
        dark ramp); this page can't load that stylesheet offline. */
@@ -56,7 +58,8 @@
       border-radius: 20px;
       text-align: center;
     }
-    img { width: 64px; height: 64px; border-radius: 16px; }
+    img { display: block; width: 72px; height: 72px; margin: 0 auto; border-radius: 18px; object-fit: contain; }
+    .brand { margin: 12px 0 0; color: var(--text); font-size: 1.05rem; font-weight: 700; }
     h1 { margin: 20px 0 4px; font-size: 1.25rem; }
     p { margin: 0 0 4px; color: var(--muted); }
     .ar { margin-top: 16px; }
@@ -78,7 +81,8 @@
 </head>
 <body>
   <main>
-    <img src="/icons/icon-192.png" alt="">
+    <img src="/icons/icon-192.png" alt="" onerror="this.style.display='none'">
+    <p class="brand" id="brand" dir="auto">__INSTANCE_NAME__</p>
     <section lang="en" dir="ltr">
       <h1>You're offline</h1>
       <p>Check your connection. This page will reload by itself once you're back online.</p>
@@ -90,6 +94,18 @@
     <button type="button" id="retry">Try again · إعادة المحاولة</button>
   </main>
   <script>
+    // Not filled in by the service worker (opened directly): drop the
+    // placeholder rather than show it.
+    // (The marker is built in two halves so the worker's fill-in can't
+    // rewrite this check too.)
+    (function () {
+      var marker = '__INSTANCE' + '_NAME__';
+      var brand = document.getElementById('brand');
+      if (brand && brand.textContent.indexOf(marker) !== -1) brand.remove();
+      if (document.title.indexOf(marker) === 0) {
+        document.title = document.title.replace(marker + ' · ', '');
+      }
+    })();
     document.getElementById('retry').addEventListener('click', function () {
       location.reload();
     });
