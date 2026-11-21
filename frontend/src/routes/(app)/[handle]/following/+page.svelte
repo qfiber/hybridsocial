@@ -265,7 +265,7 @@
 </svelte:head>
 
 <div class="following-page">
-  <div class="sticky-section-head page-header">
+  <div class="page-header">
     <a href="/@{handle}" class="back-link" aria-label="Back to profile">
       <svg class="rtl-mirror" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
         <polyline points="15 18 9 12 15 6"/>
@@ -835,5 +835,15 @@
   .btn-outline:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  /* Title stays in view while the list scrolls (same as .sticky-section-head
+     in app.css; set here so the header markup stays untouched). */
+  .page-header {
+    position: sticky;
+    inset-block-start: var(--header-height);
+    z-index: var(--z-sticky);
+    background: var(--color-surface-base, var(--color-bg));
+    padding-block: var(--space-2);
   }
 </style>
