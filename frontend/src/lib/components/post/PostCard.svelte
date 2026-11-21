@@ -1263,6 +1263,7 @@
     images={lightboxImages}
     bind:index={lightboxIndex}
     postId={post.id}
+    postVisibility={post.visibility}
     onclose={() => (lightboxOpen = false)}
     onreply={(mediaId, mediaIndex) => {
       lightboxOpen = false;
