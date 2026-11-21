@@ -170,7 +170,7 @@
 
   <PushOptIn variant="banner" />
 
-  <Tabs {tabs} bind:active={activeTab}>
+  <Tabs {tabs} bind:active={activeTab} stickyTop="calc(var(--header-height) + var(--notifications-head-h))">
     {#if loading}
       <div class="notifications-skeleton">
         {#each Array(6) as _}
@@ -218,11 +218,23 @@
     margin: 0 auto;
   }
 
+  .notifications-page {
+    /* Height of the pinned title row; the tab bar pins right below it. */
+    --notifications-head-h: 56px;
+  }
+
+  /* Title and "Mark all as read" stay in view with the tabs. */
   .notifications-header {
+    position: sticky;
+    inset-block-start: var(--header-height);
+    z-index: var(--z-sticky);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-block-end: var(--space-4);
+    box-sizing: border-box;
+    height: var(--notifications-head-h);
+    margin-block-end: 0;
+    background: var(--color-surface-base, var(--color-bg));
   }
 
   .notifications-title {

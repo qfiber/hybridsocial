@@ -81,7 +81,7 @@
 </svelte:head>
 
 <div class="tag-page">
-  <div class="tag-header">
+  <div class="sticky-section-head tag-header">
     <h1 class="tag-title">#{tag}</h1>
     <div class="tag-actions">
       <button

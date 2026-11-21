@@ -82,7 +82,7 @@
 </svelte:head>
 
 <div class="drafts-page">
-  <div class="page-header">
+  <div class="sticky-section-head page-header">
     <h1 class="page-title">Drafts</h1>
     <p class="page-sub">Saved post drafts. Resume to continue editing, or delete to discard.</p>
   </div>
