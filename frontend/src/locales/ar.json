@@ -1501,5 +1501,17 @@
   "settings.security_time_now": "الآن",
   "settings.security_time_minutes": "منذ {n} د",
   "settings.security_time_hours": "منذ {n} س",
-  "settings.security_time_days": "منذ {n} ي"
+  "settings.security_time_days": "منذ {n} ي",
+  "settings.notif_staff_title": "تنبيهات البريد للطاقم",
+  "settings.notif_staff_desc": "رسائل عن الإشراف والخادم. تصلك فقط تلك التي يستطيع دورك التعامل معها.",
+  "settings.notif_admin_new_report": "البلاغات الجديدة",
+  "settings.notif_admin_new_report_desc": "أبلغ أحدهم عن منشور أو حساب",
+  "settings.notif_admin_new_appeal": "الطعون الجديدة",
+  "settings.notif_admin_new_appeal_desc": "طعن أحدهم في قرار إشرافي",
+  "settings.notif_admin_pending_account": "حسابات بانتظار الموافقة",
+  "settings.notif_admin_pending_account_desc": "تسجيل جديد يحتاج إلى موافقة (وضع الموافقة)",
+  "settings.notif_moderation_queue": "قائمة الإشراف",
+  "settings.notif_moderation_queue_desc": "أُضيف محتوى إلى قائمة الإشراف",
+  "settings.notif_admin_backup_failed": "النسخ الاحتياطية الفاشلة",
+  "settings.notif_admin_backup_failed_desc": "لم تكتمل نسخة احتياطية مجدولة"
 }

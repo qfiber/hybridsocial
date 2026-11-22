@@ -35,14 +35,19 @@ defmodule Hybridsocial.Notifications.StaffEmail do
   Options:
 
     * `:default_email` - whether staff with no stored preference get this email
-      (default `false`). They can still opt out with a stored preference.
+      (default: `Preference.staff_email_default/1` for the key). They can
+      still opt out, or in, with a stored preference.
     * `:throttle_seconds` - overrides the shared throttle window. `0` turns
       throttling off, so every event sends.
   """
   def dispatch(notification_key, required_permission, build_email, opts \\ [])
       when is_binary(notification_key) and is_binary(required_permission) and
              is_function(build_email, 2) do
-    default_email = Keyword.get(opts, :default_email, false)
+    default_email =
+      Keyword.get_lazy(opts, :default_email, fn ->
+        Hybridsocial.Notifications.Preference.staff_email_default(notification_key)
+      end)
+
     throttle_sec = Keyword.get_lazy(opts, :throttle_seconds, &shared_throttle_seconds/0)
 
     staff_ids =

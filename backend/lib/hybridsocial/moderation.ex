@@ -85,7 +85,6 @@ defmodule Hybridsocial.Moderation do
       fn to, staff_identity ->
         Hybridsocial.Emails.admin_new_report_email(to, staff_identity, preloaded)
       end,
-      default_email: true,
       throttle_seconds: report_email_throttle_seconds()
     )
   end
