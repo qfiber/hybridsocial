@@ -69,6 +69,40 @@ defmodule HybridsocialWeb.MediaProxyControllerTest do
     assert response(conn, 206) == binary_part(@body, 0, 3)
   end
 
+  # #317: a client hanging up mid-transfer made the adapter raise after the
+  # 206 headers went out, and Phoenix logged a second response, a 500.
+  defmodule HangupAdapter do
+    @moduledoc false
+    # The stock test adapter, except the client is gone when the file is sent.
+    for {name, arity} <- Plug.Adapters.Test.Conn.__info__(:functions), name != :send_file do
+      args = Macro.generate_arguments(arity, __MODULE__)
+
+      def unquote(name)(unquote_splicing(args)),
+        do: Plug.Adapters.Test.Conn.unquote(name)(unquote_splicing(args))
+    end
+
+    def send_file(_state, _status, _headers, _path, _offset, _length) do
+      raise Bandit.TransportError, message: "Unrecoverable error: closed", error: :closed
+    end
+  end
+
+  test "a client hanging up mid-transfer ends the request without an error" do
+    Config.set("media_proxy_cache_enabled", true)
+    ["", "proxy", "media", signature, encoded] = String.split(proxy_path(), "/")
+    params = %{"signature" => signature, "encoded_url" => encoded}
+
+    conn =
+      Plug.Test.conn(:get, proxy_path())
+      |> put_req_header("range", "bytes=0-2")
+      |> Map.update!(:adapter, fn {_, state} -> {HangupAdapter, state} end)
+      |> Map.merge(%{params: params, path_params: params})
+      |> HybridsocialWeb.MediaProxyController.call(:show)
+
+    assert conn.state == :sent
+    assert conn.status == 206
+    assert conn.halted
+  end
+
   test "with the cache enabled, serves and then hits the cache", %{conn: conn} do
     Config.set("media_proxy_cache_enabled", true)
 
