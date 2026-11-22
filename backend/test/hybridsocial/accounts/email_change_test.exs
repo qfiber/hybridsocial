@@ -116,6 +116,16 @@ defmodule Hybridsocial.Accounts.EmailChangeTest do
     assert {:error, :invalid_token} = Accounts.confirm_email_change(token)
   end
 
+  # Encrypted, a 254-char address is ~380 chars of ciphertext (#325).
+  test "a maximum-length address is stored and works for login" do
+    long = String.duplicate("a", 60) <> "@" <> String.duplicate("b", 180) <> ".example.com"
+    assert String.length(long) > 250 and String.length(long) <= 254
+
+    identity = create_user("longmail", long)
+    assert Repo.get_by!(User, identity_id: identity.id).email == long
+    assert {:ok, _} = Accounts.authenticate_user(long, valid_password())
+  end
+
   test "the endpoints map outcomes to error codes", %{identity: identity} do
     conn = Phoenix.ConnTest.build_conn() |> auth_conn(identity)
 
