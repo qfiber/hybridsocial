@@ -6,8 +6,13 @@
   import { authStore, setUser } from '$lib/stores/auth.js';
   import { addToast } from '$lib/stores/toast.js';
   import { instanceName } from '$lib/stores/instance.js';
+  import { t } from '$lib/stores/i18n.js';
+  import { t as translate } from '$lib/utils/i18n.js';
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import Modal from '$lib/components/ui/Modal.svelte';
+  import Toggle from '$lib/components/ui/Toggle.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import QRCode from 'qrcode';
   import SessionsSettings from '$lib/components/settings/SessionsSettings.svelte';
 
@@ -24,22 +29,20 @@
     knownTrustedDomains,
   } from '$lib/utils/external-link-trust.js';
 
-  // The built-in allowlist is static — read once at module load so the
-  // template doesn't recompute it every render.
+  // The built-in allowlist is static, so read it once at module load.
   const preTrusted = knownTrustedDomains();
   let showPreTrusted = $state(false);
 
   // --- External link warning ---
   let externalLinkWarningEnabled = $state(true);
 
-  function toggleExternalLinkWarning() {
-    externalLinkWarningEnabled = !externalLinkWarningEnabled;
-    setWarningDisabled(!externalLinkWarningEnabled);
+  function onExternalLinkWarning(enabled: boolean) {
+    setWarningDisabled(!enabled);
   }
 
   function clearTrustedSites() {
     clearTrustedDomains();
-    addToast('Trusted sites cleared', 'success');
+    addToast(translate('settings.security_links_cleared'), 'success');
   }
 
   // --- Recovery code ---
@@ -64,7 +67,7 @@
 
   async function handleGenerateRecovery() {
     if (!recoveryPassword) {
-      recoveryError = 'Enter your current password to continue.';
+      recoveryError = translate('settings.security_recovery_password_required');
       return;
     }
     recoveryGenerating = true;
@@ -78,11 +81,10 @@
       const err = e as { body?: { error?: string; message?: string } };
       recoveryError =
         err?.body?.error === 'auth.invalid_password'
-          ? 'That password didn\u2019t match.'
+          ? translate('settings.security_wrong_password')
           : err?.body?.error === 'recovery.two_factor_required'
-            ? err?.body?.message ||
-              'Enable two-factor authentication before generating a recovery code.'
-            : 'Failed to generate a code.';
+            ? err?.body?.message || translate('settings.security_recovery_2fa_required')
+            : translate('settings.security_recovery_generate_failed');
     } finally {
       recoveryGenerating = false;
     }
@@ -90,7 +92,7 @@
 
   async function handleClearRecovery() {
     if (!recoveryPassword) {
-      recoveryError = 'Enter your current password to clear the code.';
+      recoveryError = translate('settings.security_recovery_password_required_clear');
       return;
     }
     recoveryClearing = true;
@@ -104,8 +106,8 @@
       const err = e as { body?: { error?: string } };
       recoveryError =
         err?.body?.error === 'auth.invalid_password'
-          ? 'That password didn\u2019t match.'
-          : 'Failed to clear the code.';
+          ? translate('settings.security_wrong_password')
+          : translate('settings.security_recovery_clear_failed');
     } finally {
       recoveryClearing = false;
     }
@@ -113,7 +115,7 @@
 
   function copyRecoveryCode() {
     if (recoveryNewCode) navigator.clipboard?.writeText(recoveryNewCode).catch(() => {});
-    addToast('Copied', 'success');
+    addToast(translate('settings.security_recovery_copied'), 'success');
   }
 
   function dismissNewCode() {
@@ -131,14 +133,14 @@
     try {
       securityKeys = await api.get<WebauthnCred[]>('/api/v1/auth/webauthn/credentials');
     } catch {
-      addToast('Could not load your security keys', 'error');
+      addToast(translate('settings.security_keys_load_failed'), 'error');
     }
     finally { keysLoading = false; }
   }
 
   async function registerKey() {
     if (!navigator.credentials) {
-      addToast('WebAuthn not supported in this browser', 'error');
+      addToast(translate('settings.security_keys_unsupported'), 'error');
       return;
     }
     keyRegistering = true;
@@ -167,7 +169,7 @@
 
       const response = credential.response as AuthenticatorAttestationResponse;
 
-      // 4. Send to server
+      // 4. Send to server. The fallback name is stored, so it stays untranslated.
       await api.post('/api/v1/auth/webauthn/register/verify', {
         credential_id: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
         public_key: btoa(String.fromCharCode(...new Uint8Array(response.getPublicKey?.() || new ArrayBuffer(0)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
@@ -179,10 +181,10 @@
       });
 
       keyName = '';
-      addToast('Security key registered', 'success');
+      addToast(translate('settings.security_keys_registered'), 'success');
       await loadKeys();
     } catch (e) {
-      addToast(e instanceof Error ? e.message : 'Failed to register key', 'error');
+      addToast(e instanceof Error ? e.message : translate('settings.security_keys_register_failed'), 'error');
     } finally { keyRegistering = false; }
   }
 
@@ -204,11 +206,11 @@
     try {
       await api.delete(`/api/v1/auth/webauthn/credentials/${id}`);
       securityKeys = securityKeys.filter(k => k.id !== id);
-      addToast('Security key removed', 'success');
+      addToast(translate('settings.security_keys_removed'), 'success');
       showDeleteKeyModal = false;
       keyToDelete = null;
     } catch {
-      addToast('Failed to remove key', 'error');
+      addToast(translate('settings.security_keys_remove_failed'), 'error');
     } finally {
       keyDeleting = false;
     }
@@ -222,7 +224,7 @@
   let passwordSaved = $state(false);
   let passwordError: string | null = $state(null);
 
-  // 2FA — load from user state
+  // 2FA, loaded from user state
   let twoFactorEnabled = $state(false);
 
   onMount(async () => {
@@ -248,12 +250,12 @@
     passwordSaved = false;
 
     if (newPassword !== confirmPassword) {
-      passwordError = 'New passwords do not match';
+      passwordError = translate('settings.security_password_mismatch');
       return;
     }
 
     if (newPassword.length < 16) {
-      passwordError = 'Password must be at least 16 characters';
+      passwordError = translate('settings.security_password_too_short');
       return;
     }
 
@@ -266,7 +268,7 @@
       confirmPassword = '';
       setTimeout(() => { passwordSaved = false; }, 3000);
     } catch (e) {
-      passwordError = e instanceof Error ? e.message : 'Failed to change password';
+      passwordError = e instanceof Error ? e.message : translate('settings.security_password_failed');
     } finally {
       passwordSaving = false;
     }
@@ -283,7 +285,7 @@
       }
       showSetup = true;
     } catch (e) {
-      twoFAError = e instanceof Error ? e.message : 'Failed to setup 2FA';
+      twoFAError = e instanceof Error ? e.message : translate('settings.security_2fa_setup_failed');
     } finally {
       twoFALoading = false;
     }
@@ -298,7 +300,7 @@
       showSetup = false;
       twoFactorSetup = null;
       verifyCode = '';
-      twoFASuccess = 'Two-factor authentication enabled';
+      twoFASuccess = translate('settings.security_2fa_enabled_message');
       setTimeout(() => { twoFASuccess = null; }, 3000);
       // Refresh user data so admin panel sees 2FA enabled
       try {
@@ -306,7 +308,7 @@
         setUser(user);
       } catch {};
     } catch (e) {
-      twoFAError = e instanceof Error ? e.message : 'Invalid verification code';
+      twoFAError = e instanceof Error ? e.message : translate('settings.security_2fa_invalid_verification');
     } finally {
       twoFALoading = false;
     }
@@ -320,510 +322,553 @@
       twoFactorEnabled = false;
       showDisable = false;
       disableCode = '';
-      twoFASuccess = 'Two-factor authentication disabled';
+      twoFASuccess = translate('settings.security_2fa_disabled_message');
       setTimeout(() => { twoFASuccess = null; }, 3000);
     } catch (e) {
-      twoFAError = e instanceof Error ? e.message : 'Invalid code';
+      twoFAError = e instanceof Error ? e.message : translate('settings.security_2fa_invalid_code');
     } finally {
       twoFALoading = false;
     }
   }
+
+  const formatDate = (iso: string) => new Date(iso).toLocaleDateString();
 </script>
 
-<div class="stitch-settings">
-  <!-- Change Password -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-        </svg>
-      </span>
-      <h2 class="stitch-section-title">Change Password</h2>
-    </div>
+<div class="security-page">
+  <SettingsSection title={$t('settings.security_password_title')} description={$t('settings.security_password_desc')}>
+    <form class="security-form" onsubmit={(e) => { e.preventDefault(); handlePasswordChange(); }}>
+      <SettingRow label={$t('settings.security_password_current')} labelFor="current-password" layout="stacked">
+        <input id="current-password" type="password" class="input" bind:value={currentPassword} autocomplete="current-password" required />
+      </SettingRow>
+      <SettingRow label={$t('settings.security_password_new')} labelFor="new-password" layout="stacked">
+        <input
+          id="new-password"
+          type="password"
+          class="input"
+          bind:value={newPassword}
+          autocomplete="new-password"
+          minlength="16"
+          placeholder={$t('settings.security_password_new_placeholder')}
+          required
+        />
+      </SettingRow>
+      <SettingRow label={$t('settings.security_password_confirm')} labelFor="confirm-password" layout="stacked">
+        <input id="confirm-password" type="password" class="input" bind:value={confirmPassword} autocomplete="new-password" required />
+      </SettingRow>
 
-    <div class="stitch-section-content">
-      <form class="stitch-form" onsubmit={(e) => { e.preventDefault(); handlePasswordChange(); }}>
-        <div class="stitch-field">
-          <label class="stitch-label" for="current-password">CURRENT PASSWORD</label>
-          <input
-            id="current-password"
-            type="password"
-            class="stitch-input"
-            bind:value={currentPassword}
-            autocomplete="current-password"
-            required
-          />
+      {#if passwordError}
+        <div class="security-note error">{passwordError}</div>
+      {/if}
+      {#if passwordSaved}
+        <div class="security-note success">{$t('settings.security_password_changed')}</div>
+      {/if}
+
+      <div class="security-actions">
+        <button class="btn btn-primary btn-sm" type="submit" disabled={passwordSaving}>
+          {#if passwordSaving}<Spinner size={16} color="#fff" />{/if}
+          {$t('settings.security_password_submit')}
+        </button>
+      </div>
+    </form>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.security_2fa_title')} description={$t('settings.security_2fa_desc')}>
+    {#if twoFASuccess || twoFAError}
+      <div class="security-block">
+        {#if twoFASuccess}<div class="security-note success">{twoFASuccess}</div>{/if}
+        {#if twoFAError}<div class="security-note error">{twoFAError}</div>{/if}
+      </div>
+    {/if}
+
+    {#if !twoFactorEnabled && !showSetup}
+      <SettingRow label={$t('settings.security_2fa_app')} help={$t('settings.security_2fa_intro')}>
+        <button class="btn btn-outline btn-sm" type="button" onclick={handleSetup2FA} disabled={twoFALoading}>
+          {#if twoFALoading}<Spinner size={16} />{/if}
+          {$t('settings.security_2fa_enable')}
+        </button>
+      </SettingRow>
+    {:else if showSetup && twoFactorSetup}
+      <div class="security-block">
+        <p class="security-muted">{$t('settings.security_2fa_setup_help')}</p>
+        <div class="security-qr">
+          <img src={qrDataUrl} alt={$t('settings.security_2fa_qr_alt')} class="security-qr-img" />
         </div>
-
-        <div class="stitch-field">
-          <label class="stitch-label" for="new-password">NEW PASSWORD</label>
-          <input
-            id="new-password"
-            type="password"
-            class="stitch-input"
-            bind:value={newPassword}
-            autocomplete="new-password"
-            minlength="16"
-            placeholder="At least 16 characters"
-            required
-          />
+        <div class="security-field">
+          <span class="security-field-label">{$t('settings.security_2fa_manual_key')}</span>
+          <code class="security-code" dir="ltr">{twoFactorSetup.secret}</code>
         </div>
-
-        <div class="stitch-field">
-          <label class="stitch-label" for="confirm-password">CONFIRM NEW PASSWORD</label>
-          <input
-            id="confirm-password"
-            type="password"
-            class="stitch-input"
-            bind:value={confirmPassword}
-            autocomplete="new-password"
-            required
-          />
-        </div>
-
-        {#if passwordError}
-          <div class="stitch-error">{passwordError}</div>
+        {#if twoFactorSetup.backup_codes?.length > 0}
+          <div class="security-field">
+            <span class="security-field-label">{$t('settings.security_2fa_backup_codes')}</span>
+            <div class="security-codes-grid" dir="ltr">
+              {#each twoFactorSetup.backup_codes as code}
+                <code class="security-code">{code}</code>
+              {/each}
+            </div>
+          </div>
         {/if}
-
-        {#if passwordSaved}
-          <div class="stitch-success">Password changed successfully</div>
-        {/if}
-
-        <div class="stitch-actions">
-          <button class="stitch-btn-primary" type="submit" disabled={passwordSaving}>
-            {#if passwordSaving}
-              <Spinner size={16} color="#fff" />
-            {/if}
-            Change Password
+      </div>
+      <form class="security-form" onsubmit={(e) => { e.preventDefault(); handleVerify2FA(); }}>
+        <SettingRow label={$t('settings.security_2fa_verify_code')} labelFor="verify-code" layout="stacked">
+          <input
+            id="verify-code"
+            type="text"
+            class="input"
+            bind:value={verifyCode}
+            placeholder={$t('settings.security_2fa_code_placeholder')}
+            maxlength="6"
+            autocomplete="one-time-code"
+            required
+          />
+        </SettingRow>
+        <div class="security-actions">
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => { showSetup = false; twoFactorSetup = null; }}>
+            {$t('common.cancel')}
+          </button>
+          <button class="btn btn-primary btn-sm" type="submit" disabled={twoFALoading}>
+            {#if twoFALoading}<Spinner size={16} color="#fff" />{/if}
+            {$t('settings.security_2fa_verify_submit')}
           </button>
         </div>
       </form>
-    </div>
-  </section>
-
-  <!-- Two-Factor Authentication -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      </span>
-      <h2 class="stitch-section-title">Two-Factor Authentication</h2>
-    </div>
-
-    <div class="stitch-section-content">
-      <div class="stitch-form">
-        {#if twoFASuccess}
-          <div class="stitch-success">{twoFASuccess}</div>
-        {/if}
-
-        {#if twoFAError}
-          <div class="stitch-error">{twoFAError}</div>
-        {/if}
-
-        {#if !twoFactorEnabled && !showSetup}
-          <p class="stitch-description">
-            Add an extra layer of security to your account by enabling two-factor authentication.
-            It also unlocks an <strong>account recovery code</strong>, a backup that lets you
-            reset your password if you ever lose access to your email.
-          </p>
-          <div class="stitch-actions">
-            <button class="stitch-btn-outline" type="button" onclick={handleSetup2FA} disabled={twoFALoading}>
-              {#if twoFALoading}
-                <Spinner size={16} />
-              {/if}
-              Enable 2FA
-            </button>
+    {:else if twoFactorEnabled && !showDisable}
+      <SettingRow label={$t('settings.security_2fa_app')}>
+        {#snippet meta()}<span class="security-status-on">{$t('settings.security_2fa_enabled')}</span>{/snippet}
+        <button class="btn btn-danger btn-sm" type="button" onclick={() => { showDisable = true; }}>
+          {$t('settings.security_2fa_disable')}
+        </button>
+      </SettingRow>
+      {#if recoveryStatus && !recoveryStatus.enabled}
+        <div class="security-block">
+          <div class="security-callout" role="note">
+            <span class="material-symbols-outlined" aria-hidden="true">key</span>
+            <div>
+              <strong>{$t('settings.security_2fa_recovery_nudge_title')}</strong>
+              {$t('settings.security_2fa_recovery_nudge')}
+              <a href="#recovery-code">{$t('settings.security_2fa_recovery_nudge_link')}</a>
+            </div>
           </div>
-        {:else if showSetup && twoFactorSetup}
-          <p class="stitch-description">
-            Scan the QR code below with your authenticator app (like Google Authenticator or Authy), then enter the verification code.
-          </p>
-
-          <div class="stitch-qr">
-            <img src={qrDataUrl} alt="2FA QR Code" class="stitch-qr-img" />
-          </div>
-
-          <div class="stitch-secret">
-            <span class="stitch-label">MANUAL ENTRY KEY</span>
-            <code class="stitch-secret-code">{twoFactorSetup.secret}</code>
-          </div>
-
-          {#if twoFactorSetup.backup_codes?.length > 0}
-            <div class="stitch-backup">
-              <span class="stitch-label">BACKUP CODES (SAVE THESE SOMEWHERE SAFE)</span>
-              <div class="stitch-codes-grid">
-                {#each twoFactorSetup.backup_codes as code}
-                  <code class="stitch-backup-code">{code}</code>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <form onsubmit={(e) => { e.preventDefault(); handleVerify2FA(); }}>
-            <div class="stitch-field">
-              <label class="stitch-label" for="verify-code">VERIFICATION CODE</label>
-              <input
-                id="verify-code"
-                type="text"
-                class="stitch-input"
-                bind:value={verifyCode}
-                placeholder="Enter 6-digit code"
-                maxlength="6"
-                autocomplete="one-time-code"
-                required
-              />
-            </div>
-            <div class="stitch-actions" style="margin-block-start: 16px;">
-              <button class="stitch-btn-ghost" type="button" onclick={() => { showSetup = false; twoFactorSetup = null; }}>
-                Cancel
-              </button>
-              <button class="stitch-btn-primary" type="submit" disabled={twoFALoading}>
-                {#if twoFALoading}
-                  <Spinner size={16} color="#fff" />
-                {/if}
-                Verify & Enable
-              </button>
-            </div>
-          </form>
-        {:else if twoFactorEnabled && !showDisable}
-          <div class="stitch-status-row">
-            <div class="stitch-status-info">
-              <span class="stitch-status-label">Two-factor authentication</span>
-              <span class="stitch-status-value stitch-status-enabled">Enabled</span>
-            </div>
-            <button class="stitch-btn-danger" type="button" onclick={() => { showDisable = true; }}>
-              Disable 2FA
-            </button>
-          </div>
-          {#if recoveryStatus && !recoveryStatus.enabled}
-            <div class="recovery-warn" role="note">
-              <span class="material-symbols-outlined" aria-hidden="true">key</span>
-              <div>
-                <strong>Set up your account recovery code.</strong>
-                You have 2FA on but no recovery code yet, so if you lose access to your
-                email you won't be able to get back in.
-                <a href="#recovery-code">Generate one below.</a>
-              </div>
-            </div>
-          {/if}
-        {:else if showDisable}
-          <form onsubmit={(e) => { e.preventDefault(); handleDisable2FA(); }}>
-            <div class="stitch-field">
-              <label class="stitch-label" for="disable-code">ENTER YOUR 2FA CODE TO DISABLE</label>
-              <input
-                id="disable-code"
-                type="text"
-                class="stitch-input"
-                bind:value={disableCode}
-                placeholder="Enter 6-digit code"
-                maxlength="6"
-                autocomplete="one-time-code"
-                required
-              />
-            </div>
-            <div class="stitch-actions" style="margin-block-start: 16px;">
-              <button class="stitch-btn-ghost" type="button" onclick={() => { showDisable = false; }}>
-                Cancel
-              </button>
-              <button class="stitch-btn-danger" type="submit" disabled={twoFALoading}>
-                {#if twoFALoading}
-                  <Spinner size={16} color="#fff" />
-                {/if}
-                Disable 2FA
-              </button>
-            </div>
-          </form>
-        {/if}
-      </div>
-    </div>
-  </section>
-
-  <!-- Security Keys (WebAuthn/FIDO2) -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-        </svg>
-      </span>
-      <div>
-        <h2 class="stitch-section-title">Security Keys</h2>
-        <p class="stitch-section-desc">Use a hardware security key, biometric, or passkey (e.g. YubiKey, Bitwarden, Touch ID) for secure login.</p>
-      </div>
-    </div>
-    <div class="stitch-section-content">
-      {#if keysLoading}
-        <div style="padding: 16px; text-align: center"><Spinner /></div>
-      {:else}
-        {#if securityKeys.length > 0}
-          <div class="keys-list">
-            {#each securityKeys as key (key.id)}
-              <div class="key-item">
-                <div class="key-info">
-                  <span class="material-symbols-outlined key-icon">key</span>
-                  <div>
-                    <span class="key-name">{key.name}</span>
-                    <span class="key-meta">
-                      Added {new Date(key.created_at).toLocaleDateString()}
-                      {#if key.last_used_at}
-                         &middot; Last used {new Date(key.last_used_at).toLocaleDateString()}
-                      {/if}
-                      &middot; Used {key.sign_count} times
-                    </span>
-                  </div>
-                </div>
-                <button type="button" class="key-remove" onclick={() => askDeleteKey(key)} aria-label="Remove {key.name}">
-                  <span class="material-symbols-outlined" style="font-size: 18px">delete</span>
-                </button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-        <div class="key-add-form">
-          <input type="text" class="key-name-input" bind:value={keyName} placeholder="Key name (e.g. YubiKey, Bitwarden)" />
-          <button type="button" class="key-add-btn" onclick={registerKey} disabled={keyRegistering}>
-            <span class="material-symbols-outlined" style="font-size: 18px">add</span>
-            {keyRegistering ? 'Waiting for key...' : 'Add Security Key'}
-          </button>
         </div>
       {/if}
-    </div>
-  </section>
+    {:else if showDisable}
+      <form class="security-form" onsubmit={(e) => { e.preventDefault(); handleDisable2FA(); }}>
+        <SettingRow label={$t('settings.security_2fa_disable_code')} labelFor="disable-code" layout="stacked">
+          <input
+            id="disable-code"
+            type="text"
+            class="input"
+            bind:value={disableCode}
+            placeholder={$t('settings.security_2fa_code_placeholder')}
+            maxlength="6"
+            autocomplete="one-time-code"
+            required
+          />
+        </SettingRow>
+        <div class="security-actions">
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => { showDisable = false; }}>
+            {$t('common.cancel')}
+          </button>
+          <button class="btn btn-danger btn-sm" type="submit" disabled={twoFALoading}>
+            {#if twoFALoading}<Spinner size={16} color="#fff" />{/if}
+            {$t('settings.security_2fa_disable')}
+          </button>
+        </div>
+      </form>
+    {/if}
+  </SettingsSection>
 
-  <!-- Account recovery code -->
-  <section class="stitch-section" id="recovery-code">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
-        </svg>
-      </span>
-      <div>
-        <h2 class="stitch-section-title">Account recovery code</h2>
-        <p class="stitch-section-desc">
-          A backup you can use to reset your password if you ever lose access to
-          your email. Keep it somewhere safe — we can't retrieve it for you.
-        </p>
-      </div>
-    </div>
-
-    <div class="stitch-section-body">
-      {#if recoveryNewCode}
-        <div class="recovery-reveal">
-          <div class="recovery-reveal-title">Save your new recovery code</div>
-          <p class="recovery-reveal-sub">
-            This is the only time we'll show it. If you lose this and your email,
-            your account can't be recovered.
-          </p>
-          <div class="recovery-code-display">
-            <code>{recoveryNewCode}</code>
+  <SettingsSection title={$t('settings.security_keys_title')} description={$t('settings.security_keys_desc')}>
+    {#if keysLoading}
+      <div class="security-block security-loading"><Spinner /></div>
+    {:else}
+      {#each securityKeys as key (key.id)}
+        <div class="security-item">
+          <span class="material-symbols-outlined security-item-icon" aria-hidden="true">key</span>
+          <div class="security-item-info">
+            <span class="security-item-name">{key.name}</span>
+            <span class="security-item-meta">
+              {$t('settings.security_keys_added', { date: formatDate(key.created_at) })}
+              {#if key.last_used_at}
+                &middot; {$t('settings.security_last_used', { date: formatDate(key.last_used_at) })}
+              {/if}
+              &middot; {$t('settings.security_keys_uses', { count: key.sign_count })}
+            </span>
           </div>
-          <div class="recovery-actions">
-            <button type="button" class="btn btn-outline" onclick={copyRecoveryCode}>Copy</button>
-            <button type="button" class="btn btn-outline" onclick={() => window.print()}>Print</button>
-            <button type="button" class="btn btn-primary" onclick={dismissNewCode}>I saved it</button>
+          <button type="button" class="security-item-remove" onclick={() => askDeleteKey(key)} aria-label={$t('settings.security_keys_remove_label', { name: key.name })}>
+            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+          </button>
+        </div>
+      {/each}
+
+      <SettingRow label={$t('settings.security_keys_name_label')} labelFor="key-name" layout="stacked">
+        <div class="security-inline">
+          <input id="key-name" type="text" class="input" bind:value={keyName} placeholder={$t('settings.security_keys_name_placeholder')} />
+          <button type="button" class="btn btn-primary btn-sm" onclick={registerKey} disabled={keyRegistering}>
+            <span class="material-symbols-outlined security-btn-icon" aria-hidden="true">add</span>
+            {keyRegistering ? $t('settings.security_keys_waiting') : $t('settings.security_keys_add')}
+          </button>
+        </div>
+      </SettingRow>
+    {/if}
+  </SettingsSection>
+
+  <div id="recovery-code">
+    <SettingsSection title={$t('settings.security_recovery_title')} description={$t('settings.security_recovery_desc')}>
+      {#if recoveryNewCode}
+        <div class="security-block">
+          <div class="recovery-reveal">
+            <div class="recovery-reveal-title">{$t('settings.security_recovery_save_title')}</div>
+            <p class="recovery-reveal-sub">{$t('settings.security_recovery_save_help')}</p>
+            <div class="recovery-code-display" dir="ltr"><code>{recoveryNewCode}</code></div>
+            <div class="security-button-row">
+              <button type="button" class="btn btn-outline btn-sm" onclick={copyRecoveryCode}>{$t('settings.security_recovery_copy')}</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick={() => window.print()}>{$t('settings.security_recovery_print')}</button>
+              <button type="button" class="btn btn-primary btn-sm" onclick={dismissNewCode}>{$t('settings.security_recovery_saved')}</button>
+            </div>
           </div>
         </div>
       {:else if !twoFactorEnabled}
-        <div class="recovery-state off">
-          <strong>Enable two-factor authentication first.</strong>
-          <span class="recovery-state-meta">
-            Recovery codes are only useful as a second factor — if
-            anyone with just your password could use one, the code
-            would be a downgrade, not a recovery path. Turn on 2FA
-            above and the generator will unlock here.
-          </span>
+        <div class="security-block">
+          <strong class="security-strong">{$t('settings.security_recovery_needs_2fa')}</strong>
+          <p class="security-muted">{$t('settings.security_recovery_needs_2fa_help')}</p>
         </div>
       {:else}
-        <div class="recovery-status">
+        <div class="security-block">
           {#if recoveryStatus?.enabled}
-            <div class="recovery-state on">
-              <strong>Recovery code is set.</strong>
-              {#if recoveryStatus.generated_at}
-                <span class="recovery-state-meta">
-                  Last regenerated {new Date(recoveryStatus.generated_at).toLocaleDateString()}
-                </span>
-              {/if}
-              {#if recoveryStatus.last_used_at}
-                <span class="recovery-state-meta">
-                  Last used {new Date(recoveryStatus.last_used_at).toLocaleDateString()}
-                </span>
-              {/if}
-            </div>
+            <strong class="security-strong">{$t('settings.security_recovery_set')}</strong>
+            {#if recoveryStatus.generated_at}
+              <span class="security-item-meta">{$t('settings.security_recovery_regenerated', { date: formatDate(recoveryStatus.generated_at) })}</span>
+            {/if}
+            {#if recoveryStatus.last_used_at}
+              <span class="security-item-meta">{$t('settings.security_last_used', { date: formatDate(recoveryStatus.last_used_at) })}</span>
+            {/if}
           {:else}
-            <div class="recovery-warn" role="note">
+            <div class="security-callout" role="note">
               <span class="material-symbols-outlined" aria-hidden="true">warning</span>
               <div>
-                <strong>No recovery code set.</strong>
-                If you lose access to your email and forget your password, you'll
-                have no way back into this account. Generate one now and store it
-                somewhere safe.
+                <strong>{$t('settings.security_recovery_none_title')}</strong>
+                {$t('settings.security_recovery_none')}
               </div>
             </div>
           {/if}
+        </div>
 
-          <div class="recovery-form">
-            <label for="rc-password">Current password</label>
+        <div class="security-form">
+          <SettingRow label={$t('settings.security_password_current')} labelFor="rc-password" layout="stacked">
             <input
               id="rc-password"
               type="password"
+              class="input"
               bind:value={recoveryPassword}
               autocomplete="current-password"
-              placeholder="Enter to confirm"
+              placeholder={$t('settings.security_recovery_password_placeholder')}
             />
+          </SettingRow>
 
-            {#if recoveryError}
-              <div class="recovery-error" role="alert">{recoveryError}</div>
-            {/if}
+          {#if recoveryError}
+            <div class="security-note error" role="alert">{recoveryError}</div>
+          {/if}
 
-            <div class="recovery-actions">
+          <div class="security-actions">
+            {#if recoveryStatus?.enabled}
               <button
                 type="button"
-                class="btn btn-primary"
-                disabled={recoveryGenerating || !recoveryPassword}
-                onclick={handleGenerateRecovery}
+                class="btn btn-ghost btn-sm"
+                disabled={recoveryClearing || !recoveryPassword}
+                onclick={handleClearRecovery}
               >
-                {recoveryGenerating
-                  ? 'Generating\u2026'
-                  : recoveryStatus?.enabled
-                    ? 'Generate new code'
-                    : 'Generate recovery code'}
+                {recoveryClearing ? $t('settings.security_recovery_clearing') : $t('settings.security_recovery_remove')}
               </button>
-
-              {#if recoveryStatus?.enabled}
-                <button
-                  type="button"
-                  class="btn btn-ghost-danger"
-                  disabled={recoveryClearing || !recoveryPassword}
-                  onclick={handleClearRecovery}
-                >
-                  {recoveryClearing ? 'Clearing\u2026' : 'Remove code'}
-                </button>
-              {/if}
-            </div>
+            {/if}
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              disabled={recoveryGenerating || !recoveryPassword}
+              onclick={handleGenerateRecovery}
+            >
+              {recoveryGenerating
+                ? $t('settings.security_recovery_generating')
+                : recoveryStatus?.enabled
+                  ? $t('settings.security_recovery_generate_new')
+                  : $t('settings.security_recovery_generate')}
+            </button>
           </div>
         </div>
       {/if}
-    </div>
-  </section>
+    </SettingsSection>
+  </div>
 
-  <!-- External link warning -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-          <polyline points="15 3 21 3 21 9" />
-          <line x1="10" y1="14" x2="21" y2="3" />
-        </svg>
-      </span>
-      <div>
-        <h2 class="stitch-section-title">External link warning</h2>
-        <p class="stitch-section-desc">
-          Pop a confirmation dialog before opening links that lead off
-          {$instanceName}. Helps catch typosquatted phishing domains
-          before you visit them.
-        </p>
-      </div>
-    </div>
+  <SessionsSettings />
 
-    <div class="stitch-section-body">
-      <div class="ext-link-row">
-        <div class="ext-link-info">
-          <span class="ext-link-label">Warn before opening external links</span>
-          <span class="ext-link-meta">
-            {externalLinkWarningEnabled
-              ? 'On — every off-site link prompts before navigating.'
-              : 'Off — links open immediately. Re-enable any time.'}
-          </span>
-        </div>
-        <button
-          type="button"
-          class="ext-link-toggle"
-          class:on={externalLinkWarningEnabled}
-          aria-pressed={externalLinkWarningEnabled}
-          aria-label="Toggle external link warning"
-          onclick={toggleExternalLinkWarning}
-        >
-          <span class="ext-link-knob"></span>
+  <SettingsSection title={$t('settings.security_links_title')} description={$t('settings.security_links_desc', { instance: $instanceName })}>
+    <SettingRow
+      label={$t('settings.security_links_warn')}
+      help={externalLinkWarningEnabled ? $t('settings.security_links_on') : $t('settings.security_links_off')}
+      labelFor="s-extlink"
+    >
+      <Toggle id="s-extlink" bind:checked={externalLinkWarningEnabled} onchange={onExternalLinkWarning} />
+    </SettingRow>
+
+    {#if externalLinkWarningEnabled}
+      <SettingRow label={$t('settings.security_links_trusted')} help={$t('settings.security_links_trusted_help')}>
+        <button type="button" class="btn btn-ghost btn-sm" onclick={clearTrustedSites}>
+          {$t('settings.security_links_clear')}
         </button>
-      </div>
+      </SettingRow>
 
-      {#if externalLinkWarningEnabled}
-        <div class="ext-link-row" style="margin-block-start: 12px;">
-          <div class="ext-link-info">
-            <span class="ext-link-label">Trusted sites</span>
-            <span class="ext-link-meta">
-              Sites you've checked "Don't warn me again" for. Entries
-              expire after 24 hours automatically.
-            </span>
-          </div>
-          <button
-            type="button"
-            class="btn btn-ghost-danger"
-            onclick={clearTrustedSites}
-          >
-            Clear all
-          </button>
-        </div>
+      <SettingRow label={$t('settings.security_links_pretrusted')} help={$t('settings.security_links_pretrusted_help', { n: preTrusted.length })}>
+        <button type="button" class="btn btn-ghost btn-sm" aria-expanded={showPreTrusted} onclick={() => (showPreTrusted = !showPreTrusted)}>
+          {showPreTrusted ? $t('settings.security_links_hide') : $t('settings.security_links_show')}
+        </button>
+      </SettingRow>
 
-        <div class="ext-link-row" style="margin-block-start: 12px;">
-          <div class="ext-link-info">
-            <span class="ext-link-label">Pre-trusted well-known sites</span>
-            <span class="ext-link-meta">
-              We skip the warning for major platforms ({preTrusted.length} domains
-              like GitHub, Wikipedia, YouTube). Subdomains are covered too.
-            </span>
-          </div>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            onclick={() => (showPreTrusted = !showPreTrusted)}
-          >
-            {showPreTrusted ? 'Hide' : 'Show list'}
-          </button>
-        </div>
-
-        {#if showPreTrusted}
-          <ul class="pre-trusted-list">
+      {#if showPreTrusted}
+        <div class="security-block">
+          <ul class="pre-trusted-list" dir="ltr">
             {#each preTrusted as domain (domain)}
-              <li class="pre-trusted-item"><code>{domain}</code></li>
+              <li><code>{domain}</code></li>
             {/each}
           </ul>
-        {/if}
+        </div>
       {/if}
-    </div>
-  </section>
-
+    {/if}
+  </SettingsSection>
 </div>
 
-<!-- Merged in: signed-in devices / sessions -->
-<SessionsSettings />
-
-<Modal bind:open={showDeleteKeyModal} title="Remove this security key?" onclose={() => { keyToDelete = null; }}>
+<Modal bind:open={showDeleteKeyModal} title={$t('settings.security_keys_remove_title')} onclose={() => { keyToDelete = null; }}>
   {#if keyToDelete}
-    <p class="confirm-message">
-      <strong>{keyToDelete.name}</strong> will no longer be able to sign in to your account. Make sure you have another way to log in before removing it.
-    </p>
+    <p class="confirm-message">{$t('settings.security_keys_remove_message', { name: keyToDelete.name })}</p>
     <div class="confirm-actions">
-      <button type="button" class="stitch-btn-ghost" onclick={() => (showDeleteKeyModal = false)}>Cancel</button>
-      <button type="button" class="stitch-btn-danger" onclick={confirmDeleteKey} disabled={keyDeleting}>
+      <button type="button" class="btn btn-ghost btn-sm" onclick={() => (showDeleteKeyModal = false)}>{$t('common.cancel')}</button>
+      <button type="button" class="btn btn-danger btn-sm" onclick={confirmDeleteKey} disabled={keyDeleting}>
         {#if keyDeleting}<Spinner size={14} color="#fff" />{/if}
-        Remove key
+        {$t('settings.security_keys_remove')}
       </button>
     </div>
   {/if}
 </Modal>
 
 <style>
+  .security-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  /* Clear the sticky settings header when the 2FA nudge anchors here. */
+  #recovery-code {
+    scroll-margin-block-start: var(--space-8);
+  }
+
+  .security-form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .security-form > :global(.setting-row + .setting-row) {
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .security-block {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+  }
+
+  .security-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: 0 var(--space-5) var(--space-4);
+  }
+
+  .security-button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .security-inline {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .security-inline .input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .security-btn-icon {
+    font-size: 18px;
+  }
+
+  .security-muted {
+    margin: 0;
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--color-text-secondary);
+  }
+
+  .security-strong {
+    font-size: var(--text-sm);
+    color: var(--color-text);
+  }
+
+  .security-loading {
+    align-items: center;
+  }
+
+  .security-note {
+    margin: 0 var(--space-5) var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+  }
+
+  .security-block .security-note {
+    margin: 0;
+  }
+
+  .security-note.error {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  .security-note.success {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+  }
+
+  .security-status-on {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-success);
+  }
+
+  /* Actionable warning: 2FA is on but no recovery code is set. */
+  .security-callout {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--color-warning-soft);
+    border: 1px solid var(--color-warning);
+    font-size: var(--text-sm);
+    color: var(--color-text);
+    line-height: 1.5;
+  }
+
+  .security-callout .material-symbols-outlined {
+    font-size: 20px;
+    color: var(--color-warning);
+    flex-shrink: 0;
+  }
+
+  .security-callout a {
+    color: var(--color-primary);
+    font-weight: 600;
+  }
+
+  /* ---- 2FA setup ---- */
+  .security-qr {
+    display: flex;
+    justify-content: center;
+  }
+
+  .security-qr-img {
+    width: 200px;
+    height: 200px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+  }
+
+  .security-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .security-field-label {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .security-code {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-surface-container-high);
+    border-radius: var(--radius-md);
+    word-break: break-all;
+    user-select: all;
+    text-align: center;
+  }
+
+  .security-codes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-2);
+  }
+
+  /* ---- Security keys ---- */
+  .security-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
+  }
+
+  .security-item-icon {
+    font-size: 24px;
+    color: var(--color-primary);
+    flex-shrink: 0;
+  }
+
+  .security-item-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .security-item-name {
+    display: block;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .security-item-meta {
+    display: block;
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  .security-item-remove {
+    display: inline-flex;
+    background: none;
+    border: none;
+    color: var(--color-text-tertiary);
+    cursor: pointer;
+    padding: var(--space-1);
+    border-radius: var(--radius-full);
+  }
+
+  .security-item-remove .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  .security-item-remove:hover {
+    color: var(--color-danger);
+    background: var(--color-danger-soft);
+  }
+
   /* ---- Recovery code ---- */
   .recovery-reveal {
-    background: var(--color-warning-surface, rgba(217, 119, 6, 0.08));
-    border: 1px solid var(--color-warning, #d97706);
+    background: var(--color-warning-soft);
+    border: 1px solid var(--color-warning);
     border-radius: var(--radius-lg);
     padding: var(--space-4);
   }
@@ -838,11 +883,11 @@
     font-size: var(--text-sm);
     color: var(--color-text);
     line-height: 1.5;
-    margin: 0 0 var(--space-3) 0;
+    margin: 0 0 var(--space-3);
   }
 
   .recovery-code-display {
-    background: var(--color-surface-raised, #fff);
+    background: var(--color-surface-raised);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: var(--space-4);
@@ -851,155 +896,19 @@
   }
 
   .recovery-code-display code {
-    font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: 1.35rem;
+    font-family: var(--font-mono);
+    font-size: var(--text-xl);
     font-weight: 700;
     letter-spacing: 0.08em;
     color: var(--color-text);
     word-break: break-all;
   }
 
-  .recovery-state {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    margin-block-end: var(--space-4);
-    font-size: var(--text-sm);
-    color: var(--color-text);
-  }
-
-  .recovery-state-meta {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
-  }
-
-  /* Actionable warning callout: shown when 2FA is on but no recovery
-     code is set (in both the 2FA section as a nudge and the recovery
-     section). Draws the eye to a step the user can act on right now. */
-  .recovery-warn {
-    display: flex;
-    gap: var(--space-2);
-    align-items: flex-start;
-    padding: var(--space-3);
-    margin-block-end: var(--space-4);
-    border-radius: var(--radius-md);
-    background: var(--color-warning-soft, rgba(234, 179, 8, 0.12));
-    border: 1px solid var(--color-warning, #eab308);
-    font-size: var(--text-sm);
-    color: var(--color-text);
-    line-height: 1.5;
-  }
-
-  .recovery-warn .material-symbols-outlined {
-    font-size: 20px;
-    color: var(--color-warning, #eab308);
-    flex-shrink: 0;
-  }
-
-  .recovery-warn a {
-    color: var(--color-primary);
-    font-weight: 600;
-  }
-
-  /* Clear the sticky settings header when the 2FA nudge anchors here. */
-  #recovery-code {
-    scroll-margin-block-start: var(--space-8);
-  }
-
-  .recovery-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .recovery-form label {
-    font-weight: 600;
-    font-size: var(--text-sm);
-  }
-
-  .recovery-form input {
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface);
-    color: var(--color-text);
-    font: inherit;
-  }
-
-  .recovery-actions {
-    display: flex;
-    gap: var(--space-2);
-    flex-wrap: wrap;
-  }
-
-  .recovery-error {
-    color: var(--color-danger, #b00);
-    font-size: var(--text-sm);
-  }
-
-  /* ---- External link warning ---- */
-  .ext-link-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-3) 0;
-  }
-
-  .ext-link-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    flex: 1;
-  }
-
-  .ext-link-label {
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .ext-link-meta {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
-    line-height: 1.5;
-  }
-
-  .ext-link-toggle {
-    flex-shrink: 0;
-    width: 44px;
-    height: 24px;
-    border-radius: 9999px;
-    border: none;
-    background: var(--color-border);
-    position: relative;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-  }
-
-  .ext-link-toggle.on {
-    background: var(--color-success, #16a34a);
-  }
-
-  .ext-link-knob {
-    position: absolute;
-    top: 2px;
-    inset-inline-start: 2px;
-    width: 20px;
-    height: 20px;
-    background: white;
-    border-radius: 50%;
-    transition: inset-inline-start 0.2s ease;
-  }
-
-  .ext-link-toggle.on .ext-link-knob {
-    inset-inline-start: 22px;
-  }
-
+  /* ---- External links ---- */
   .pre-trusted-list {
     list-style: none;
     padding: var(--space-3);
-    margin: var(--space-2) 0 0 0;
+    margin: 0;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
@@ -1010,14 +919,9 @@
     overflow-y: auto;
   }
 
-  .pre-trusted-item code {
-    font-size: 0.8rem;
+  .pre-trusted-list code {
+    font-size: var(--text-xs);
     color: var(--color-text-secondary);
-  }
-
-  /* ---- Page layout ---- */
-  .stitch-settings {
-    max-width: 720px;
   }
 
   .confirm-message {
@@ -1032,341 +936,4 @@
     justify-content: flex-end;
     gap: var(--space-2);
   }
-
-  .stitch-section {
-    margin-block-end: 24px;
-  }
-
-  .stitch-section-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-block-end: 16px;
-  }
-
-  .stitch-section-icon {
-    color: var(--color-primary);
-    display: flex;
-    align-items: center;
-  }
-
-  .stitch-section-title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .stitch-section-content {
-    background: var(--color-surface-container-low);
-    border-radius: 16px;
-    overflow: hidden;
-  }
-
-  .stitch-form {
-    padding: 24px 32px 32px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .stitch-description {
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-  }
-
-  /* ---- Fields ---- */
-  .stitch-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .stitch-label {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-text-secondary);
-    margin-inline-start: 4px;
-  }
-
-  .stitch-input {
-    display: block;
-    width: 100%;
-    padding: 12px 16px;
-    background: var(--color-surface-container-high);
-    border: none;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    color: var(--color-text);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .stitch-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-input:focus {
-    outline: none;
-    background: var(--color-surface-container-lowest);
-    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
-  }
-
-  /* ---- Status row (2FA enabled) ---- */
-  .stitch-status-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 12px 0;
-    border-block-end: 1px solid var(--scrim-soft);
-  }
-
-  .stitch-status-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .stitch-status-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-text);
-  }
-
-  .stitch-status-value {
-    font-size: 0.75rem;
-    font-weight: 600;
-  }
-
-  .stitch-status-enabled {
-    color: var(--color-success);
-  }
-
-  /* ---- QR & backup codes ---- */
-  .stitch-qr {
-    display: flex;
-    justify-content: center;
-    padding: 16px;
-  }
-
-  .stitch-qr-img {
-    width: 200px;
-    height: 200px;
-    border-radius: 10px;
-    border: 1px solid var(--scrim-soft);
-  }
-
-  .stitch-secret {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .stitch-secret-code {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    padding: 10px 14px;
-    background: var(--color-surface-container-high);
-    border-radius: 10px;
-    word-break: break-all;
-    user-select: all;
-  }
-
-  .stitch-backup {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .stitch-codes-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
-  .stitch-backup-code {
-    font-family: var(--font-mono);
-    font-size: 0.875rem;
-    padding: 6px 10px;
-    background: var(--color-surface-container-high);
-    border-radius: 8px;
-    text-align: center;
-    user-select: all;
-  }
-
-  /* ---- Error / Success ---- */
-  .stitch-error {
-    padding: 12px 16px;
-    background: var(--color-danger-soft);
-    color: var(--color-danger);
-    border-radius: 10px;
-    font-size: 0.875rem;
-  }
-
-  .stitch-success {
-    padding: 12px 16px;
-    background: var(--color-success-soft);
-    color: var(--color-success);
-    border-radius: 10px;
-    font-size: 0.875rem;
-  }
-
-  /* ---- Buttons ---- */
-  .stitch-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding-block-start: 8px;
-  }
-
-  .stitch-btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 28px;
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.2);
-    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-  }
-
-  .stitch-btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb), 0.3);
-  }
-
-  .stitch-btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .stitch-btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-ghost {
-    padding: 10px 24px;
-    background: transparent;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: color 0.15s ease, background-color 0.15s ease;
-  }
-
-  .stitch-btn-ghost:hover {
-    color: var(--color-text);
-    background: var(--scrim-tint);
-  }
-
-  .stitch-btn-outline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: transparent;
-    border: 1.5px solid var(--color-primary);
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-primary);
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-  }
-
-  .stitch-btn-outline:hover:not(:disabled) {
-    background: rgba(var(--color-primary-rgb), 0.06);
-  }
-
-  .stitch-btn-outline:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-danger {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: var(--color-danger);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.15s ease, transform 0.1s ease;
-  }
-
-  .stitch-btn-danger:hover:not(:disabled) {
-    background: #b91c1c;
-  }
-
-  .stitch-btn-danger:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-sm {
-    padding: 6px 16px;
-    font-size: 0.75rem;
-  }
-
-  /* ---- Responsive ---- */
-  @media (max-width: 640px) {
-    .stitch-form {
-      padding: 20px;
-    }
-
-    .stitch-status-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 12px;
-    }
-  }
-
-  /* Security Keys */
-  .keys-list { display: flex; flex-direction: column; gap: 8px; margin-block-end: 16px; }
-
-  .key-item {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px; background: var(--color-surface); border-radius: 10px;
-  }
-
-  .key-info { display: flex; align-items: center; gap: 12px; }
-  .key-icon { font-size: 24px; color: var(--color-primary); }
-  .key-name { display: block; font-size: 0.875rem; font-weight: 600; }
-  .key-meta { display: block; font-size: 0.7rem; color: var(--color-text-tertiary); }
-
-  .key-remove {
-    background: none; border: none; color: var(--color-text-tertiary); cursor: pointer;
-    padding: 4px; border-radius: 50%;
-  }
-  .key-remove:hover { color: var(--color-danger); background: var(--color-danger-soft); }
-
-  .key-add-form { display: flex; gap: 8px; }
-
-  .key-name-input {
-    flex: 1; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 10px;
-    font-size: 0.875rem; background: var(--color-surface); color: var(--color-text);
-  }
-  .key-name-input:focus { outline: none; border-color: var(--color-primary); }
-
-  .key-add-btn {
-    display: flex; align-items: center; gap: 6px;
-    padding: 10px 18px; background: var(--color-primary); color: white; border: none;
-    border-radius: 10px; font-size: 0.875rem; font-weight: 600; cursor: pointer; white-space: nowrap;
-  }
-  .key-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .key-add-btn:hover:not(:disabled) { opacity: 0.9; }
 </style>
