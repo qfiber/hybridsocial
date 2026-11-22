@@ -63,6 +63,16 @@
 		// Initialize i18n (auto-detects browser locale)
 		await initializeI18n();
 
+		// Tell the service worker the interface language, so push notifications
+		// are worded in it (sw.js keeps the last one it was told).
+		if (!dev && 'serviceWorker' in navigator) {
+			locale.subscribe((code) => {
+				navigator.serviceWorker.ready
+					.then((reg) => reg.active?.postMessage({ type: 'hs-locale', locale: code }))
+					.catch(() => {});
+			});
+		}
+
 		// Initialize auth (restore session from storage)
 		await initAuth();
 
