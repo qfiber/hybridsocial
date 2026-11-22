@@ -9,7 +9,7 @@
   import type { SettingSchemaEntry, SettingsSchemaGroup, SettingValue } from '$lib/api/types.js';
   import { settingsHref, type SettingsGroupId } from '$lib/admin-settings.js';
   import AdminPage from '$lib/components/admin/AdminPage.svelte';
-  import SettingsSection from '$lib/components/admin/SettingsSection.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
   import StatusPill from '$lib/components/admin/StatusPill.svelte';
 
   let groups = $state.raw<SettingsSchemaGroup[]>([]);

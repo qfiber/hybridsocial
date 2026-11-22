@@ -5,7 +5,7 @@
   import { t } from '$lib/stores/i18n.js';
   import type { ReplacementPair, SettingSchemaEntry, SettingValue } from '$lib/api/types.js';
   import Toggle from '$lib/components/ui/Toggle.svelte';
-  import SettingRow from './SettingRow.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import StatusPill from './StatusPill.svelte';
 
   let {

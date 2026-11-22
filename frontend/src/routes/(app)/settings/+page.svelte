@@ -1,193 +1,184 @@
 <script lang="ts">
   import { currentUser } from '$lib/stores/auth.js';
-  import { settingsGroups } from '$lib/settings-nav.js';
+  import { filterSettings } from '$lib/settings-nav.js';
   import type { Identity } from '$lib/api/types.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
-  import { instanceName } from '$lib/stores/instance.js';
+  import SettingsNav from '$lib/components/settings/SettingsNav.svelte';
+  import { t } from '$lib/stores/i18n.js';
 
   let user = $derived($currentUser as Identity | null);
+  let query = $state('');
+  let groups = $derived(filterSettings(query, (k) => $t(k)));
 </script>
 
-<svelte:head>
-  <title>Settings - {$instanceName}</title>
-</svelte:head>
-
 <div class="settings-index">
+  <h1 class="index-title">{$t('nav.settings')}</h1>
+
   {#if user}
-    <a href="/@{user.handle}" class="identity-card">
-      <Avatar src={user.avatar_url} name={user.display_name || user.handle} size="lg" />
-      <div class="identity-text">
-        <span class="identity-name">{user.display_name || user.handle}</span>
-        <span class="identity-handle">@{user.acct || user.handle}</span>
-      </div>
-      <span class="identity-view">View profile
-        <svg class="rtl-mirror" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+    <a href="/@{user.handle}" class="hero">
+      <span class="hero-banner" style:background-image={user.header_url ? `url("${user.header_url}")` : undefined}></span>
+      <span class="hero-body">
+        <span class="hero-avatar"><Avatar src={user.avatar_url} name={user.display_name || user.handle} size="lg" /></span>
+        <span class="hero-text">
+          <span class="hero-name">{user.display_name || user.handle}</span>
+          <span class="hero-handle" dir="ltr">@{user.acct || user.handle}</span>
+        </span>
+        <span class="hero-view">
+          {$t('settings.view_profile')}
+          <svg class="rtl-mirror" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+        </span>
       </span>
     </a>
   {/if}
 
-  {#each settingsGroups as group (group.title)}
-    <section class="settings-group">
-      <h2 class="group-title">{group.title}</h2>
-      <div class="card-grid">
-        {#each group.items as item (item.href)}
-          <a href={item.href} class="settings-card">
-            <span class="card-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d={item.icon} />
-              </svg>
-            </span>
-            <span class="card-text">
-              <span class="card-label">{item.label}</span>
-              <span class="card-desc">{item.description}</span>
-            </span>
-            <svg class="rtl-mirror card-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
-          </a>
-        {/each}
-      </div>
-    </section>
-  {/each}
+  <label class="index-search">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+    <input type="search" bind:value={query} placeholder={$t('settings.search_placeholder')} aria-label={$t('settings.search_placeholder')} />
+  </label>
+
+  {#if groups.length}
+    <SettingsNav {groups} variant="detailed" />
+  {:else}
+    <p class="search-empty">{$t('settings.search_empty', { query })}</p>
+  {/if}
 </div>
 
 <style>
   .settings-index {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-5);
   }
 
-  .identity-card {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    background: var(--color-surface-raised);
+  .index-title {
+    font-family: var(--font-headline, inherit);
+    font-size: var(--text-2xl);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    color: var(--color-text);
+  }
+
+  /* Profile hero: the user's own header image behind their identity. */
+  .hero {
+    position: relative;
+    display: block;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
-    text-decoration: none;
+    overflow: hidden;
+    background: var(--color-surface-raised);
     color: var(--color-text);
+    text-decoration: none;
     box-shadow: var(--shadow-sm);
-    transition: background var(--transition-fast);
+    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
   }
 
-  .identity-card:hover {
-    background: var(--color-surface-container-low);
+  .hero:hover {
+    border-color: var(--color-primary);
     text-decoration: none;
   }
 
-  .identity-card:focus-visible {
+  .hero:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
   }
 
-  .identity-text {
+  .hero-banner {
+    display: block;
+    height: 96px;
+    background-color: var(--color-primary-soft);
+    background-image: linear-gradient(135deg, var(--color-primary-soft), var(--color-surface-container-low));
+    background-size: cover;
+    background-position: center;
+  }
+
+  .hero-body {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-3);
+    padding: 0 var(--space-4) var(--space-4);
+    margin-block-start: -28px;
+  }
+
+  .hero-avatar {
+    flex-shrink: 0;
+    border-radius: 999px;
+    box-shadow: 0 0 0 4px var(--color-surface-raised);
+    line-height: 0;
+  }
+
+  .hero-text {
     display: flex;
     flex-direction: column;
     min-width: 0;
     flex: 1;
+    padding-block-end: 2px;
   }
 
-  .identity-name {
-    font-weight: 700;
-    font-size: var(--text-base);
+  .hero-name {
+    font-weight: 800;
+    font-size: var(--text-lg);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .identity-handle {
+  .hero-handle {
     font-size: var(--text-sm);
     color: var(--color-text-secondary);
+    text-align: start;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .identity-view {
+  .hero-view {
     display: inline-flex;
     align-items: center;
     gap: 2px;
     flex-shrink: 0;
+    padding-block-end: 4px;
     font-size: var(--text-sm);
     font-weight: 600;
     color: var(--color-primary);
   }
 
-  .settings-group {
+  .index-search {
     display: flex;
-    flex-direction: column;
+    align-items: center;
     gap: var(--space-2);
-  }
-
-  .group-title {
-    font-size: var(--text-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--color-text-tertiary);
-    padding-inline: var(--space-1);
-  }
-
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: var(--space-3);
-  }
-
-  .settings-card {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-4);
-    background: var(--color-surface-raised);
+    padding: 0 var(--space-4);
+    min-height: 46px;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    text-decoration: none;
-    color: var(--color-text);
-    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
-  }
-
-  .settings-card:hover {
-    background: var(--color-surface-container-low);
-    border-color: var(--color-primary);
-    text-decoration: none;
-  }
-
-  .settings-card:focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-  }
-
-  .card-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    border-radius: var(--radius-md);
-    background: var(--color-primary-soft);
-    color: var(--color-primary);
-  }
-
-  .card-text {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    flex: 1;
-    gap: 1px;
-  }
-
-  .card-label {
-    font-weight: 600;
-    font-size: var(--text-sm);
-  }
-
-  .card-desc {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
-    line-height: 1.35;
-  }
-
-  .card-chevron {
-    flex-shrink: 0;
+    border-radius: 999px;
+    background: var(--color-surface-raised);
     color: var(--color-text-tertiary);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .index-search:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  .index-search input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font: inherit;
+    font-size: var(--text-base);
+    color: var(--color-text);
+  }
+
+  .search-empty {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+  }
+
+  @media (max-width: 480px) {
+    .hero-view {
+      display: none;
+    }
   }
 </style>
