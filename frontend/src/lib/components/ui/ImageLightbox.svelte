@@ -114,6 +114,23 @@
     !!postId && !!current?.id && (currentReplies.length > 0 || panelOpen),
   );
 
+  // Phones: the panel is a half-height sheet under the image showing the
+  // latest few comments; "Show more comments" expands it to read them all,
+  // and it folds back to half height (on the button, Escape, or another
+  // image). Wider screens always list every comment beside the image.
+  const PREVIEW_COUNT = 3;
+  let compact = $state(false);
+  let expanded = $state(false);
+  let visibleReplies = $derived(
+    compact && !expanded ? currentReplies.slice(-PREVIEW_COUNT) : currentReplies,
+  );
+  let hiddenCount = $derived(currentReplies.length - visibleReplies.length);
+
+  $effect(() => {
+    void current?.id;
+    expanded = false;
+  });
+
   // --- Writing a comment on this image ---------------------------------------
   let draft = $state('');
   let sending = $state(false);
@@ -358,7 +375,8 @@
 
   function handleKey(e: KeyboardEvent) {
     if (e.key === 'Escape') {
-      if (panelOpen && currentReplies.length === 0) panelOpen = false;
+      if (expanded) expanded = false;
+      else if (panelOpen && currentReplies.length === 0) panelOpen = false;
       else close();
     }
     // The prev/next buttons sit on the start/end edges, so in an RTL locale
@@ -378,10 +396,15 @@
     // On <html>, not <body> — a body lock doesn't reach the viewport here
     // (see utils/scroll-lock.ts).
     const unlockScroll = lockScroll();
+    const narrow = window.matchMedia('(max-width: 768px)');
+    const syncCompact = () => (compact = narrow.matches);
+    syncCompact();
+    narrow.addEventListener('change', syncCompact);
     window.addEventListener('keydown', handleKey);
     window.addEventListener('new-post', handleNewReply);
     return () => {
       unlockScroll();
+      narrow.removeEventListener('change', syncCompact);
       window.removeEventListener('keydown', handleKey);
       window.removeEventListener('new-post', handleNewReply);
     };
@@ -534,7 +557,11 @@
   {/if}
 
   {#if showSidebar}
-    <aside class="lightbox-sidebar" aria-label="Replies on this image">
+    <aside
+      class="lightbox-sidebar"
+      class:lightbox-sidebar-expanded={compact && expanded}
+      aria-label={$t('lightbox.comment_on_image')}
+    >
       <header class="lightbox-sidebar-header">
         <svg
           class="sidebar-header-icon"
@@ -555,6 +582,17 @@
             ? $t('lightbox.image_comments', { count: currentReplies.length })
             : $t('lightbox.no_image_comments')}
         </span>
+        {#if compact && expanded}
+          <button
+            type="button"
+            class="lightbox-sidebar-close"
+            onclick={() => (expanded = false)}
+            aria-label={$t('lightbox.collapse_comments')}
+            title={$t('lightbox.collapse_comments')}
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">expand_more</span>
+          </button>
+        {/if}
         <button
           type="button"
           class="lightbox-sidebar-close"
@@ -566,7 +604,15 @@
         </button>
       </header>
       <ul class="lightbox-reply-list">
-        {#each currentReplies as reply (reply.id)}
+        {#if hiddenCount > 0}
+          <li class="lightbox-more-wrap">
+            <button type="button" class="lightbox-more" onclick={() => (expanded = true)}>
+              <span class="material-symbols-outlined" aria-hidden="true">expand_less</span>
+              {$t('lightbox.more_comments', { count: hiddenCount })}
+            </button>
+          </li>
+        {/if}
+        {#each visibleReplies as reply (reply.id)}
           <li>
             <button
               type="button"
@@ -1157,6 +1203,44 @@
     :global(.lightbox:has(.lightbox-sidebar)) .lightbox-counter {
       bottom: calc(46dvh + 12px);
     }
+
+    /* Expanded to read every comment: the sheet rises to just under the
+       viewer's toolbar; the image waits behind it until it folds back. */
+    .lightbox-sidebar.lightbox-sidebar-expanded {
+      height: calc(100vh - 68px);
+      height: calc(100dvh - 68px);
+      transition: height 0.22s ease;
+    }
+  }
+
+  .lightbox-more-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 4px 16px 8px;
+  }
+
+  .lightbox-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 6px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f3f3f5;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .lightbox-more:hover {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .lightbox-more :global(.material-symbols-outlined) {
+    font-size: 18px;
   }
 
   @keyframes lightbox-sidebar-up {
