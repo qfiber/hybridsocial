@@ -17,7 +17,7 @@
   } from '$lib/api/types.js';
   import { groupFromSlug, relatedPages } from '$lib/admin-settings.js';
   import AdminPage from '$lib/components/admin/AdminPage.svelte';
-  import SettingsSection from '$lib/components/admin/SettingsSection.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
   import SettingField from '$lib/components/admin/SettingField.svelte';
   import SaveBar from '$lib/components/admin/SaveBar.svelte';
 
