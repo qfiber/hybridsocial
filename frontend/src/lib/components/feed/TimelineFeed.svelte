@@ -49,7 +49,7 @@
 </script>
 
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import FeedList from './FeedList.svelte';
   import { createEntityFeed } from '$lib/feed/entity-feed.svelte.js';
   import FeedTabs from './FeedTabs.svelte';
@@ -68,8 +68,11 @@
     filterContext = 'home',
     cache = null,
     bannerOffset = 0,
+    initialTabId = undefined,
   }: {
     tabs: TimelineTab[];
+    /** Tab to open on when there is no cached state to restore. */
+    initialTabId?: string;
     /** Height of a sticky tab bar the page renders itself (Explore), so the
      *  "new posts" pill clears it. Ignored when this feed draws its own tabs. */
     bannerOffset?: number;
@@ -80,7 +83,10 @@
   // Hydrate synchronously from the cache (if any) so the DOM keeps its
   // heights for scroll restoration and we can skip the initial fetch.
   const cached = cache?.read() ?? null;
-  let activeId = $state<string>(cached?.tabId ?? tabs[0]?.id);
+  // The starting tab is read once; later tab changes are the user's.
+  let activeId = $state<string>(
+    untrack(() => cached?.tabId ?? (tabs.some((tb) => tb.id === initialTabId) ? initialTabId! : tabs[0]?.id)),
+  );
 
   let activeTab = $derived(tabs.find((t) => t.id === activeId) ?? tabs[0]);
 

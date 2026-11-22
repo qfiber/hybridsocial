@@ -1075,7 +1075,7 @@
   "settings.nav_account": "الحساب",
   "settings.nav_account_desc": "البريد واللغة والتوثيق وحذف الحساب",
   "settings.nav_appearance": "المظهر",
-  "settings.nav_appearance_desc": "فاتح أو داكن أو حسب النظام",
+  "settings.nav_appearance_desc": "السمة والخلاصة الرئيسية والتشغيل التلقائي",
   "settings.nav_notifications": "الإشعارات",
   "settings.nav_notifications_desc": "ما يصلك وأين يصلك",
   "settings.nav_privacy": "الخصوصية",
@@ -1101,5 +1101,14 @@
   "settings.search_placeholder": "ابحث في الإعدادات",
   "settings.search_empty": "لا إعدادات تطابق «{query}»",
   "settings.view_profile": "عرض الملف الشخصي",
-  "settings.nav_label": "أقسام الإعدادات"
+  "settings.nav_label": "أقسام الإعدادات",
+  "settings.feed_media_title": "الخلاصة والوسائط",
+  "settings.feed_media_desc": "كيف تُفتح خلاصتك الرئيسية وكيف تعمل المقاطع.",
+  "settings.home_tab_label": "تُفتح الرئيسية على",
+  "settings.home_tab_help": "التبويب الذي تراه أولًا عند فتح الرئيسية. يمكنك التبديل بين التبويبات في أي وقت.",
+  "settings.autoplay_label": "تشغيل المقاطع وصور GIF تلقائيًا",
+  "settings.autoplay_help": "تبدأ المقاطع القصيرة وصور GIF في الرسائل بالتشغيل وحدها دون صوت. أوقفه لتوفير البيانات؛ ومفتاح المقاطع القصيرة يغيّر هذا الإعداد أيضًا.",
+  "settings.posting_language_title": "لغة النشر",
+  "settings.posting_language_desc": "اللغة التي تُوسَم بها منشوراتك الجديدة، ليعرف المترجم والخوادم الأخرى لغة ما كتبت.",
+  "settings.posting_language_none": "غير محددة"
 }

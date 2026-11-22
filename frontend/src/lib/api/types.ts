@@ -520,13 +520,12 @@ export interface ApiErrorBody {
 }
 
 export interface UserPreferences {
-  feed_algorithm: 'chronological' | 'algorithmic';
+  /** Which Home tab opens first: Latest, For You or Top. */
+  feed_algorithm: 'chronological' | 'algorithmic' | 'trending';
   compact_mode: boolean;
-  sidebar_position: 'left' | 'right';
   auto_play_media: boolean;
   default_visibility: Post['visibility'];
   default_language: string | null;
-  comment_style: 'threaded' | 'flat';
   /** User's theme choice. `null` = follow the instance (admin) default. */
   theme_mode: 'auto' | 'light' | 'dark' | null;
 }

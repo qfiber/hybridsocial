@@ -7,11 +7,9 @@ const STORAGE_KEY = 'hybridsocial_preferences';
 const defaults: UserPreferences = {
   feed_algorithm: 'chronological',
   compact_mode: false,
-  sidebar_position: 'left',
   auto_play_media: true,
   default_visibility: 'public',
   default_language: null,
-  comment_style: 'threaded',
   theme_mode: null,
 };
 
@@ -67,10 +65,8 @@ export function applyServerPreferences(serverPrefs: Record<string, any>, default
     if (serverPrefs) {
       if (serverPrefs.feed_algorithm) merged.feed_algorithm = serverPrefs.feed_algorithm;
       if (serverPrefs.compact_mode !== undefined) merged.compact_mode = serverPrefs.compact_mode;
-      if (serverPrefs.sidebar_position) merged.sidebar_position = serverPrefs.sidebar_position;
       if (serverPrefs.auto_play_media !== undefined) merged.auto_play_media = serverPrefs.auto_play_media;
       if (serverPrefs.default_language !== undefined) merged.default_language = serverPrefs.default_language;
-      if (serverPrefs.comment_style) merged.comment_style = serverPrefs.comment_style;
       if (serverPrefs.theme_mode !== undefined) merged.theme_mode = serverPrefs.theme_mode;
     }
 
@@ -94,10 +90,8 @@ function syncToServer(partial: Partial<UserPreferences>): void {
         preferences: {
           feed_algorithm: prefs.feed_algorithm,
           compact_mode: prefs.compact_mode,
-          sidebar_position: prefs.sidebar_position,
           auto_play_media: prefs.auto_play_media,
           default_language: prefs.default_language,
-          comment_style: prefs.comment_style,
           theme_mode: prefs.theme_mode,
         },
         ...(partial.default_visibility ? { default_visibility: partial.default_visibility } : {}),

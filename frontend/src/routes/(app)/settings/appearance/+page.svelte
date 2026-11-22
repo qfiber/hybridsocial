@@ -2,6 +2,11 @@
   import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
   import { themeStore, resolvedMode } from '$lib/stores/theme.js';
   import { instanceName } from '$lib/stores/instance.js';
+  import { t } from '$lib/stores/i18n.js';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
+  import Toggle from '$lib/components/ui/Toggle.svelte';
+  import type { UserPreferences } from '$lib/api/types.js';
 
   type Mode = 'auto' | 'light' | 'dark';
 
@@ -32,6 +37,17 @@
       icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
     },
   ];
+
+  // Feed & media: saved on change, like the theme.
+  let autoplay = $state($preferencesStore.auto_play_media);
+  $effect(() => {
+    if (autoplay !== $preferencesStore.auto_play_media) updatePreferences({ auto_play_media: autoplay });
+  });
+
+  function setHomeTab(e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value as UserPreferences['feed_algorithm'];
+    updatePreferences({ feed_algorithm: value });
+  }
 
   function choose(mode: Mode) {
     // Persists to localStorage + (when signed in) the account preferences in
@@ -87,6 +103,19 @@
       Following the instance default (<strong>{adminDefault}</strong>).
     {/if}
   </p>
+
+  <SettingsSection title={$t('settings.feed_media_title')} description={$t('settings.feed_media_desc')}>
+    <SettingRow label={$t('settings.home_tab_label')} help={$t('settings.home_tab_help')} labelFor="home-tab">
+      <select id="home-tab" class="input" value={$preferencesStore.feed_algorithm} onchange={setHomeTab}>
+        <option value="chronological">{$t('home.tab_latest')}</option>
+        <option value="algorithmic">{$t('home.tab_foryou')}</option>
+        <option value="trending">{$t('home.tab_top')}</option>
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.autoplay_label')} help={$t('settings.autoplay_help')} labelFor="autoplay-media">
+      <Toggle id="autoplay-media" bind:checked={autoplay} />
+    </SettingRow>
+  </SettingsSection>
 </div>
 
 <style>
