@@ -20,29 +20,26 @@
   const options: { value: Mode; label: string; desc: string; icon: string }[] = [
     {
       value: 'auto',
-      label: 'System',
-      desc: "Match your device's light or dark setting",
+      label: 'settings.theme_auto',
+      desc: 'settings.theme_auto_desc',
       icon: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 0v18',
     },
     {
       value: 'light',
-      label: 'Light',
-      desc: 'Always use the light theme',
+      label: 'settings.theme_light',
+      desc: 'settings.theme_light_desc',
       icon: 'M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
     },
     {
       value: 'dark',
-      label: 'Dark',
-      desc: 'Always use the dark theme',
+      label: 'settings.theme_dark',
+      desc: 'settings.theme_dark_desc',
       icon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
     },
   ];
 
   // Feed & media: saved on change, like the theme.
   let autoplay = $state($preferencesStore.auto_play_media);
-  $effect(() => {
-    if (autoplay !== $preferencesStore.auto_play_media) updatePreferences({ auto_play_media: autoplay });
-  });
 
   function setHomeTab(e: Event) {
     const value = (e.currentTarget as HTMLSelectElement).value as UserPreferences['feed_algorithm'];
@@ -56,20 +53,9 @@
   }
 </script>
 
-<svelte:head>
-  <title>Appearance - {$instanceName}</title>
-</svelte:head>
-
 <div class="appearance-page">
-  <header class="appearance-head">
-    <h1>Appearance</h1>
-    <p>
-      Choose how {$instanceName} looks. <strong>System</strong> follows your device.
-      Your choice is saved to your account and this device.
-    </p>
-  </header>
-
-  <div class="theme-options" role="radiogroup" aria-label="Theme">
+  <SettingsSection title={$t('settings.theme_title')} description={$t('settings.theme_desc', { instance: $instanceName })}>
+  <div class="theme-options" role="radiogroup" aria-label={$t('settings.theme_title')}>
     {#each options as opt (opt.value)}
       <button
         type="button"
@@ -85,8 +71,8 @@
           </svg>
         </span>
         <span class="theme-option-text">
-          <span class="theme-option-label">{opt.label}</span>
-          <span class="theme-option-desc">{opt.desc}</span>
+          <span class="theme-option-label">{$t(opt.label)}</span>
+          <span class="theme-option-desc">{$t(opt.desc)}</span>
         </span>
         <span class="theme-option-check" aria-hidden="true">
           {#if selected === opt.value}
@@ -98,11 +84,12 @@
   </div>
 
   <p class="appearance-note">
-    Currently showing the <strong>{$resolvedMode}</strong> theme.
+    {$t($resolvedMode === 'dark' ? 'settings.theme_showing_dark' : 'settings.theme_showing_light')}
     {#if $preferencesStore.theme_mode == null}
-      Following the instance default (<strong>{adminDefault}</strong>).
+      {$t('settings.theme_following_default', { mode: $t(`settings.theme_${adminDefault}`) })}
     {/if}
   </p>
+  </SettingsSection>
 
   <SettingsSection title={$t('settings.feed_media_title')} description={$t('settings.feed_media_desc')}>
     <SettingRow label={$t('settings.home_tab_label')} help={$t('settings.home_tab_help')} labelFor="home-tab">
@@ -113,38 +100,24 @@
       </select>
     </SettingRow>
     <SettingRow label={$t('settings.autoplay_label')} help={$t('settings.autoplay_help')} labelFor="autoplay-media">
-      <Toggle id="autoplay-media" bind:checked={autoplay} />
+      <Toggle id="autoplay-media" bind:checked={autoplay} onchange={(v) => updatePreferences({ auto_play_media: v })} />
     </SettingRow>
   </SettingsSection>
 </div>
 
 <style>
   .appearance-page {
-    max-width: var(--feed-max-width);
-    margin: 0 auto;
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
   }
 
-  .appearance-head h1 {
-    font-size: var(--text-xl);
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0 0 var(--space-2);
-  }
-
-  .appearance-head p {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-    margin: 0;
-  }
 
   .theme-options {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
   }
 
   .theme-option {
@@ -210,5 +183,6 @@
     font-size: var(--text-xs);
     color: var(--color-text-tertiary);
     margin: 0;
+    padding: var(--space-3) var(--space-5);
   }
 </style>

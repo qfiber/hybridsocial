@@ -1,434 +1,227 @@
 <script lang="ts">
-  import { get } from 'svelte/store';
+  // Every control saves on its own as soon as it changes; a failure reverts
+  // the control and says so. No page-wide Save button.
   import { onMount } from 'svelte';
-  import { authStore, setUser } from '$lib/stores/auth.js';
-  import { updateAccount, getAccount } from '$lib/api/accounts.js';
+  import { currentUser, setUser } from '$lib/stores/auth.js';
+  import { updateAccount, getAccount, type InvitePolicy } from '$lib/api/accounts.js';
   import { api } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
   import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
+  import { t } from '$lib/stores/i18n.js';
   import Toggle from '$lib/components/ui/Toggle.svelte';
-  import Spinner from '$lib/components/ui/Spinner.svelte';
-  import {
-    isAutoLoadRemoteMedia,
-    setAutoLoadRemoteMedia,
-  } from '$lib/utils/media-preferences.js';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
+  import { isAutoLoadRemoteMedia, setAutoLoadRemoteMedia } from '$lib/utils/media-preferences.js';
 
-  let isLocked: boolean = $state(false);
-  let discoverable: boolean = $state(true);
-  let allowUnfurl: boolean = $state(true);
-  let hideFollowCounts: boolean = $state(false);
-  // Auto-delete period in months as a <select> value; '' = off (#254).
-  let autoDeleteMonths: string = $state('');
+  type DmPolicy = 'everyone' | 'followers' | 'mutual_followers' | 'nobody';
+
+  // Account-level settings, seeded from /auth/me and refreshed below.
+  let isLocked = $state($currentUser?.is_locked ?? false);
+  let discoverable = $state($currentUser?.discoverable ?? true);
+  let allowUnfurl = $state($currentUser?.allow_unfurl ?? true);
+  let hideFollowCounts = $state($currentUser?.hide_follow_counts ?? false);
+  let allowGroupInvites = $state<InvitePolicy>($currentUser?.allow_group_invites ?? 'anyone');
+  let allowPageInvites = $state<InvitePolicy>($currentUser?.allow_page_invites ?? 'anyone');
+  let autoDeleteMonths = $state(String($currentUser?.auto_delete_after_months ?? ''));
+
+  let dmPolicy = $state<DmPolicy>('everyone');
+  let groupDms = $state(false);
+  let dmLoaded = $state(false);
+
+  let autoLoadRemote = $state(true);
+
   const autoDeleteOptions = Array.from({ length: 12 }, (_, i) => i + 1);
-  let dmPreference: string = $state('everyone');
-  let groupDmOptIn: boolean = $state(false);
-  type InvitePref = 'anyone' | 'only_follows' | 'nobody';
-  let allowGroupInvites: InvitePref = $state('anyone');
-  let allowPageInvites: InvitePref = $state('anyone');
-  let loaded = $state(false);
-  let defaultVisibility = $state<string>('public');
-  let autoLoadRemoteMedia = $state(true);
-  let saving = $state(false);
-
-  // Media preference is local-only — flushes to localStorage on
-  // every change, takes effect immediately on every visible
-  // <LazyMedia> via the autoLoadRemoteMedia store.
-  $effect(() => {
-    if (loaded) setAutoLoadRemoteMedia(autoLoadRemoteMedia);
-  });
+  const invitePolicies: InvitePolicy[] = ['anyone', 'only_follows', 'nobody'];
 
   onMount(async () => {
-    const state = get(authStore);
-    if (state.user) {
-      isLocked = state.user.is_locked ?? false;
-      discoverable = (state.user as any).discoverable ?? true;
-      allowUnfurl = (state.user as any).allow_unfurl ?? true;
-      hideFollowCounts = (state.user as any).hide_follow_counts ?? false;
-      autoDeleteMonths = String(state.user.auto_delete_after_months ?? '');
-      allowGroupInvites = ((state.user as any).allow_group_invites ?? 'anyone') as InvitePref;
-      allowPageInvites = ((state.user as any).allow_page_invites ?? 'anyone') as InvitePref;
-    }
+    autoLoadRemote = isAutoLoadRemoteMedia();
 
-    // Load default visibility from local preferences
-    const prefs = get(preferencesStore);
-    defaultVisibility = prefs.default_visibility || 'public';
-
-    // Media auto-load preference (localStorage)
-    autoLoadRemoteMedia = isAutoLoadRemoteMedia();
-
-    // Refresh the account-level flags from the server so a stale cached
-    // snapshot doesn't misrepresent (or silently re-save) the wrong
-    // values. `also_known_as` / invite prefs aren't serialised here, so
-    // those stay as the cached values.
-    const uid = state.user?.id;
-    if (uid) {
+    const id = $currentUser?.id;
+    if (id) {
       try {
-        const fresh = await getAccount(uid);
+        // The cached session can be stale; the account endpoint is current.
+        const fresh = await getAccount(id);
         isLocked = fresh.is_locked ?? isLocked;
-        discoverable = (fresh as any).discoverable ?? discoverable;
-        allowUnfurl = (fresh as any).allow_unfurl ?? allowUnfurl;
+        discoverable = fresh.discoverable ?? discoverable;
+        allowUnfurl = fresh.allow_unfurl ?? allowUnfurl;
         hideFollowCounts = fresh.hide_follow_counts ?? hideFollowCounts;
         if (fresh.auto_delete_after_months !== undefined) {
           autoDeleteMonths = String(fresh.auto_delete_after_months ?? '');
         }
       } catch {
-        // Keep cached values.
+        // Keep the session values.
       }
     }
 
     try {
-      const dmPrefs = await api.get<any>('/api/v1/dm_preferences');
-      dmPreference = dmPrefs.allow_dms_from || 'everyone';
-      groupDmOptIn = dmPrefs.allow_group_dms ?? false;
+      const prefs = await api.get<{ allow_dms_from: DmPolicy; allow_group_dms: boolean }>('/api/v1/dm_preferences');
+      dmPolicy = prefs.allow_dms_from || 'everyone';
+      groupDms = prefs.allow_group_dms ?? false;
+      dmLoaded = true;
     } catch {
-      // Fall back to defaults, but tell the user we couldn't load their
-      // saved message settings so a failed fetch isn't mistaken for
-      // "everyone can DM me".
-      addToast('Could not load your message settings', 'error');
+      // Don't show "Everyone" as if it were their choice.
+      addToast($t('settings.privacy_dm_load_failed'), 'error');
     }
-    loaded = true;
   });
 
-  async function handleSave() {
-    if (saving) return;
-    saving = true;
+  /** Save one account field; on failure put the old value back. */
+  async function saveAccount<K extends keyof Parameters<typeof updateAccount>[0]>(
+    field: K,
+    value: Parameters<typeof updateAccount>[0][K],
+    revert: () => void,
+  ) {
     try {
-      const updated = await updateAccount({
-        is_locked: isLocked,
-        discoverable,
-        allow_unfurl: allowUnfurl,
-        hide_follow_counts: hideFollowCounts,
-        allow_group_invites: allowGroupInvites,
-        allow_page_invites: allowPageInvites,
-        auto_delete_after_months: autoDeleteMonths ? Number(autoDeleteMonths) : null,
-      } as any);
-      setUser(updated);
-
-      await api.patch('/api/v1/dm_preferences', {
-        allow_dms_from: dmPreference,
-        allow_group_dms: groupDmOptIn,
-      });
-
-      // Save default visibility (syncs to server automatically)
-      updatePreferences({ default_visibility: defaultVisibility as any });
-
-      addToast('Privacy settings saved', 'success');
-    } catch (e) {
-      addToast(e instanceof Error ? e.message : 'Failed to save privacy settings', 'error');
-    } finally {
-      saving = false;
+      await updateAccount({ [field]: value });
+      if ($currentUser) setUser({ ...$currentUser, [field]: value });
+    } catch {
+      revert();
+      addToast($t('settings.save_failed'), 'error');
     }
+  }
+
+  async function saveDm(patch: { allow_dms_from?: DmPolicy; allow_group_dms?: boolean }, revert: () => void) {
+    try {
+      await api.patch('/api/v1/dm_preferences', patch);
+    } catch {
+      revert();
+      addToast($t('settings.save_failed'), 'error');
+    }
+  }
+
+  // Toggles bind locally; these react to a change made by the user.
+  function onToggle(field: 'is_locked' | 'discoverable' | 'allow_unfurl' | 'hide_follow_counts', value: boolean) {
+    saveAccount(field, value, () => {
+      if (field === 'is_locked') isLocked = !value;
+      else if (field === 'discoverable') discoverable = !value;
+      else if (field === 'allow_unfurl') allowUnfurl = !value;
+      else hideFollowCounts = !value;
+    });
+  }
+
+  function onInvite(field: 'allow_group_invites' | 'allow_page_invites', e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value as InvitePolicy;
+    const prev = field === 'allow_group_invites' ? allowGroupInvites : allowPageInvites;
+    if (field === 'allow_group_invites') allowGroupInvites = value;
+    else allowPageInvites = value;
+    saveAccount(field, value, () => {
+      if (field === 'allow_group_invites') allowGroupInvites = prev;
+      else allowPageInvites = prev;
+    });
+  }
+
+  function onAutoDelete(e: Event) {
+    const prev = autoDeleteMonths;
+    autoDeleteMonths = (e.currentTarget as HTMLSelectElement).value;
+    saveAccount('auto_delete_after_months', autoDeleteMonths ? Number(autoDeleteMonths) : null, () => (autoDeleteMonths = prev));
+  }
+
+  function onDmPolicy(e: Event) {
+    const prev = dmPolicy;
+    dmPolicy = (e.currentTarget as HTMLSelectElement).value as DmPolicy;
+    saveDm({ allow_dms_from: dmPolicy }, () => (dmPolicy = prev));
+  }
+
+  function onGroupDms(value: boolean) {
+    saveDm({ allow_group_dms: value }, () => (groupDms = !value));
+  }
+
+  function onVisibility(e: Event) {
+    updatePreferences({ default_visibility: (e.currentTarget as HTMLSelectElement).value as 'public' });
   }
 </script>
 
-<div class="settings-section">
-  <h2 class="section-title">Privacy</h2>
+<div class="privacy-page">
+  <SettingsSection title={$t('settings.privacy_profile_title')} description={$t('settings.privacy_profile_desc')}>
+    <SettingRow label={$t('settings.privacy_locked')} help={$t('settings.privacy_locked_help')} labelFor="p-locked">
+      <Toggle id="p-locked" bind:checked={isLocked} onchange={(v) => onToggle('is_locked', v)} />
+    </SettingRow>
+    <SettingRow label={$t('settings.privacy_discoverable')} help={$t('settings.privacy_discoverable_help')} labelFor="p-discoverable">
+      <Toggle id="p-discoverable" bind:checked={discoverable} onchange={(v) => onToggle('discoverable', v)} />
+    </SettingRow>
+    <SettingRow label={$t('settings.privacy_unfurl')} help={$t('settings.privacy_unfurl_help')} labelFor="p-unfurl">
+      <Toggle id="p-unfurl" bind:checked={allowUnfurl} onchange={(v) => onToggle('allow_unfurl', v)} />
+    </SettingRow>
+    <SettingRow label={$t('settings.privacy_hide_counts')} help={$t('settings.privacy_hide_counts_help')} labelFor="p-counts">
+      <Toggle id="p-counts" bind:checked={hideFollowCounts} onchange={(v) => onToggle('hide_follow_counts', v)} />
+    </SettingRow>
+  </SettingsSection>
 
-  <form class="settings-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Lock account</span>
-        <span class="setting-description">
-          Manually approve follow requests. Your profile and posts can't be viewed by
-          people who aren't logged in, or found through search engines.
-        </span>
-      </div>
-      <Toggle bind:checked={isLocked} name="locked" />
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Group invites</span>
-        <span class="setting-description">
-          Who can invite you into a group. "Only people I follow" treats
-          the existing follow graph as your allow-list. "Nobody" rejects
-          invites at the database level — no notification, no pending
-          row, just a polite 403 to the inviter.
-        </span>
-      </div>
-      <select class="setting-select" bind:value={allowGroupInvites}>
-        <option value="anyone">Anyone</option>
-        <option value="only_follows">Only people I follow</option>
-        <option value="nobody">Nobody</option>
+  <SettingsSection title={$t('settings.privacy_posts_title')} description={$t('settings.privacy_posts_desc')}>
+    <SettingRow label={$t('settings.privacy_default_visibility')} help={$t('settings.privacy_default_visibility_help')} labelFor="p-visibility">
+      <select id="p-visibility" class="input" value={$preferencesStore.default_visibility} onchange={onVisibility}>
+        <option value="public">{$t('settings.visibility_public')}</option>
+        <option value="followers">{$t('settings.visibility_followers')}</option>
+        <option value="direct">{$t('settings.visibility_direct')}</option>
       </select>
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Page manager invites</span>
-        <span class="setting-description">
-          Who can invite you to co-manage an organization page. Same
-          three-way policy as group invites.
-        </span>
-      </div>
-      <select class="setting-select" bind:value={allowPageInvites}>
-        <option value="anyone">Anyone</option>
-        <option value="only_follows">Only people I follow</option>
-        <option value="nobody">Nobody</option>
-      </select>
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Show me in the directory and search engines</span>
-        <span class="setting-description">
-          Appear in the New Members widget and the <a href="/directory">directory</a>
-          when you're a recent signup, and let search engines index your profile and
-          public posts. When off, your profile page and public posts can still be
-          viewed without logging in, but aren't promoted or indexed.
-        </span>
-      </div>
-      <Toggle bind:checked={discoverable} name="discoverable" />
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Hide follower & following counts</span>
-        <span class="setting-description">
-          When on, your follower / following totals are hidden from
-          everyone except you. The lists themselves stay accessible
-          to people you've chosen to share them with — this just
-          removes the headline numbers from your profile.
-        </span>
-      </div>
-      <Toggle bind:checked={hideFollowCounts} name="hide-follow-counts" />
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Allow link previews of my profile</span>
-        <span class="setting-description">
-          When someone shares <code>/@{'{'}your-handle{'}'}</code> on WhatsApp,
-          Telegram, Facebook, Discord, etc., the link can unfurl into a card
-          with your display name, avatar, and bio. Turn this off and those
-          platforms only see a generic placeholder — the link still works,
-          but your profile details aren't exposed to external services.
-        </span>
-      </div>
-      <Toggle bind:checked={allowUnfurl} name="allow-unfurl" />
-    </div>
-
-    <div class="setting-divider"></div>
-
-    <div class="encryption-notice">
-      <div class="encryption-notice-title">
-        <span class="material-symbols-outlined encryption-notice-icon">lock</span>
-        <span>Direct message encryption</span>
-      </div>
-      <p>
-        <strong>Local DMs are encrypted at rest</strong> — stored as ciphertext
-        in our database with a per-conversation key (amber lock icon in your
-        inbox). We can decrypt them if compelled. This is not end-to-end encryption.
-      </p>
-      <p>
-        DMs with people on other servers travel over HTTPS but the remote
-        server sees plaintext.
-      </p>
-      <p class="encryption-notice-dim">
-        End-to-end encryption (green lock) is on the roadmap. Until then,
-        use Signal or Matrix for conversations that must stay private.
-      </p>
-    </div>
-
-    <div class="setting-divider"></div>
-
-    <div class="form-group">
-      <label class="form-label" for="dm-pref">Who can send you direct messages</label>
-      <select id="dm-pref" class="input" bind:value={dmPreference}>
-        <option value="everyone">Everyone</option>
-        <option value="followers">Followers only</option>
-        <option value="mutual_followers">Mutual followers only</option>
-        <option value="nobody">Nobody</option>
-      </select>
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Allow group DM invites</span>
-        <span class="setting-description">Let others add you to group conversations</span>
-      </div>
-      <Toggle bind:checked={groupDmOptIn} name="group-dm" />
-    </div>
-
-    <div class="setting-divider"></div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <span class="setting-label">Auto-load remote media</span>
-        <span class="setting-description">
-          When on, images and videos from other instances load
-          automatically as you scroll. Turn off to save data on
-          metered connections — remote media stays as a tap-to-load
-          placeholder until you ask for it. Posts from this instance
-          always auto-load.
-        </span>
-      </div>
-      <Toggle bind:checked={autoLoadRemoteMedia} name="auto-load-remote-media" />
-    </div>
-
-    <div class="setting-divider"></div>
-
-    <div class="form-group">
-      <label class="form-label" for="default-vis">Default post visibility</label>
-      <select id="default-vis" class="input" bind:value={defaultVisibility}>
-        <option value="public">Public</option>
-        <option value="followers">Followers only</option>
-        <option value="direct">Direct (mentioned people only)</option>
-      </select>
-      <span class="form-hint">New posts will default to this visibility setting</span>
-    </div>
-
-    <div class="setting-row">
-      <div class="setting-info">
-        <label class="setting-label" for="auto-delete">Automatically delete my posts</label>
-        <span class="setting-description">
-          Delete your posts once they reach this age. Only posts you publish after
-          turning this on are affected; your existing posts are kept. Deleted posts
-          are also removed from other servers and can't be recovered.
-        </span>
-      </div>
-      <select id="auto-delete" class="setting-select" bind:value={autoDeleteMonths}>
-        <option value="">Off</option>
+    </SettingRow>
+    <SettingRow label={$t('settings.privacy_auto_delete')} help={$t('settings.privacy_auto_delete_help')} labelFor="p-autodelete">
+      <select id="p-autodelete" class="input" value={autoDeleteMonths} onchange={onAutoDelete}>
+        <option value="">{$t('settings.privacy_auto_delete_off')}</option>
         {#each autoDeleteOptions as m (m)}
-          <option value={String(m)}>After {m} {m === 1 ? 'month' : 'months'}</option>
+          <option value={String(m)}>{$t(m === 1 ? 'settings.privacy_auto_delete_after_one' : 'settings.privacy_auto_delete_after_other', { n: m })}</option>
         {/each}
       </select>
-    </div>
+    </SettingRow>
+  </SettingsSection>
 
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit" disabled={saving}>
-        {#if saving}
-          <Spinner size={16} color="var(--color-text-on-primary)" />
-        {/if}
-        Save changes
-      </button>
+  <SettingsSection title={$t('settings.privacy_messages_title')} description={$t('settings.privacy_messages_desc')}>
+    <SettingRow label={$t('settings.privacy_dm_policy')} labelFor="p-dm">
+      <select id="p-dm" class="input" value={dmPolicy} onchange={onDmPolicy} disabled={!dmLoaded}>
+        <option value="everyone">{$t('settings.dm_everyone')}</option>
+        <option value="followers">{$t('settings.dm_followers')}</option>
+        <option value="mutual_followers">{$t('settings.dm_mutuals')}</option>
+        <option value="nobody">{$t('settings.dm_nobody')}</option>
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.privacy_group_dms')} help={$t('settings.privacy_group_dms_help')} labelFor="p-groupdm">
+      <Toggle id="p-groupdm" bind:checked={groupDms} disabled={!dmLoaded} onchange={onGroupDms} />
+    </SettingRow>
+    <div class="encryption-note">
+      <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+      <p>{$t('settings.privacy_dm_encryption')}</p>
     </div>
-  </form>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.privacy_invites_title')} description={$t('settings.privacy_invites_desc')}>
+    <SettingRow label={$t('settings.privacy_group_invites')} labelFor="p-ginv">
+      <select id="p-ginv" class="input" value={allowGroupInvites} onchange={(e) => onInvite('allow_group_invites', e)}>
+        {#each invitePolicies as p (p)}<option value={p}>{$t(`settings.invite_${p}`)}</option>{/each}
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.privacy_page_invites')} labelFor="p-pinv">
+      <select id="p-pinv" class="input" value={allowPageInvites} onchange={(e) => onInvite('allow_page_invites', e)}>
+        {#each invitePolicies as p (p)}<option value={p}>{$t(`settings.invite_${p}`)}</option>{/each}
+      </select>
+    </SettingRow>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.privacy_media_title')}>
+    <SettingRow label={$t('settings.privacy_remote_media')} help={$t('settings.privacy_remote_media_help')} labelFor="p-remote">
+      <Toggle id="p-remote" bind:checked={autoLoadRemote} onchange={setAutoLoadRemoteMedia} />
+    </SettingRow>
+  </SettingsSection>
 </div>
 
 <style>
-  .settings-section {
-    background: var(--color-surface-raised);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-  }
-
-  .section-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--color-text);
-    padding: var(--space-4) var(--space-6);
-    border-block-end: 1px solid var(--color-border);
-  }
-
-  .settings-form {
-    padding: var(--space-6);
+  .privacy-page {
     display: flex;
     flex-direction: column;
     gap: var(--space-5);
   }
 
-  .setting-row {
+  .encryption-note {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .setting-select {
-    min-width: 180px;
-    padding: 8px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    background: var(--color-surface-container-lowest, #fff);
-    color: var(--color-text);
-    font-size: var(--text-sm);
-    cursor: pointer;
-  }
-
-  .setting-select:focus {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 1px;
-  }
-
-  .setting-info {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .setting-label {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-text);
-  }
-
-  .setting-description {
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-4) var(--space-5);
+    background: var(--color-surface-container-low);
     font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
-  }
-
-  .setting-divider {
-    height: 1px;
-    background: var(--color-border);
-  }
-
-  .encryption-notice {
-    background: var(--color-surface-alt, rgba(0,0,0,0.03));
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: var(--space-4);
-    font-size: var(--text-sm);
-    color: var(--color-text);
-  }
-
-  .encryption-notice-title {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-weight: 700;
-    margin-block-end: var(--space-2);
-  }
-
-  .encryption-notice-icon {
-    font-size: 18px;
-    color: var(--color-warning, #d97706);
-  }
-
-  .encryption-notice p {
-    margin: 0 0 var(--space-2) 0;
     line-height: 1.5;
+    color: var(--color-text-secondary);
   }
 
-  .encryption-notice p:last-child {
-    margin-block-end: 0;
-  }
-
-  .encryption-notice-dim {
+  .encryption-note .material-symbols-outlined {
+    font-size: 18px;
     color: var(--color-text-tertiary);
-    font-size: var(--text-xs);
-  }
-
-  .form-group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .form-label {
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-text);
-  }
-
-  .form-hint {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
   }
 </style>

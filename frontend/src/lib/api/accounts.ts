@@ -11,6 +11,9 @@ export function lookupAccount(handle: string): Promise<Identity> {
   return api.get('/api/v1/accounts/lookup', { handle: clean });
 }
 
+/** Who may invite this account into a group or to co-manage a page. */
+export type InvitePolicy = 'anyone' | 'only_follows' | 'nobody';
+
 export function updateAccount(data: {
   display_name?: string;
   bio?: string;
@@ -18,6 +21,10 @@ export function updateAccount(data: {
   is_bot?: boolean;
   show_badge?: boolean;
   hide_follow_counts?: boolean;
+  discoverable?: boolean;
+  allow_unfurl?: boolean;
+  allow_group_invites?: InvitePolicy;
+  allow_page_invites?: InvitePolicy;
   auto_delete_after_months?: number | null;
   default_visibility?: string;
   birthday?: string | null;

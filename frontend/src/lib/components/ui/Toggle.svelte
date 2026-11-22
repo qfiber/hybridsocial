@@ -4,13 +4,16 @@
     label = '',
     disabled = false,
     id = '',
-    name = ''
+    name = '',
+    onchange = undefined
   }: {
     checked?: boolean;
     label?: string;
     disabled?: boolean;
     id?: string;
     name?: string;
+    /** Called with the new value when the user flips the switch. */
+    onchange?: (checked: boolean) => void;
   } = $props();
 
   let toggleId = $derived(id || `toggle-${name || Math.random().toString(36).slice(2)}`);
@@ -26,6 +29,7 @@
     class="toggle-input"
     role="switch"
     aria-checked={checked}
+    onchange={(e) => onchange?.(e.currentTarget.checked)}
   />
   <span class="toggle-track">
     <span class="toggle-thumb"></span>

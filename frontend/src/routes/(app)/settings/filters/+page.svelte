@@ -1,237 +1,342 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { api } from '$lib/api/client.js';
+  import { api, ApiError } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
   import { reloadFilters } from '$lib/stores/content-filters.js';
+  import { t, locale } from '$lib/stores/i18n.js';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
+  import Toggle from '$lib/components/ui/Toggle.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
   interface ContentFilter {
     id: string;
     phrase: string;
     context: string[];
-    action: string;
+    action: 'warn' | 'hide';
     whole_word: boolean;
     expires_at: string | null;
   }
 
+  const ALL_CONTEXTS = ['home', 'public', 'notifications', 'thread'];
+  // Matches validate_length(:phrase, max: 200) in user_content_filter.ex.
+  const MAX_PHRASE = 200;
+  // Expiry choices in minutes; 'never' sends null, 'keep' leaves an edited
+  // filter's current expiry untouched.
+  const EXPIRY_MINUTES: Record<string, number> = {
+    '30m': 30,
+    '1h': 60,
+    '6h': 360,
+    '1d': 1440,
+    '1w': 10080,
+    '1mo': 43200,
+  };
+
   let filters = $state<ContentFilter[]>([]);
   let loading = $state(true);
 
-  // New filter form
-  let newPhrase = $state('');
-  let newAction = $state('warn');
-  let newWholeWord = $state(false);
-  let newContexts = $state(['home', 'public', 'notifications', 'thread']);
-  let adding = $state(false);
+  let editingId = $state<string | null>(null);
+  let phrase = $state('');
+  let action = $state<'warn' | 'hide'>('warn');
+  let wholeWord = $state(false);
+  let contexts = $state<string[]>([...ALL_CONTEXTS]);
+  let expiry = $state('never');
+  let saving = $state(false);
+  let deletingId = $state<string | null>(null);
 
-  const allContexts = [
-    { id: 'home', label: 'Home' },
-    { id: 'public', label: 'Public' },
-    { id: 'notifications', label: 'Notifications' },
-    { id: 'thread', label: 'Threads' },
-  ];
+  let editing = $derived(filters.find((f) => f.id === editingId) ?? null);
 
   onMount(async () => {
     try {
       filters = await api.get<ContentFilter[]>('/api/v1/accounts/filters');
     } catch {
-      addToast('Could not load your filters', 'error');
+      addToast($t('settings.filters_load_failed'), 'error');
+    } finally {
+      loading = false;
     }
-    finally { loading = false; }
   });
 
-  async function addFilter() {
-    if (!newPhrase.trim() || adding) return;
-    adding = true;
-    try {
-      const f = await api.post<ContentFilter>('/api/v1/accounts/filters', {
-        phrase: newPhrase,
-        action: newAction,
-        whole_word: newWholeWord,
-        context: newContexts,
-      });
-      filters = [f, ...filters];
-      newPhrase = '';
-      newWholeWord = false;
-      reloadFilters();
-      addToast('Filter added', 'success');
-    } catch {
-      addToast('Failed to add filter', 'error');
-    } finally { adding = false; }
+  function resetForm() {
+    editingId = null;
+    phrase = '';
+    action = 'warn';
+    wholeWord = false;
+    contexts = [...ALL_CONTEXTS];
+    expiry = 'never';
   }
 
-  async function removeFilter(id: string) {
-    try {
-      await api.delete(`/api/v1/accounts/filters/${id}`);
-      filters = filters.filter(f => f.id !== id);
-      reloadFilters();
-      addToast('Filter removed', 'success');
-    } catch {
-      addToast('Failed to remove filter', 'error');
-    }
+  function startEdit(f: ContentFilter) {
+    editingId = f.id;
+    phrase = f.phrase;
+    action = f.action;
+    wholeWord = f.whole_word;
+    contexts = [...f.context];
+    expiry = f.expires_at ? 'keep' : 'never';
+    document.getElementById('filter-phrase')?.focus();
   }
 
   function toggleContext(ctx: string) {
-    if (newContexts.includes(ctx)) {
-      newContexts = newContexts.filter(c => c !== ctx);
-    } else {
-      newContexts = [...newContexts, ctx];
+    contexts = contexts.includes(ctx) ? contexts.filter((c) => c !== ctx) : [...contexts, ctx];
+  }
+
+  function errorCopy(err: unknown, fallbackKey: string): string {
+    if (err instanceof ApiError) {
+      if (err.body?.error === 'filter.not_found') return $t('settings.filters_error_not_found');
+      if (err.body?.details?.phrase) return $t('settings.filters_error_phrase');
+      if (err.body?.details?.context) return $t('settings.filters_error_context');
     }
+    return $t(fallbackKey);
+  }
+
+  async function save() {
+    const trimmed = phrase.trim();
+    if (!trimmed) return addToast($t('settings.filters_error_phrase'), 'error');
+    if (trimmed.length > MAX_PHRASE) return addToast($t('settings.filters_error_phrase'), 'error');
+    if (contexts.length === 0) return addToast($t('settings.filters_error_context'), 'error');
+    if (saving) return;
+
+    const body: Record<string, unknown> = {
+      phrase: trimmed,
+      action,
+      whole_word: wholeWord,
+      context: contexts,
+    };
+    // The changeset casts expires_at, so an explicit null clears it on update.
+    if (expiry === 'never') body.expires_at = null;
+    else if (expiry !== 'keep') body.expires_at = new Date(Date.now() + EXPIRY_MINUTES[expiry] * 60_000).toISOString();
+
+    saving = true;
+    try {
+      if (editingId) {
+        const updated = await api.put<ContentFilter>(`/api/v1/accounts/filters/${editingId}`, body);
+        filters = filters.map((f) => (f.id === updated.id ? updated : f));
+        addToast($t('settings.filters_updated'), 'success');
+      } else {
+        const created = await api.post<ContentFilter>('/api/v1/accounts/filters', body);
+        filters = [created, ...filters];
+        addToast($t('settings.filters_added'), 'success');
+      }
+      resetForm();
+      reloadFilters();
+    } catch (err) {
+      addToast(errorCopy(err, editingId ? 'settings.filters_update_failed' : 'settings.filters_add_failed'), 'error');
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function removeFilter(id: string) {
+    if (deletingId) return;
+    deletingId = id;
+    try {
+      await api.delete(`/api/v1/accounts/filters/${id}`);
+      filters = filters.filter((f) => f.id !== id);
+      if (editingId === id) resetForm();
+      reloadFilters();
+      addToast($t('settings.filters_removed'), 'success');
+    } catch (err) {
+      addToast(errorCopy(err, 'settings.filters_remove_failed'), 'error');
+    } finally {
+      deletingId = null;
+    }
+  }
+
+  function expiryLabel(expiresAt: string | null): string {
+    if (!expiresAt) return $t('settings.filters_expires_never');
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    if (ms <= 0) return $t('settings.filters_expired');
+    const minutes = Math.ceil(ms / 60_000);
+    const rtf = new Intl.RelativeTimeFormat($locale, { numeric: 'always' });
+    let time: string;
+    if (minutes < 60) time = rtf.format(minutes, 'minute');
+    else if (minutes < 1440) time = rtf.format(Math.round(minutes / 60), 'hour');
+    else time = rtf.format(Math.round(minutes / 1440), 'day');
+    return $t('settings.filters_expires_in', { time });
   }
 </script>
 
-<svelte:head>
-  <title>Content Filters - Settings</title>
-</svelte:head>
-
 <div class="filters-page">
-  <p class="stitch-desc">Hide or warn about posts containing specific words or phrases.</p>
-
-  <!-- Add filter form -->
-  <div class="stitch-card">
-    <h2 class="stitch-section-title">Add Filter</h2>
-    <div class="filter-form">
-      <div class="stitch-field">
-        <label class="stitch-label" for="filter-phrase">Keyword or phrase</label>
-        <input id="filter-phrase" type="text" class="stitch-input" bind:value={newPhrase} placeholder="e.g. spoiler, politics" />
-      </div>
-
-      <div class="stitch-field">
-        <span class="stitch-label">Action</span>
-        <div class="action-toggle">
-          <button type="button" class="action-opt" class:active={newAction === 'warn'} onclick={() => newAction = 'warn'}>
-            <span class="material-symbols-outlined" style="font-size: 16px">warning</span> Warn
+  <SettingsSection
+    title={editing ? $t('settings.filters_edit_title') : $t('settings.filters_new_title')}
+    description={$t('settings.filters_form_desc')}
+  >
+    <SettingRow label={$t('settings.filters_phrase_label')} labelFor="filter-phrase" layout="stacked">
+      <input
+        id="filter-phrase"
+        type="text"
+        class="input"
+        maxlength={MAX_PHRASE}
+        bind:value={phrase}
+        placeholder={$t('settings.filters_phrase_placeholder')}
+      />
+    </SettingRow>
+    <SettingRow label={$t('settings.filters_action_label')} help={$t('settings.filters_action_help')} labelFor="filter-action">
+      <select id="filter-action" class="input" bind:value={action}>
+        <option value="warn">{$t('settings.filters_action_warn')}</option>
+        <option value="hide">{$t('settings.filters_action_hide')}</option>
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.filters_context_label')} help={$t('settings.filters_context_help')}>
+      <div class="chips" role="group" aria-label={$t('settings.filters_context_label')}>
+        {#each ALL_CONTEXTS as ctx (ctx)}
+          <button
+            type="button"
+            class="chip"
+            class:active={contexts.includes(ctx)}
+            aria-pressed={contexts.includes(ctx)}
+            onclick={() => toggleContext(ctx)}
+          >
+            {$t(`settings.filters_context_${ctx}`)}
           </button>
-          <button type="button" class="action-opt" class:active={newAction === 'hide'} onclick={() => newAction = 'hide'}>
-            <span class="material-symbols-outlined" style="font-size: 16px">visibility_off</span> Hide
-          </button>
-        </div>
-      </div>
-
-      <div class="stitch-field">
-        <span class="stitch-label">Apply to</span>
-        <div class="context-chips">
-          {#each allContexts as ctx (ctx.id)}
-            <button type="button" class="context-chip" class:active={newContexts.includes(ctx.id)} onclick={() => toggleContext(ctx.id)}>
-              {ctx.label}
-            </button>
-          {/each}
-        </div>
-      </div>
-
-      <label class="stitch-checkbox">
-        <input type="checkbox" bind:checked={newWholeWord} />
-        <span>Whole word only</span>
-      </label>
-
-      <button type="button" class="stitch-btn-primary" onclick={addFilter} disabled={!newPhrase.trim() || adding}>
-        {adding ? 'Adding...' : 'Add filter'}
-      </button>
-    </div>
-  </div>
-
-  <!-- Existing filters -->
-  <div class="stitch-card">
-    <h2 class="stitch-section-title">Active Filters</h2>
-    {#if loading}
-      <div style="padding: 24px; text-align: center"><Spinner /></div>
-    {:else if filters.length === 0}
-      <p class="stitch-empty">No filters yet. Add one above.</p>
-    {:else}
-      <div class="filters-list">
-        {#each filters as filter (filter.id)}
-          <div class="filter-item">
-            <div class="filter-info">
-              <span class="filter-phrase">"{filter.phrase}"</span>
-              <div class="filter-meta">
-                <span class="filter-action-badge" class:badge-warn={filter.action === 'warn'} class:badge-hide={filter.action === 'hide'}>
-                  {filter.action}
-                </span>
-                {#each filter.context as ctx}
-                  <span class="filter-context-tag">{ctx}</span>
-                {/each}
-                {#if filter.whole_word}
-                  <span class="filter-context-tag">whole word</span>
-                {/if}
-              </div>
-            </div>
-            <button type="button" class="filter-remove" onclick={() => removeFilter(filter.id)} aria-label="Remove filter">
-              <span class="material-symbols-outlined" style="font-size: 18px">close</span>
-            </button>
-          </div>
         {/each}
       </div>
+    </SettingRow>
+    <SettingRow label={$t('settings.filters_whole_word_label')} help={$t('settings.filters_whole_word_help')} labelFor="filter-whole-word">
+      <Toggle id="filter-whole-word" bind:checked={wholeWord} />
+    </SettingRow>
+    <SettingRow label={$t('settings.filters_expiry_label')} labelFor="filter-expiry">
+      <select id="filter-expiry" class="input" bind:value={expiry}>
+        {#if editing?.expires_at}
+          <option value="keep">{$t('settings.filters_expiry_keep', { current: expiryLabel(editing.expires_at) })}</option>
+        {/if}
+        <option value="never">{$t('settings.filters_expiry_never')}</option>
+        <option value="30m">{$t('settings.filters_expiry_30m')}</option>
+        <option value="1h">{$t('settings.filters_expiry_1h')}</option>
+        <option value="6h">{$t('settings.filters_expiry_6h')}</option>
+        <option value="1d">{$t('settings.filters_expiry_1d')}</option>
+        <option value="1w">{$t('settings.filters_expiry_1w')}</option>
+        <option value="1mo">{$t('settings.filters_expiry_1mo')}</option>
+      </select>
+    </SettingRow>
+    <div class="form-actions">
+      {#if editing}
+        <button type="button" class="btn btn-ghost btn-sm" onclick={resetForm} disabled={saving}>
+          {$t('settings.filters_cancel')}
+        </button>
+      {/if}
+      <button type="button" class="btn btn-primary btn-sm" onclick={save} disabled={!phrase.trim() || saving}>
+        {#if saving}
+          {$t('settings.filters_saving')}
+        {:else if editing}
+          {$t('settings.filters_save')}
+        {:else}
+          {$t('settings.filters_add')}
+        {/if}
+      </button>
+    </div>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.filters_list_title')} description={$t('settings.filters_list_desc')}>
+    {#if loading}
+      <div class="placeholder"><Spinner /></div>
+    {:else if filters.length === 0}
+      <p class="placeholder">{$t('settings.filters_empty')}</p>
+    {:else}
+      {#each filters as filter (filter.id)}
+        <SettingRow label={filter.phrase}>
+          {#snippet meta()}
+            <span class="badge" class:badge-warn={filter.action === 'warn'} class:badge-hide={filter.action === 'hide'}>
+              {$t(`settings.filters_action_${filter.action}`)}
+            </span>
+            {#each filter.context as ctx (ctx)}
+              <span class="tag">{$t(`settings.filters_context_${ctx}`)}</span>
+            {/each}
+            {#if filter.whole_word}
+              <span class="tag">{$t('settings.filters_whole_word_tag')}</span>
+            {/if}
+            <span class="tag">{expiryLabel(filter.expires_at)}</span>
+          {/snippet}
+          <button type="button" class="btn btn-secondary btn-sm" onclick={() => startEdit(filter)}>
+            {$t('settings.filters_edit')}
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm danger"
+            onclick={() => removeFilter(filter.id)}
+            disabled={deletingId === filter.id}
+          >
+            {$t('settings.filters_delete')}
+          </button>
+        </SettingRow>
+      {/each}
     {/if}
-  </div>
+  </SettingsSection>
 </div>
 
 <style>
-  .filters-page { max-width: 600px; }
-  .stitch-desc { font-size: var(--text-sm); color: var(--color-text-secondary); margin-block-end: var(--space-6); }
+  .filters-page {
+    max-width: var(--feed-max-width);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
 
-  .stitch-card {
-    background: var(--color-surface-raised, white);
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .chip {
+    padding: 4px var(--space-3);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    padding: var(--space-5);
-    margin-block-end: var(--space-4);
+    border-radius: var(--radius-full);
+    background: transparent;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+    cursor: pointer;
   }
 
-  .stitch-section-title { font-size: var(--text-base); font-weight: 600; margin-block-end: var(--space-4); }
-  .stitch-empty { font-size: var(--text-sm); color: var(--color-text-tertiary); text-align: center; padding: var(--space-6); }
-
-  .stitch-field { margin-block-end: var(--space-3); }
-  .stitch-label { display: block; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); margin-block-end: 6px; }
-  .stitch-input { width: 100%; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: 10px; font-size: 0.875rem; color: var(--color-text); background: var(--color-surface); }
-  .stitch-input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px var(--color-primary-soft, rgba(var(--color-primary-rgb),0.1)); }
-
-  .action-toggle { display: flex; gap: 8px; }
-  .action-opt {
-    display: flex; align-items: center; gap: 6px;
-    padding: 8px 16px; border: 2px solid var(--color-border); border-radius: 10px;
-    background: transparent; color: var(--color-text-secondary); font-size: 0.8125rem; font-weight: 600; cursor: pointer;
-    transition: all 150ms ease;
-  }
-  .action-opt.active { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft, rgba(var(--color-primary-rgb),0.05)); }
-
-  .context-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .context-chip {
-    padding: 4px 12px; border: 1px solid var(--color-border); border-radius: 9999px;
-    background: transparent; font-size: 0.75rem; font-weight: 600; color: var(--color-text-secondary); cursor: pointer;
-    transition: all 150ms ease;
-  }
-  .context-chip.active { background: var(--color-primary); color: white; border-color: var(--color-primary); }
-
-  .stitch-checkbox { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--color-text-secondary); margin-block-end: var(--space-3); cursor: pointer; }
-  .stitch-checkbox input { accent-color: var(--color-primary); }
-
-  .stitch-btn-primary {
-    padding: 10px 24px; background: var(--color-primary); color: white; border: none; border-radius: 9999px;
-    font-size: 0.875rem; font-weight: 600; cursor: pointer;
-  }
-  .stitch-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  .stitch-btn-primary:hover:not(:disabled) { opacity: 0.9; }
-
-  .filters-list { display: flex; flex-direction: column; gap: 8px; }
-  .filter-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 10px 14px; background: var(--color-surface); border-radius: 10px;
+  .chip.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-on-primary, white);
   }
 
-  .filter-phrase { font-size: 0.875rem; font-weight: 600; color: var(--color-text); }
-  .filter-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-block-start: 4px; }
-
-  .filter-action-badge {
-    font-size: 0.65rem; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 4px;
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
   }
-  .badge-warn { background: var(--color-warning-soft); color: var(--color-on-warning-soft); }
-  .badge-hide { background: var(--color-danger-soft); color: var(--color-danger); }
 
-  .filter-context-tag { font-size: 0.65rem; color: var(--color-text-tertiary); background: var(--color-surface-container-low, #f0f0f0); padding: 1px 6px; border-radius: 4px; }
-
-  .filter-remove {
-    background: none; border: none; color: var(--color-text-tertiary); cursor: pointer; padding: 4px; border-radius: 50%;
-    transition: background 150ms ease;
+  .placeholder {
+    margin: 0;
+    padding: var(--space-6) var(--space-5);
+    text-align: center;
+    font-size: var(--text-sm);
+    color: var(--color-text-tertiary);
   }
-  .filter-remove:hover { background: var(--color-danger-soft, rgba(239,68,68,0.1)); color: var(--color-danger); }
+
+  .badge,
+  .tag {
+    font-size: var(--text-xs);
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+  }
+
+  .badge {
+    font-weight: 700;
+  }
+
+  .badge-warn {
+    background: var(--color-warning-soft);
+    color: var(--color-on-warning-soft);
+  }
+
+  .badge-hide {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  .tag {
+    color: var(--color-text-tertiary);
+    background: var(--color-surface);
+  }
+
+  .danger {
+    color: var(--color-danger);
+  }
 </style>
