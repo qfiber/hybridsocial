@@ -32,7 +32,7 @@
 
     addingAlias = true;
     try {
-      await api.post('/api/v1/accounts/also_known_as', { alias });
+      await api.post('/api/v1/accounts/also_known_as', { uri: alias });
       aliases = [...aliases, alias];
       newAlias = '';
       addToast('Alias added', 'success');

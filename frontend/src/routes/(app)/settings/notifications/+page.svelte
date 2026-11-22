@@ -15,7 +15,7 @@
 
   interface ChannelPrefs { email: boolean; push: boolean; in_app: boolean }
 
-  const notifTypes = ['follow', 'mention', 'reaction', 'boost', 'poll', 'group_invite'] as const;
+  const notifTypes = ['follow', 'mention', 'reaction', 'boost', 'poll_ended', 'group_invite'] as const;
 
   let channels = $derived([
     { key: 'in_app', label: $t('settings.notif_channel_in_app') },
@@ -41,7 +41,8 @@
   let messageSound = $state(getMessageSoundEnabled());
 
   function pref(type: string): ChannelPrefs {
-    return prefs[type] ?? { email: true, push: true, in_app: true };
+    // Server defaults for a type with no stored row (notifications.ex).
+    return prefs[type] ?? { email: false, push: true, in_app: true };
   }
 
   function setChannel(type: string, channel: keyof ChannelPrefs, value: boolean) {
