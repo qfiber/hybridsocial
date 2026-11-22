@@ -93,6 +93,8 @@ defmodule HybridsocialWeb.Router do
     post "/login", AuthController, :login
     post "/refresh", AuthController, :refresh
     post "/confirm", AuthController, :confirm
+    # Token-only, so the link works on any device, signed in or not.
+    post "/confirm_email_change", AuthController, :confirm_email_change
     post "/2fa/login", AuthController, :login_with_otp
     post "/password/reset", AuthController, :password_reset
     post "/password/change", AuthController, :password_change
@@ -176,6 +178,7 @@ defmodule HybridsocialWeb.Router do
 
     # Change email
     post "/change_email", AccountController, :change_email
+    delete "/change_email", AccountController, :cancel_email_change
 
     # Account recovery code
     get "/recovery_code", AccountController, :recovery_code_status
