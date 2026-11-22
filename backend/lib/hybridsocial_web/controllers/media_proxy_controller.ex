@@ -138,11 +138,11 @@ defmodule HybridsocialWeb.MediaProxyController do
             send_range_or_full(conn, path, range, file_size)
 
           {:error, _} ->
-            send_file(conn, 200, path)
+            send_file_or_hangup(conn, 200, path)
         end
 
       _ ->
-        send_file(conn, 200, path)
+        send_file_or_hangup(conn, 200, path)
     end
   end
 
@@ -154,10 +154,21 @@ defmodule HybridsocialWeb.MediaProxyController do
 
       conn
       |> put_resp_header("content-range", "bytes #{range_start}-#{range_end}/#{file_size}")
-      |> send_file(206, path, range_start, length)
+      |> send_file_or_hangup(206, path, range_start, length)
     else
-      _ -> send_file(conn, 200, path)
+      _ -> send_file_or_hangup(conn, 200, path)
     end
+  end
+
+  # A client that hangs up mid-transfer (seeking a video, scrolling away, or
+  # giving up on a slow first fetch) makes the adapter raise. The headers are
+  # already out, so the request is simply over: without this, Phoenix rendered
+  # a second response and logged "Sent 500" after the 206 (#317).
+  # sobelow_skip ["Traversal.SendFile"]
+  defp send_file_or_hangup(conn, status, path, offset \\ 0, length \\ :all) do
+    send_file(conn, status, path, offset, length)
+  rescue
+    Bandit.TransportError -> halt(%{conn | state: :sent, status: status})
   end
 
   defp parse_range("-" <> rest, file_size) do
