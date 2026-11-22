@@ -3,6 +3,7 @@ defmodule Hybridsocial.Accounts do
   The Accounts context. Manages identities, users, and organizations.
   """
   import Ecto.Query
+  require Logger
   alias Hybridsocial.Repo
   alias Hybridsocial.Accounts.{Bot, Identity, Invite, User}
 
@@ -1564,16 +1565,105 @@ defmodule Hybridsocial.Accounts do
 
   # --- Change Email ---
 
-  def change_email(identity_id, new_email, password) do
-    with user when not is_nil(user) <- Repo.get_by(User, identity_id: identity_id),
-         true <- Bcrypt.verify_pass(password, user.password_hash) do
-      user
-      |> User.email_changeset(new_email)
-      |> Repo.update()
-    else
-      nil -> {:error, :not_found}
-      false -> {:error, :invalid_password}
+  @doc """
+  Starts an email change. Nothing changes yet: the new address is stored as
+  pending and must be confirmed through a link sent to it
+  (`confirm_email_change/1`); the current address gets a heads-up, so an
+  unexpected request is noticed. Requires the account password.
+  """
+  def request_email_change(identity_id, new_email, password) do
+    with %User{} = user <- Repo.get_by(User, identity_id: identity_id) || {:error, :not_found},
+         true <- Bcrypt.verify_pass(password, user.password_hash) || {:error, :invalid_password},
+         changeset = User.pending_email_changeset(user, new_email),
+         true <- changeset.valid? || {:error, changeset},
+         pending = Ecto.Changeset.get_field(changeset, :pending_email),
+         :ok <- ensure_email_available(user, pending) do
+      token = :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
+
+      {:ok, user} =
+        changeset
+        |> Ecto.Changeset.change(%{
+          pending_email_token: User.hash_token(token),
+          pending_email_sent_at: DateTime.utc_now()
+        })
+        |> Repo.update()
+
+      deliver_quietly(fn -> Hybridsocial.Emails.email_change_confirmation_email(user, token) end)
+      deliver_quietly(fn -> Hybridsocial.Emails.email_change_notice_email(user) end)
+      {:ok, user}
     end
+  end
+
+  @doc "Applies a pending email change from its emailed token."
+  def confirm_email_change(token) when is_binary(token) and token != "" do
+    hashed = User.hash_token(token)
+
+    with %User{} = user <-
+           Repo.one(from u in User, where: u.pending_email_token == ^hashed) ||
+             {:error, :invalid_token},
+         :ok <- check_email_change_fresh(user),
+         :ok <- ensure_email_available(user, user.pending_email) do
+      user
+      |> User.email_changeset(user.pending_email)
+      |> Ecto.Changeset.put_change(:pending_email, nil)
+      |> Ecto.Changeset.put_change(:pending_email_token, nil)
+      |> Ecto.Changeset.put_change(:pending_email_sent_at, nil)
+      |> Repo.update()
+    end
+  end
+
+  def confirm_email_change(_), do: {:error, :invalid_token}
+
+  @doc "Drops a requested email change that hasn't been confirmed."
+  def cancel_email_change(identity_id) do
+    case Repo.get_by(User, identity_id: identity_id) do
+      nil ->
+        {:error, :not_found}
+
+      user ->
+        user
+        |> Ecto.Changeset.change(
+          pending_email: nil,
+          pending_email_token: nil,
+          pending_email_sent_at: nil
+        )
+        |> Repo.update()
+    end
+  end
+
+  defp ensure_email_available(user, email) do
+    cond do
+      Hybridsocial.Crypto.blind_index(email, "user.email") == user.email_hash ->
+        {:error, :same_email}
+
+      get_user_by_email(email) ->
+        {:error, :email_taken}
+
+      true ->
+        :ok
+    end
+  end
+
+  @doc "How long an email-change link stays valid (admin setting)."
+  def email_change_ttl_seconds do
+    case Hybridsocial.Config.get("email_change_ttl_seconds", 86_400) do
+      n when is_integer(n) and n > 0 -> n
+      _ -> 86_400
+    end
+  end
+
+  defp check_email_change_fresh(%User{pending_email_sent_at: sent_at}) do
+    if sent_at && DateTime.diff(DateTime.utc_now(), sent_at) <= email_change_ttl_seconds(),
+      do: :ok,
+      else: {:error, :token_expired}
+  end
+
+  # A mail outage must not fail the request: the pending change is saved and
+  # the user can ask again.
+  defp deliver_quietly(build) do
+    build.() |> Hybridsocial.Mailer.deliver()
+  rescue
+    e -> Logger.warning("email change: delivery failed: #{Exception.message(e)}")
   end
 
   # --- Account Migration ---

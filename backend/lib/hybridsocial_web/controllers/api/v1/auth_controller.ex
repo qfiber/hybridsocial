@@ -249,6 +249,29 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
     end
   end
 
+  def confirm_email_change(conn, %{"token" => token}) when is_binary(token) do
+    case Accounts.confirm_email_change(token) do
+      {:ok, _user} ->
+        json(conn, %{message: "account.email_changed"})
+
+      {:error, :token_expired} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "account.email_change_expired"})
+
+      {:error, :email_taken} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.email_taken"})
+
+      {:error, _} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "account.email_change_invalid"})
+    end
+  end
+
+  def confirm_email_change(conn, _),
+    do: conn |> put_status(:bad_request) |> json(%{error: "account.email_change_invalid"})
+
   # Re-send the confirmation email for an unconfirmed account. Non-committal
   # response (never reveals whether the address exists); abuse is bounded by
   # the per-IP rate limit on this path.
@@ -306,6 +329,8 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       permissions: permissions,
       created_at: identity.inserted_at,
       email: identity.user && identity.user.email,
+      # Requested but not yet confirmed (Settings > Account).
+      pending_email: identity.user && identity.user.pending_email,
       confirmed: identity.user && identity.user.confirmed_at != nil,
       two_factor_enabled: identity.user && identity.user.otp_enabled,
       # Either an authenticator app or a registered security key
