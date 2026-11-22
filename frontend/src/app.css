@@ -843,3 +843,16 @@ img.custom-emoji {
 :root[dir='rtl'] .rtl-mirror {
   transform: scaleX(-1);
 }
+
+/* A section's title and its controls stay in view while its content
+   scrolls: pinned under the app header, on a solid surface so content
+   passes cleanly beneath. Applied to section headers without tabs; the
+   shared Tabs component pins its own bar the same way (ui/Tabs.svelte). */
+.sticky-section-head {
+  position: sticky;
+  inset-block-start: var(--header-height);
+  z-index: var(--z-sticky);
+  background: var(--color-surface-base, var(--color-bg));
+  padding-block: var(--space-2);
+}
+

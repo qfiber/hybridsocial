@@ -334,4 +334,14 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+
+  /* Title stays in view while the list scrolls (same as .sticky-section-head
+     in app.css; set here so the header markup stays untouched). */
+  .page-header {
+    position: sticky;
+    inset-block-start: var(--header-height);
+    z-index: var(--z-sticky);
+    background: var(--color-surface-base, var(--color-bg));
+    padding-block: var(--space-2);
+  }
 </style>

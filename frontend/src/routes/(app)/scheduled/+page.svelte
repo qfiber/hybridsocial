@@ -119,7 +119,7 @@
 </svelte:head>
 
 <div class="scheduled-page">
-  <div class="page-header">
+  <div class="sticky-section-head page-header">
     <h1 class="page-title">Scheduled Posts</h1>
   </div>
 

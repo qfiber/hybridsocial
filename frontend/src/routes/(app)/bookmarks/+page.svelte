@@ -28,7 +28,7 @@
 </svelte:head>
 
 <div class="bookmarks-page">
-  <h1 class="bookmarks-title">Bookmarks</h1>
+  <h1 class="sticky-section-head bookmarks-title">Bookmarks</h1>
 
   <FeedList
     posts={feed.posts}
