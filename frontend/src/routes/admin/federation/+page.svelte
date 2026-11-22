@@ -604,7 +604,7 @@
 <div class="federation-page">
   <h1 class="page-title">Federation</h1>
 
-  <Tabs {tabs} bind:active={activeTab}>
+  <Tabs {tabs} bind:active={activeTab} sticky={false}>
     {#if activeTab === 'instances'}
       <DataTable
         columns={instanceColumns}
