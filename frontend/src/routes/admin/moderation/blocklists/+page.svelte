@@ -347,7 +347,7 @@
 </script>
 
 <AdminPage title={$t('admin_blocklists.title')} description={$t('admin_blocklists.description')}>
-  <Tabs {tabs} bind:active={activeTab}>
+  <Tabs {tabs} bind:active={activeTab} sticky={false}>
     {#if activeTab === 'filters'}
       <form class="add-form" onsubmit={(e) => { e.preventDefault(); handleAddFilter(); }}>
         <select class="input" bind:value={newFilterType} aria-label={$t('admin.moderation.filters.type_label')} style="width: 120px">

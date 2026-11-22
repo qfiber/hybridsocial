@@ -273,7 +273,7 @@
 <div class="moderation-page">
   <h1 class="page-title">Moderation</h1>
 
-  <Tabs {tabs} bind:active={activeTab}>
+  <Tabs {tabs} bind:active={activeTab} sticky={false}>
     {#if activeTab === 'reports'}
       <div class="tab-toolbar">
         <select

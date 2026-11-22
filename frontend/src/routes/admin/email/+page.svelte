@@ -102,7 +102,7 @@
 <div class="email-page">
   <h1 class="page-title">Email Settings</h1>
 
-  <Tabs {tabs} bind:active={activeTab}>
+  <Tabs {tabs} bind:active={activeTab} sticky={false}>
     {#if activeTab === 'server'}
       <div class="server-tab">
       {#if loading}
