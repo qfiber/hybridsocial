@@ -153,6 +153,11 @@ defmodule HybridsocialWeb.Api.V1.NotificationController do
             in_app: pref.in_app
           })
 
+        {:error, :forbidden} ->
+          conn
+          |> put_status(:forbidden)
+          |> json(%{error: "notification_preferences.staff_only"})
+
         {:error, changeset} ->
           conn
           |> put_status(:unprocessable_entity)

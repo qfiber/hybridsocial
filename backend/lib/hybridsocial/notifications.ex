@@ -174,19 +174,38 @@ defmodule Hybridsocial.Notifications do
   # ---------------------------------------------------------------------------
 
   def get_preferences(identity_id) do
-    Preference
-    |> where([p], p.identity_id == ^identity_id)
-    |> Repo.all()
-    |> Enum.reduce(%{}, fn pref, acc ->
-      Map.put(acc, pref.type, %{
-        email: pref.email,
-        push: pref.push,
-        in_app: pref.in_app
-      })
-    end)
+    stored =
+      Preference
+      |> where([p], p.identity_id == ^identity_id)
+      |> Repo.all()
+      |> Enum.reduce(%{}, fn pref, acc ->
+        Map.put(acc, pref.type, %{
+          email: pref.email,
+          push: pref.push,
+          in_app: pref.in_app
+        })
+      end)
+
+    # Staff also see their staff alerts, with the default filled in, so the
+    # settings page shows what actually happens today.
+    if Hybridsocial.Auth.RBAC.staff?(identity_id) do
+      Enum.reduce(Preference.staff_email_defaults(), stored, fn {type, default}, acc ->
+        Map.put_new(acc, type, %{email: default, push: false, in_app: false})
+      end)
+    else
+      Map.drop(stored, Map.keys(Preference.staff_email_defaults()))
+    end
   end
 
   def update_preference(identity_id, type, attrs) do
+    if Preference.staff_type?(type) and not Hybridsocial.Auth.RBAC.staff?(identity_id) do
+      {:error, :forbidden}
+    else
+      upsert_preference(identity_id, type, attrs)
+    end
+  end
+
+  defp upsert_preference(identity_id, type, attrs) do
     case Repo.get_by(Preference, identity_id: identity_id, type: type) do
       nil ->
         %Preference{}

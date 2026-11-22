@@ -1998,5 +1998,17 @@
   "settings.security_time_now": "Just now",
   "settings.security_time_minutes": "{n}m ago",
   "settings.security_time_hours": "{n}h ago",
-  "settings.security_time_days": "{n}d ago"
+  "settings.security_time_days": "{n}d ago",
+  "settings.notif_staff_title": "Staff email alerts",
+  "settings.notif_staff_desc": "Emails about moderation and the instance. You only get the ones your role can act on.",
+  "settings.notif_admin_new_report": "New reports",
+  "settings.notif_admin_new_report_desc": "Someone reports a post or account",
+  "settings.notif_admin_new_appeal": "New appeals",
+  "settings.notif_admin_new_appeal_desc": "Someone appeals a moderation decision",
+  "settings.notif_admin_pending_account": "Accounts awaiting approval",
+  "settings.notif_admin_pending_account_desc": "A new sign-up needs approval (approval mode)",
+  "settings.notif_moderation_queue": "Moderation queue",
+  "settings.notif_moderation_queue_desc": "Content is flagged into the moderation queue",
+  "settings.notif_admin_backup_failed": "Failed backups",
+  "settings.notif_admin_backup_failed_desc": "A scheduled backup did not complete"
 }

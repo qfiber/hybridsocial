@@ -29,6 +29,11 @@
   ];
   const channels: Channel[] = ['in_app', 'email', 'push'];
 
+  // Staff email alerts (#319). The server includes these only for staff, so
+  // their presence is the gate; they are email-only.
+  const staffTypes = ['admin_new_report', 'admin_new_appeal', 'admin_pending_account', 'moderation_queue', 'admin_backup_failed'];
+  let shownStaffTypes = $derived(staffTypes.filter((type) => type in prefs));
+
   let prefs = $state<Record<string, ChannelPrefs>>({});
   let loading = $state(true);
   let loadError = $state(false);
@@ -100,6 +105,16 @@
       {/each}
     </div>
   </AsyncState>
+
+  {#if shownStaffTypes.length}
+    <SettingsSection title={$t('settings.notif_staff_title')} description={$t('settings.notif_staff_desc')}>
+      {#each shownStaffTypes as type (type)}
+        <SettingRow label={$t(`settings.notif_${type}`)} help={$t(`settings.notif_${type}_desc`)} labelFor={`n-${type}-email`}>
+          <Toggle id={`n-${type}-email`} checked={pref(type).email} onchange={(v) => setChannel(type, 'email', v)} />
+        </SettingRow>
+      {/each}
+    </SettingsSection>
+  {/if}
 
   <SettingsSection title={$t('settings.sounds_title')} description={$t('settings.sounds_hint')}>
     <SettingRow label={$t('settings.sound_notifications')} labelFor="n-sound">

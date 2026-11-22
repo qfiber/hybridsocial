@@ -359,6 +359,60 @@ defmodule Hybridsocial.NotificationsTest do
     end
   end
 
+  # #319: staff alert types were rejected by validation, so staff could
+  # neither silence report emails (on by default) nor opt in to the rest.
+  describe "staff email alert preferences" do
+    test "staff see their alerts with the defaults filled in" do
+      admin = create_admin("staffprefs1")
+      prefs = Notifications.get_preferences(admin.id)
+
+      assert prefs["admin_new_report"].email == true
+      assert prefs["admin_pending_account"].email == false
+      assert prefs["moderation_queue"].email == false
+    end
+
+    test "staff can turn a default-on alert off and a default-off alert on" do
+      admin = create_admin("staffprefs2")
+
+      assert {:ok, _} =
+               Notifications.update_preference(admin.id, "admin_new_report", %{"email" => false})
+
+      assert {:ok, _} =
+               Notifications.update_preference(admin.id, "admin_pending_account", %{
+                 "email" => true
+               })
+
+      refute Notifications.email_enabled?(admin.id, "admin_new_report", true)
+      assert Notifications.email_enabled?(admin.id, "admin_pending_account", false)
+    end
+
+    test "members can't store staff alert types and don't see them" do
+      member = create_user("staffprefs3")
+
+      assert {:error, :forbidden} =
+               Notifications.update_preference(member.id, "admin_new_report", %{"email" => true})
+
+      refute Map.has_key?(Notifications.get_preferences(member.id), "admin_new_report")
+    end
+
+    test "the endpoint answers 403 to a member", %{} do
+      member = create_user("staffprefs4")
+
+      Phoenix.ConnTest.build_conn()
+      |> auth_conn(member)
+      |> Phoenix.ConnTest.dispatch(
+        HybridsocialWeb.Endpoint,
+        :patch,
+        "/api/v1/notification_preferences",
+        %{
+          "type" => "admin_pending_account",
+          "email" => true
+        }
+      )
+      |> Phoenix.ConnTest.json_response(403)
+    end
+  end
+
   describe "update_preference/3" do
     test "creates a preference if it does not exist" do
       alice = create_user("notif_alice19", "notif_alice19@example.com")
