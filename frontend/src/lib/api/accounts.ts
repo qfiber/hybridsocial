@@ -79,7 +79,7 @@ export function unblock(id: string): Promise<Relationship> {
 }
 
 export function mute(id: string, notifications?: boolean): Promise<Relationship> {
-  return api.post(`/api/v1/accounts/${id}/mute`, { notifications });
+  return api.post(`/api/v1/accounts/${id}/mute`, { mute_notifications: notifications });
 }
 
 export function unmute(id: string): Promise<Relationship> {

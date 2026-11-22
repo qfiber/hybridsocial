@@ -125,6 +125,33 @@ defmodule HybridsocialWeb.Api.V1.AuthControllerTest do
       assert response["email"] == "test@example.com"
     end
 
+    # The privacy page reads these back; when they were missing, saving it
+    # reset the invite settings to "anyone".
+    test "returns the owner's own privacy settings", %{conn: conn} do
+      identity = create_user("privacyowner")
+
+      {:ok, identity} =
+        identity
+        |> Ecto.Changeset.change(
+          allow_group_invites: "nobody",
+          allow_page_invites: "only_follows",
+          discoverable: false,
+          also_known_as: ["https://old.example/users/me"]
+        )
+        |> Hybridsocial.Repo.update()
+
+      response =
+        conn
+        |> auth_conn(identity)
+        |> get("/api/v1/auth/me")
+        |> json_response(200)
+
+      assert response["allow_group_invites"] == "nobody"
+      assert response["allow_page_invites"] == "only_follows"
+      assert response["discoverable"] == false
+      assert response["also_known_as"] == ["https://old.example/users/me"]
+    end
+
     test "returns 401 without token", %{conn: conn} do
       conn = get(conn, "/api/v1/auth/me")
       assert json_response(conn, 401)["error"] == "auth.unauthorized"

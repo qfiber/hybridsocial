@@ -283,6 +283,13 @@ defmodule HybridsocialWeb.Api.V1.AuthController do
       show_badge: identity.show_badge,
       hide_follow_counts: identity.hide_follow_counts,
       auto_delete_after_months: identity.auto_delete_after_months,
+      # Owner-only settings the settings pages read back; without them a
+      # save re-sends the client default over the stored choice.
+      discoverable: identity.discoverable,
+      allow_unfurl: identity.allow_unfurl,
+      allow_group_invites: identity.allow_group_invites,
+      allow_page_invites: identity.allow_page_invites,
+      also_known_as: identity.also_known_as || [],
       followers_count: Hybridsocial.Social.followers_count(identity.id),
       following_count: Hybridsocial.Social.following_count(identity.id),
       badges: Hybridsocial.Badges.instance_badges(identity),
