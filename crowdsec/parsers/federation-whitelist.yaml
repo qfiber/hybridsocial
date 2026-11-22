@@ -1,0 +1,20 @@
+# Never count ActivityPub inbox deliveries toward a ban.
+#
+# Peers retry deliveries we reject: 401 for a Delete signed by an account
+# that is already gone (its key 410s), 422 for an activity about an object we
+# never saw, 403 from the bouncer itself once banned. The generic 401/403
+# brute-force scenarios read that as an attack and banned mastodon.social,
+# mastodon.world, flipboard.social and others in a loop; banned peers then
+# can't fetch our actor keys and reject everything we send them.
+#
+# The inbox does its own authentication (HTTP signatures), so these events
+# carry no brute-force signal. Every other path keeps full CrowdSec coverage.
+#
+# Mounted as a single file (docker-compose-production.yml): after editing,
+# RECREATE hs_crowdsec, a reload keeps the old inode (#186).
+name: hybridsocial/federation-whitelist
+description: "Do not ban fediverse peers for rejected inbox deliveries"
+whitelist:
+  reason: "ActivityPub inbox delivery"
+  expression:
+    - evt.Meta.http_verb == 'POST' && evt.Meta.http_path matches '^/(inbox|(users|actors)/[^/?]+/inbox)/?(\\?.*)?$'

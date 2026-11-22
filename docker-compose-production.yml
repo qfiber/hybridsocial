@@ -321,6 +321,7 @@ services:
       - /var/log/secure:/var/log/host-secure:ro
       - ./crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro,z
       - ./crowdsec/profiles.yaml:/etc/crowdsec/profiles.yaml:ro,z
+      - ./crowdsec/parsers/federation-whitelist.yaml:/etc/crowdsec/parsers/s02-enrich/hybridsocial-federation-whitelist.yaml:ro,z
       # Email digest notifier — disabled until SMTP is configured. The
       # plugin broker loads every file in notifications/, so an unwired
       # (templated) config crashes crowdsec at boot. Re-add this mount +
