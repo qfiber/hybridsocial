@@ -151,6 +151,15 @@ defmodule Hybridsocial.FederationTest do
       assert Federation.deduplicate?("existinghash")
     end
 
+    # Bridgy Fed ids embed a full percent-encoded article URL; a 255-char
+    # column made this raise and the inbox 500 after processing.
+    test "record_dedup/2 accepts activity ids longer than 255 chars" do
+      long_id = "https://web.brid.gy/r/https://example.com/" <> String.duplicate("%D9%88", 120)
+      assert String.length(long_id) > 600
+      assert {:ok, _} = Federation.record_dedup("longidhash", long_id)
+      assert Federation.deduplicate?("longidhash")
+    end
+
     test "record_dedup/2 stores a dedup record" do
       assert {:ok, dedup} = Federation.record_dedup("hash123", "https://example.com/activity/2")
       assert dedup.activity_hash == "hash123"
