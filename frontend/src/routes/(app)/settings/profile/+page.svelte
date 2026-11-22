@@ -466,6 +466,14 @@
     border-radius: var(--radius-xl);
   }
 
+  /* Phones: BottomTabs is fixed to the bottom (BottomTabs.svelte, same
+     breakpoint), so stick above it and the home-indicator inset. */
+  @media (max-width: 768px) {
+    .actions {
+      inset-block-end: calc(var(--header-height) + env(safe-area-inset-bottom, 0px) + var(--space-2));
+    }
+  }
+
   .actions.dirty {
     border-color: var(--color-primary);
     box-shadow: var(--shadow-md);
