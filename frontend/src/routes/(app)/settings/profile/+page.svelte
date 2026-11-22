@@ -4,11 +4,18 @@
   import { authStore, setUser, currentUser } from '$lib/stores/auth.js';
   import { updateAccount, updateAvatar, updateHeader } from '$lib/api/accounts.js';
   import { getCurrentUser } from '$lib/api/auth.js';
-  import { tError } from '$lib/utils/i18n.js';
+  import { t } from '$lib/stores/i18n.js';
+  import { t as tr, tError } from '$lib/utils/i18n.js';
   import { addToast } from '$lib/stores/toast.js';
   import type { Identity } from '$lib/api/types.js';
   import Avatar from '$lib/components/ui/Avatar.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import Toggle from '$lib/components/ui/Toggle.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
+
+  const DISPLAY_NAME_MAX = 50;
+  const BIO_MAX = 500;
 
   let avatarUploading = $state(false);
   let headerUploading = $state(false);
@@ -23,12 +30,17 @@
   let location = $state('');
   // Free-form fields user can publish on their profile (Twitter/Mastodon
   // "links + facts" section). Per-tier cap from currentUser.limits;
-  // free tier gets 0 (toggle hidden), starter 2, creator 5, pro 10.
+  // free tier gets 0 (editor hidden), starter 2, creator 5, pro 10.
   let profileFields = $state<{ name: string; value: string }[]>([]);
   let profileFieldsMax = $derived(($currentUser?.limits as { profile_fields?: number } | undefined)?.profile_fields ?? 0);
   let saving = $state(false);
   let avatarInput: HTMLInputElement | undefined = $state();
   let headerInput: HTMLInputElement | undefined = $state();
+
+  // Snapshot of the form as last loaded/saved; Save stays off until it differs.
+  let savedSnapshot = $state('');
+  let formSnapshot = $derived(JSON.stringify({ displayName, bio, showBadge, birthday, location, profileFields }));
+  let dirty = $derived(formSnapshot !== savedSnapshot);
 
   function populate(u: Identity) {
     displayName = u.display_name || '';
@@ -40,6 +52,7 @@
     birthday = u.birthday || '';
     location = u.location || '';
     profileFields = (u.profile_fields ?? []).map((f) => ({ name: f.name, value: f.value }));
+    savedSnapshot = JSON.stringify({ displayName, bio, showBadge, birthday, location, profileFields });
   }
 
   onMount(async () => {
@@ -67,7 +80,7 @@
   }
 
   async function handleSave() {
-    if (saving) return;
+    if (saving || !dirty) return;
     saving = true;
     try {
       const cleanedFields = profileFields
@@ -86,9 +99,9 @@
       });
       setUser(updated);
       populate(updated);
-      addToast('Profile saved', 'success');
+      addToast(tr('settings.profile_saved'), 'success');
     } catch (e) {
-      addToast(e instanceof Error ? e.message : 'Failed to save profile', 'error');
+      addToast(e instanceof Error ? e.message : tr('settings.profile_save_failed'), 'error');
     } finally {
       saving = false;
     }
@@ -103,7 +116,7 @@
       const updated = await updateAvatar(file);
       avatarUrl = updated.avatar_url;
       setUser(updated);
-      addToast('Profile picture updated', 'success');
+      addToast(tr('settings.profile_avatar_updated'), 'success');
     } catch (err) {
       addToast(err instanceof Error ? tError(err.message) : tError('media.upload_failed'), 'error');
     } finally {
@@ -121,7 +134,7 @@
       const updated = await updateHeader(file);
       headerUrl = updated.header_url;
       setUser(updated);
-      addToast('Header image updated', 'success');
+      addToast(tr('settings.profile_header_updated'), 'success');
     } catch (err) {
       addToast(err instanceof Error ? tError(err.message) : tError('media.upload_failed'), 'error');
     } finally {
@@ -136,615 +149,367 @@
   }
 </script>
 
-<div class="stitch-settings">
+{#snippet cameraIcon()}
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
+  </svg>
+{/snippet}
 
-  <!-- Profile Section -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-        </svg>
-      </span>
-      <h2 class="stitch-section-title">Profile</h2>
-    </div>
+<form class="profile-page" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+  <SettingsSection title={$t('settings.profile_pictures_title')} description={$t('settings.profile_pictures_desc')}>
+    <div class="pictures">
+      <button
+        type="button"
+        class="header-btn"
+        class:busy={headerUploading}
+        onclick={() => headerInput?.click()}
+        disabled={headerUploading}
+        aria-label={$t('settings.profile_change_header')}
+      >
+        <img src={headerUrl || '/images/default-cover.svg'} alt="" class="header-img" />
+        <span class="overlay">
+          {#if headerUploading}<Spinner size={22} color="#fff" />{:else}{@render cameraIcon()}{/if}
+        </span>
+      </button>
+      <input bind:this={headerInput} type="file" accept="image/*" class="visually-hidden" onchange={handleHeaderChange} />
 
-    <div class="stitch-section-content">
-      <!-- Header image -->
-      <div class="stitch-header-preview" class:busy={headerUploading} onclick={() => !headerUploading && headerInput?.click()} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter' && !headerUploading) headerInput?.click(); }}>
-        <img src={headerUrl || '/images/default-cover.svg'} alt="" class="stitch-header-img" />
-        <div class="stitch-header-overlay">
-          {#if headerUploading}
-            <Spinner size={22} color="#fff" />
-          {:else}
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-            </svg>
-          {/if}
-        </div>
-        <input bind:this={headerInput} type="file" accept="image/*" class="visually-hidden" onchange={handleHeaderChange} />
-      </div>
-
-      <!-- Avatar -->
-      <div class="stitch-avatar-area">
-        <button type="button" class="stitch-avatar-btn" class:busy={avatarUploading} onclick={() => avatarInput?.click()} disabled={avatarUploading} aria-label="Change avatar">
+      <div class="pictures-bar">
+        <button
+          type="button"
+          class="avatar-btn"
+          class:busy={avatarUploading}
+          onclick={() => avatarInput?.click()}
+          disabled={avatarUploading}
+          aria-label={$t('settings.profile_change_avatar')}
+        >
           <Avatar src={avatarUrl} name={displayName || handle} size="xl" />
-          <div class="stitch-avatar-overlay">
-            {#if avatarUploading}
-              <Spinner size={20} color="#fff" />
-            {:else}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>
-              </svg>
-            {/if}
-          </div>
+          <span class="overlay">
+            {#if avatarUploading}<Spinner size={20} color="#fff" />{:else}{@render cameraIcon()}{/if}
+          </span>
         </button>
         <input bind:this={avatarInput} type="file" accept="image/*" class="visually-hidden" onchange={handleAvatarChange} />
-      </div>
-
-      <!-- Form fields -->
-      <form class="stitch-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
-        <div class="stitch-field">
-          <label class="stitch-label" for="display-name">DISPLAY NAME</label>
-          <input
-            id="display-name"
-            type="text"
-            class="stitch-input"
-            bind:value={displayName}
-            placeholder="Your display name"
-            maxlength="50"
-          />
-        </div>
-
-        <div class="stitch-field">
-          <label class="stitch-label" for="bio">BIO</label>
-          <textarea
-            id="bio"
-            class="stitch-textarea"
-            bind:value={bio}
-            placeholder="Tell people about yourself"
-            maxlength="500"
-            rows="4"
-          ></textarea>
-          <span class="stitch-hint">{bio.length}/500</span>
-        </div>
-
-        <div class="stitch-field">
-          <label class="stitch-label" for="handle">HANDLE</label>
-          <input
-            id="handle"
-            type="text"
-            class="stitch-input stitch-input-disabled"
-            value={handle}
-            disabled
-          />
-          <span class="stitch-hint">Your handle is permanent and cannot be changed. This ensures stable identity across the federation.</span>
-        </div>
-
-        <div class="stitch-field-row">
-          <div class="stitch-field">
-            <label class="stitch-label" for="birthday">BIRTHDAY</label>
-            <input
-              id="birthday"
-              type="date"
-              class="stitch-input"
-              bind:value={birthday}
-            />
-            <span class="stitch-hint">Optional. Shown on your profile if set.</span>
-          </div>
-
-          <div class="stitch-field">
-            <label class="stitch-label" for="location">LOCATION</label>
-            <input
-              id="location"
-              type="text"
-              class="stitch-input"
-              bind:value={location}
-              placeholder="City, Country"
-              maxlength="100"
-            />
-          </div>
-        </div>
-
-        {#if profileFieldsMax > 0}
-          <div class="stitch-field">
-            <div class="stitch-fields-header">
-              <span class="stitch-label">PROFILE FIELDS</span>
-              <span class="stitch-hint">{profileFields.length}/{profileFieldsMax}</span>
-            </div>
-            <p class="stitch-hint stitch-fields-help">
-              Free-form pairs (e.g. "Website" / "https://…", "Pronouns" / "she/they"). Visible on your public profile.
-            </p>
-            {#each profileFields as field, i (i)}
-              <div class="stitch-fields-row">
-                <input
-                  type="text"
-                  class="stitch-input stitch-fields-name"
-                  placeholder="Label"
-                  maxlength="60"
-                  bind:value={field.name}
-                />
-                <input
-                  type="text"
-                  class="stitch-input stitch-fields-value"
-                  placeholder="Value"
-                  maxlength="280"
-                  bind:value={field.value}
-                />
-                <button
-                  type="button"
-                  class="stitch-fields-remove"
-                  onclick={() => removeProfileField(i)}
-                  aria-label="Remove field"
-                  title="Remove"
-                >
-                  ✕
-                </button>
-              </div>
-            {/each}
-            {#if profileFields.length < profileFieldsMax}
-              <button type="button" class="stitch-btn-ghost stitch-fields-add" onclick={addProfileField}>
-                + Add field
-              </button>
-            {/if}
-          </div>
-        {:else}
-          <p class="stitch-hint stitch-fields-help">
-            Custom profile fields are available on Starter tier and above.
-          </p>
+        {#if handle}
+          <a class="btn btn-secondary btn-sm" href="/@{handle}">{$t('settings.view_profile')}</a>
         {/if}
-
-        <!-- Show badge toggle -->
-        <div class="stitch-toggle-row">
-          <div class="stitch-toggle-info">
-            <span class="stitch-toggle-label">Show role badge</span>
-            <span class="stitch-toggle-desc">Display your instance role badge (Admin, Moderator, Owner) on your profile and posts. Group and page badges are always visible.</span>
-          </div>
-          <label class="stitch-switch">
-            <input type="checkbox" bind:checked={showBadge} />
-            <span class="stitch-switch-track"></span>
-          </label>
-        </div>
-
-        <div class="stitch-actions">
-          <button class="stitch-btn-ghost" type="button" onclick={handleDiscard}>
-            Discard Changes
-          </button>
-          <button class="stitch-btn-primary" type="submit" disabled={saving}>
-            {#if saving}
-              <Spinner size={16} color="#fff" />
-            {/if}
-            Save Settings
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
-  </section>
-</div>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.profile_basics_title')} description={$t('settings.profile_basics_desc')}>
+    <SettingRow label={$t('settings.profile_display_name')} labelFor="display-name" layout="stacked">
+      <div class="field">
+        <input
+          id="display-name"
+          type="text"
+          class="input"
+          bind:value={displayName}
+          placeholder={$t('settings.profile_display_name_placeholder')}
+          maxlength={DISPLAY_NAME_MAX}
+        />
+        <span class="counter" dir="ltr">{displayName.length}/{DISPLAY_NAME_MAX}</span>
+      </div>
+    </SettingRow>
+    <SettingRow label={$t('settings.profile_bio')} labelFor="bio" layout="stacked">
+      <div class="field">
+        <textarea
+          id="bio"
+          class="input textarea"
+          bind:value={bio}
+          placeholder={$t('settings.profile_bio_placeholder')}
+          maxlength={BIO_MAX}
+          rows="4"
+        ></textarea>
+        <span class="counter" dir="ltr">{bio.length}/{BIO_MAX}</span>
+      </div>
+    </SettingRow>
+    <SettingRow label={$t('settings.profile_handle')} help={$t('settings.profile_handle_help')} labelFor="handle" layout="stacked">
+      <input id="handle" type="text" class="input" dir="ltr" value={handle} disabled />
+    </SettingRow>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.profile_details_title')} description={$t('settings.profile_details_desc')}>
+    <SettingRow label={$t('settings.profile_location')} labelFor="location" layout="stacked">
+      <input
+        id="location"
+        type="text"
+        class="input"
+        bind:value={location}
+        placeholder={$t('settings.profile_location_placeholder')}
+        maxlength="100"
+      />
+    </SettingRow>
+    <SettingRow label={$t('settings.profile_birthday')} help={$t('settings.profile_birthday_help')} labelFor="birthday" layout="stacked">
+      <input id="birthday" type="date" class="input" bind:value={birthday} />
+    </SettingRow>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.profile_fields_title')} description={$t('settings.profile_fields_desc')}>
+    {#if profileFieldsMax > 0}
+      <div class="fields">
+        <p class="fields-used">{$t('settings.profile_fields_used', { used: profileFields.length, max: profileFieldsMax })}</p>
+        {#each profileFields as field, i (i)}
+          <div class="fields-row">
+            <input
+              type="text"
+              class="input fields-name"
+              placeholder={$t('settings.profile_fields_label_placeholder')}
+              aria-label={$t('settings.profile_fields_label_placeholder')}
+              maxlength="60"
+              bind:value={field.name}
+            />
+            <input
+              type="text"
+              class="input fields-value"
+              placeholder={$t('settings.profile_fields_value_placeholder')}
+              aria-label={$t('settings.profile_fields_value_placeholder')}
+              maxlength="280"
+              bind:value={field.value}
+            />
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm fields-remove"
+              onclick={() => removeProfileField(i)}
+              aria-label={$t('settings.profile_fields_remove')}
+              title={$t('settings.profile_fields_remove')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
+        {/each}
+        {#if profileFields.length < profileFieldsMax}
+          <button type="button" class="btn btn-secondary btn-sm fields-add" onclick={addProfileField}>
+            + {$t('settings.profile_fields_add')}
+          </button>
+        {/if}
+      </div>
+    {:else}
+      <p class="fields-upgrade">{$t('settings.profile_fields_upgrade')}</p>
+    {/if}
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.profile_badge_title')}>
+    <SettingRow label={$t('settings.profile_badge_label')} help={$t('settings.profile_badge_help')} labelFor="show-badge">
+      <Toggle id="show-badge" bind:checked={showBadge} />
+    </SettingRow>
+  </SettingsSection>
+
+  <div class="actions" class:dirty>
+    <span class="actions-status" aria-live="polite">
+      {dirty ? $t('settings.profile_unsaved') : $t('settings.profile_all_saved')}
+    </span>
+    <div class="actions-buttons">
+      <button class="btn btn-ghost" type="button" onclick={handleDiscard} disabled={!dirty || saving}>
+        {$t('settings.profile_discard')}
+      </button>
+      <button class="btn btn-primary" type="submit" disabled={!dirty || saving}>
+        {#if saving}<Spinner size={16} color="#fff" />{/if}
+        {$t('settings.profile_save')}
+      </button>
+    </div>
+  </div>
+</form>
 
 <style>
-  /* ---- Page header ---- */
-  .stitch-settings {
-    max-width: 720px;
-  }
-
-  /* ---- Section ---- */
-  .stitch-section {
-    margin-block-end: 24px;
-  }
-
-  .stitch-section-heading {
+  .profile-page {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-block-end: 16px;
+    flex-direction: column;
+    gap: var(--space-5);
   }
 
-  .stitch-section-icon {
-    color: var(--color-primary);
-    display: flex;
-    align-items: center;
-  }
-
-  .stitch-section-title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  /* ---- Section content container ---- */
-  .stitch-section-content {
-    background: var(--color-surface-container-low);
-    border-radius: 16px;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  /* ---- Header image ---- */
-  .stitch-header-preview {
-    height: 160px;
-    cursor: pointer;
+  /* ---- Pictures: header with the avatar overlapping its lower edge ---- */
+  .header-btn {
     position: relative;
+    display: block;
+    width: 100%;
+    height: 160px;
+    padding: 0;
+    border: none;
     overflow: hidden;
+    cursor: pointer;
     background: var(--color-surface-container-high);
   }
 
-  .stitch-header-img {
+  .header-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: opacity 0.2s ease;
   }
 
-  .stitch-header-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    color: var(--color-text-tertiary);
-    font-size: 0.8125rem;
-  }
-
-  .stitch-header-overlay {
+  .overlay {
     position: absolute;
     inset: 0;
-    background: var(--scrim-medium);
     display: flex;
     align-items: center;
     justify-content: center;
+    background: var(--scrim-medium);
     color: white;
     opacity: 0;
     transition: opacity 0.2s ease;
   }
 
-  .stitch-header-preview:hover .stitch-header-overlay,
-  .stitch-header-preview.busy .stitch-header-overlay,
-  .stitch-avatar-btn.busy .stitch-avatar-overlay {
+  .avatar-btn .overlay {
+    border-radius: 50%;
+  }
+
+  .header-btn:hover .overlay,
+  .header-btn:focus-visible .overlay,
+  .avatar-btn:hover .overlay,
+  .avatar-btn:focus-visible .overlay,
+  .busy .overlay {
     opacity: 1;
   }
 
-  .stitch-header-preview.busy,
-  .stitch-avatar-btn.busy {
+  .busy {
     cursor: default;
   }
 
-  /* ---- Avatar ---- */
-  .stitch-avatar-area {
-    padding-inline-start: 32px;
-    margin-block-start: -40px;
-    margin-block-end: 8px;
-    position: relative;
-    z-index: 1;
+  .pictures-bar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: 0 var(--space-5) var(--space-4);
+    margin-block-start: -48px;
   }
 
-  .stitch-avatar-btn {
+  .avatar-btn {
     position: relative;
-    border: none;
-    padding: 0;
-    cursor: pointer;
-    background: none;
     display: block;
+    padding: 0;
+    border: none;
     border-radius: 50%;
-    ring: none;
+    background: none;
+    cursor: pointer;
   }
 
-  .stitch-avatar-btn :global(.avatar) {
+  .avatar-btn :global(.avatar) {
     width: 96px !important;
     height: 96px !important;
-    ring: 4px solid var(--color-surface);
+    border: 4px solid var(--color-surface-raised);
+    border-radius: 50%;
     box-shadow: var(--shadow-md);
-    border: 4px solid var(--color-surface);
-    border-radius: 50%;
   }
 
-  .stitch-avatar-overlay {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    background: var(--scrim-medium);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-  }
-
-  .stitch-avatar-btn:hover .stitch-avatar-overlay {
-    opacity: 1;
-  }
-
-  /* ---- Form ---- */
-  .stitch-form {
-    padding: 24px 32px 32px;
+  /* ---- Text fields ---- */
+  .field {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 4px;
   }
 
-  .stitch-field {
+  .textarea {
+    resize: vertical;
+    font-family: inherit;
+  }
+
+  .counter {
+    align-self: flex-end;
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+  }
+
+  /* ---- Profile fields ---- */
+  .fields {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-5);
   }
 
-  /* Two-up grid: birthday + location side by side on wide screens,
-     stacked on phones. */
-  .stitch-field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
+  .fields-used,
+  .fields-upgrade {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
   }
 
-  @media (max-width: 600px) {
-    .stitch-field-row {
-      grid-template-columns: 1fr;
-    }
+  .fields-upgrade {
+    padding: var(--space-4) var(--space-5);
   }
 
-  .stitch-fields-header {
+  .fields-row {
     display: flex;
+    gap: var(--space-2);
     align-items: center;
-    justify-content: space-between;
   }
 
-  .stitch-fields-help {
-    margin: 0 0 8px;
-  }
-
-  .stitch-fields-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    margin-block-end: 8px;
-  }
-
-  .stitch-fields-name {
-    flex: 0 0 30%;
+  .fields-name {
+    flex: 0 0 32%;
     min-width: 0;
   }
 
-  .stitch-fields-value {
+  .fields-value {
     flex: 1;
     min-width: 0;
   }
 
-  .stitch-fields-remove {
+  .fields-remove {
     flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border: 1px solid var(--color-border);
-    background: transparent;
-    border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
-    cursor: pointer;
   }
 
-  .stitch-fields-remove:hover {
-    background: var(--color-surface);
-    color: var(--color-text);
-  }
-
-  .stitch-fields-add {
+  .fields-add {
     align-self: flex-start;
-    margin-block-start: 4px;
   }
 
-  .stitch-label {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-text-secondary);
-    margin-inline-start: 4px;
-  }
-
-  .stitch-input {
-    display: block;
-    width: 100%;
-    padding: 12px 16px;
-    background: var(--color-surface-container-high);
-    border: none;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    color: var(--color-text);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .stitch-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-input:focus {
-    outline: none;
-    background: var(--color-surface-container-lowest);
-    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
-  }
-
-  .stitch-input-disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-textarea {
-    display: block;
-    width: 100%;
-    padding: 12px 16px;
-    background: var(--color-surface-container-high);
-    border: none;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    color: var(--color-text);
-    resize: vertical;
-    font-family: inherit;
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .stitch-textarea::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-textarea:focus {
-    outline: none;
-    background: var(--color-surface-container-lowest);
-    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
-  }
-
-  .stitch-hint {
-    font-size: 0.75rem;
-    color: var(--color-text-tertiary);
-    margin-inline-start: 4px;
-  }
-
-  /* ---- Toggle row ---- */
-  .stitch-toggle-row {
+  /* ---- Save bar: sticks to the bottom while the form scrolls ---- */
+  .actions {
+    position: sticky;
+    inset-block-end: var(--space-3);
+    z-index: 2;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    padding: 12px 0;
-    border-block-start: 1px solid var(--scrim-soft);
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
   }
 
-  .stitch-toggle-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  /* Phones: BottomTabs is fixed to the bottom (BottomTabs.svelte, same
+     breakpoint), so stick above it and the home-indicator inset. */
+  @media (max-width: 768px) {
+    .actions {
+      inset-block-end: calc(var(--header-height) + env(safe-area-inset-bottom, 0px) + var(--space-2));
+    }
   }
 
-  .stitch-toggle-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-text);
+  .actions.dirty {
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-md);
   }
 
-  .stitch-toggle-desc {
-    font-size: 0.75rem;
-    color: var(--color-text-tertiary);
-    line-height: 1.4;
-  }
-
-  /* Pill-shaped toggle switch */
-  .stitch-switch {
-    position: relative;
-    display: inline-flex;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .stitch-switch input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  .stitch-switch-track {
-    width: 44px;
-    height: 24px;
-    background: var(--color-border);
-    border-radius: 12px;
-    position: relative;
-    transition: background-color 0.2s ease;
-  }
-
-  .stitch-switch-track::after {
-    content: '';
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 20px;
-    height: 20px;
-    background: white;
-    border-radius: 50%;
-    transition: transform 0.2s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-  }
-
-  .stitch-switch input:checked + .stitch-switch-track {
-    background: var(--color-primary);
-  }
-
-  .stitch-switch input:checked + .stitch-switch-track::after {
-    transform: translateX(20px);
-  }
-
-  /* ---- Action buttons ---- */
-  .stitch-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    padding-block-start: 8px;
-  }
-
-  .stitch-btn-ghost {
-    padding: 10px 24px;
-    background: transparent;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
+  .actions-status {
+    font-size: var(--text-sm);
     color: var(--color-text-secondary);
-    cursor: pointer;
-    transition: color 0.15s ease, background-color 0.15s ease;
   }
 
-  .stitch-btn-ghost:hover {
-    color: var(--color-text);
-    background: var(--scrim-tint);
+  .actions-buttons {
+    display: flex;
+    gap: var(--space-2);
   }
 
-  .stitch-btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 28px;
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.2);
-    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-  }
-
-  .stitch-btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb), 0.3);
-  }
-
-  .stitch-btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .stitch-btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  /* ---- Responsive ---- */
-  @media (max-width: 640px) {
-    .stitch-form {
-      padding: 20px;
+  @media (max-width: 560px) {
+    .header-btn {
+      height: 120px;
     }
 
-    .stitch-avatar-area {
-      padding-inline-start: 20px;
+    .pictures-bar {
+      margin-block-start: -40px;
     }
 
-    .stitch-actions {
+    .avatar-btn :global(.avatar) {
+      width: 80px !important;
+      height: 80px !important;
+    }
+
+    .actions {
       flex-direction: column;
+      align-items: stretch;
     }
 
-    .stitch-btn-ghost,
-    .stitch-btn-primary {
-      width: 100%;
+    .actions-buttons > * {
+      flex: 1;
       justify-content: center;
     }
   }
