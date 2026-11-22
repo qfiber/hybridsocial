@@ -2,337 +2,139 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
+  import { t } from '$lib/stores/i18n.js';
+  import Avatar from '$lib/components/ui/Avatar.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
 
-  // The API nests the requester under `account` (Mastodon-style), same as
-  // every other account list in the app. Reading it flat is what crashed
-  // the page with "charAt of undefined" (issue #27).
-  interface FollowRequestAccount {
-    handle: string;
-    display_name: string | null;
-    avatar_url: string | null;
-  }
-
+  // The API nests the requester under `account` (Mastodon-style); reading it
+  // flat is what crashed this page once (issue #27).
   interface FollowRequest {
     id: string;
-    account: FollowRequestAccount;
+    account: { handle: string; acct?: string; display_name: string | null; avatar_url: string | null };
     created_at: string;
   }
 
-  let requests: FollowRequest[] = $state([]);
+  let requests = $state<FollowRequest[]>([]);
   let loading = $state(true);
-  let processingId: string | null = $state(null);
+  let processingId = $state<string | null>(null);
 
   onMount(async () => {
     try {
       const res = await api.get<FollowRequest[]>('/api/v1/accounts/follow_requests');
       requests = Array.isArray(res) ? res : [];
     } catch {
-      addToast('Failed to load follow requests', 'error');
+      addToast($t('settings.requests_load_failed'), 'error');
     } finally {
       loading = false;
     }
   });
 
-  async function handleApprove(request: FollowRequest) {
+  async function decide(request: FollowRequest, verb: 'authorize' | 'reject') {
     processingId = request.id;
+    const handle = request.account.acct || request.account.handle;
     try {
-      await api.post(`/api/v1/follow_requests/${request.id}/authorize`);
-      requests = requests.filter(r => r.id !== request.id);
-      addToast(`Approved @${request.account.handle}`, 'success');
+      await api.post(`/api/v1/follow_requests/${request.id}/${verb}`);
+      requests = requests.filter((r) => r.id !== request.id);
+      addToast($t(verb === 'authorize' ? 'settings.requests_approved' : 'settings.requests_declined', { handle }), 'success');
     } catch {
-      addToast('Failed to approve follow request', 'error');
+      addToast($t('settings.requests_failed'), 'error');
     } finally {
       processingId = null;
     }
   }
 
-  async function handleReject(request: FollowRequest) {
-    processingId = request.id;
-    try {
-      await api.post(`/api/v1/follow_requests/${request.id}/reject`);
-      requests = requests.filter(r => r.id !== request.id);
-      addToast(`Rejected @${request.account.handle}`, 'success');
-    } catch {
-      addToast('Failed to reject follow request', 'error');
-    } finally {
-      processingId = null;
-    }
-  }
-
-  function formatDate(iso: string): string {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 </script>
 
-<div class="stitch-settings">
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/>
-        </svg>
-      </span>
-      <h2 class="stitch-section-title">Pending Requests</h2>
-    </div>
-
-    <div class="stitch-section-content">
-      <div class="stitch-form">
-        <p class="stitch-description">
-          These people have requested to follow your account. Approve to let them see your posts, or reject to deny the request.
-        </p>
-
-        {#if loading}
-          <div class="stitch-loading"><Spinner size={20} /> Loading follow requests...</div>
-        {:else if requests.length === 0}
-          <p class="stitch-description">No pending follow requests.</p>
-        {:else}
-          <div class="stitch-list">
-            {#each requests as request (request.id)}
-              <div class="stitch-list-item">
-                <div class="stitch-list-avatar">
-                  {#if request.account.avatar_url}
-                    <img src={request.account.avatar_url} alt="" class="stitch-avatar-img" />
-                  {:else}
-                    <div class="stitch-avatar-placeholder">
-                      {(request.account.display_name || request.account.handle || '?').charAt(0).toUpperCase()}
-                    </div>
-                  {/if}
-                </div>
-                <div class="stitch-list-info">
-                  <div class="stitch-list-name">{request.account.display_name || request.account.handle}</div>
-                  <div class="stitch-list-meta">
-                    <span class="stitch-list-handle">@{request.account.handle}</span>
-                    <span class="stitch-list-dot">&middot;</span>
-                    <span>{formatDate(request.created_at)}</span>
-                  </div>
-                </div>
-                <div class="stitch-request-actions">
-                  <button
-                    class="stitch-btn-approve"
-                    onclick={() => handleApprove(request)}
-                    disabled={processingId === request.id}
-                    title="Approve"
-                  >
-                    {#if processingId === request.id}
-                      <Spinner size={14} color="#fff" />
-                    {:else}
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    {/if}
-                  </button>
-                  <button
-                    class="stitch-btn-reject"
-                    onclick={() => handleReject(request)}
-                    disabled={processingId === request.id}
-                    title="Reject"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            {/each}
-          </div>
-        {/if}
+<SettingsSection title={$t('settings.requests_title')} description={$t('settings.requests_desc')}>
+  {#if loading}
+    <div class="placeholder"><Spinner size={18} /></div>
+  {:else if requests.length === 0}
+    <p class="placeholder">{$t('settings.requests_empty')}</p>
+  {:else}
+    {#each requests as request (request.id)}
+      {@const a = request.account}
+      {@const handle = a.acct || a.handle}
+      <div class="list-row">
+        <a href="/@{handle}" class="who">
+          <Avatar src={a.avatar_url} name={a.display_name || a.handle} size="sm" />
+          <span class="who-text">
+            <span class="who-name">{a.display_name || a.handle}</span>
+            <span class="who-handle" dir="ltr">@{handle} · {formatDate(request.created_at)}</span>
+          </span>
+        </a>
+        <div class="actions">
+          <button type="button" class="btn btn-secondary btn-sm" onclick={() => decide(request, 'reject')} disabled={processingId === request.id}>
+            {$t('settings.requests_decline')}
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" onclick={() => decide(request, 'authorize')} disabled={processingId === request.id}>
+            {#if processingId === request.id}<Spinner size={14} color="#fff" />{/if}
+            {$t('settings.requests_approve')}
+          </button>
+        </div>
       </div>
-    </div>
-  </section>
-</div>
+    {/each}
+  {/if}
+</SettingsSection>
 
 <style>
-  .stitch-settings {
-    max-width: 720px;
-  }
-
-  .stitch-section {
-    margin-block-end: 24px;
-  }
-
-  .stitch-section-heading {
+  .list-row {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-block-end: 16px;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
   }
 
-  .stitch-section-icon {
-    color: var(--color-primary);
+  .who {
     display: flex;
     align-items: center;
-  }
-
-  .stitch-section-title {
-    font-size: 1.125rem;
-    font-weight: 700;
+    gap: var(--space-3);
+    min-width: 0;
     color: var(--color-text);
-    margin: 0;
+    text-decoration: none;
   }
 
-  .stitch-section-content {
-    background: var(--color-surface-container-low);
-    border-radius: 16px;
-    overflow: hidden;
+  .who:hover .who-name {
+    text-decoration: underline;
   }
 
-  .stitch-form {
-    padding: 24px 32px 32px;
+  .who-text {
     display: flex;
     flex-direction: column;
-    gap: 20px;
-  }
-
-  .stitch-description {
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-  }
-
-  .stitch-loading {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-  }
-
-  .stitch-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--scrim-soft);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .stitch-list-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--color-surface-container-high);
-  }
-
-  .stitch-list-avatar {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    overflow: hidden;
-  }
-
-  .stitch-avatar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .stitch-avatar-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-primary);
-    color: white;
-    font-weight: 700;
-    font-size: 1rem;
-  }
-
-  .stitch-list-info {
-    flex: 1;
     min-width: 0;
   }
 
-  .stitch-list-name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-text);
+  .who-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .who-handle {
+    font-size: var(--text-xs);
+    color: var(--color-text-tertiary);
+    text-align: start;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .stitch-list-meta {
+  .actions {
     display: flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 0.75rem;
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-list-handle {
-    font-size: 0.75rem;
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-list-dot {
-    font-size: 0.75rem;
-  }
-
-  .stitch-request-actions {
-    display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     flex-shrink: 0;
   }
 
-  .stitch-btn-approve {
-    display: inline-flex;
-    align-items: center;
+  .placeholder {
+    display: flex;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: var(--color-success);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background-color 0.15s ease, transform 0.1s ease;
-  }
-
-  .stitch-btn-approve:hover:not(:disabled) {
-    background: #15803d;
-    transform: scale(1.05);
-  }
-
-  .stitch-btn-approve:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-reject {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: var(--color-danger);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: background-color 0.15s ease, transform 0.1s ease;
-  }
-
-  .stitch-btn-reject:hover:not(:disabled) {
-    background: #b91c1c;
-    transform: scale(1.05);
-  }
-
-  .stitch-btn-reject:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  @media (max-width: 640px) {
-    .stitch-form {
-      padding: 20px;
-    }
+    padding: var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--color-text-tertiary);
   }
 </style>

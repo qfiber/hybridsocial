@@ -2,574 +2,225 @@
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
+  import { t } from '$lib/stores/i18n.js';
+  import Avatar from '$lib/components/ui/Avatar.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
 
-  interface BlockedAccount {
+  interface ListedAccount {
     id: string;
     handle: string;
+    acct?: string;
     display_name: string;
     avatar_url: string | null;
+    muted_until?: string | null;
   }
 
-  interface DomainBlock {
-    domain: string;
-  }
-
-  interface MutedAccount {
-    id: string;
-    handle: string;
-    display_name: string;
-    avatar_url: string | null;
-    muted_until: string | null;
-  }
-
-  let blockedAccounts: BlockedAccount[] = $state([]);
-  let domainBlocks: string[] = $state([]);
-  let mutedAccounts: MutedAccount[] = $state([]);
-  let accountsLoading = $state(true);
-  let domainsLoading = $state(true);
-  let mutesLoading = $state(true);
-  let unblockingId: string | null = $state(null);
-  let removingDomain: string | null = $state(null);
-  let unmutingId: string | null = $state(null);
+  let blocked = $state<ListedAccount[]>([]);
+  let muted = $state<ListedAccount[]>([]);
+  let domains = $state<string[]>([]);
+  let loading = $state({ blocked: true, muted: true, domains: true });
+  let busy = $state<string | null>(null);
   let newDomain = $state('');
-  let addingDomain = $state(false);
 
-  onMount(async () => {
-    await Promise.all([loadBlockedAccounts(), loadDomainBlocks(), loadMutedAccounts()]);
+  onMount(() => {
+    load('blocked', '/api/v1/accounts/blocks', (r: ListedAccount[]) => (blocked = r), 'settings.blocks_load_failed');
+    load('muted', '/api/v1/accounts/mutes', (r: ListedAccount[]) => (muted = r), 'settings.mutes_load_failed');
+    load('domains', '/api/v1/accounts/domain_blocks', (r: { domain: string }[]) => (domains = r.map((b) => b.domain)), 'settings.domains_load_failed');
   });
 
-  async function loadMutedAccounts() {
+  async function load<T>(key: keyof typeof loading, url: string, set: (r: T[]) => void, failKey: string) {
     try {
-      const res = await api.get<MutedAccount[]>('/api/v1/accounts/mutes');
-      mutedAccounts = Array.isArray(res) ? res : [];
+      const res = await api.get<T[]>(url);
+      set(Array.isArray(res) ? res : []);
     } catch {
-      addToast('Failed to load muted accounts', 'error');
+      addToast($t(failKey), 'error');
     } finally {
-      mutesLoading = false;
+      loading[key] = false;
     }
   }
 
-  async function handleUnmute(account: MutedAccount) {
-    unmutingId = account.id;
+  /** Run a list action, remove the row on success, toast either way. */
+  async function act(id: string, call: () => Promise<unknown>, onDone: () => void, okKey: string, failKey: string, params = {}) {
+    busy = id;
     try {
-      await api.post(`/api/v1/accounts/${account.id}/unmute`);
-      mutedAccounts = mutedAccounts.filter((a) => a.id !== account.id);
-      addToast(`Unmuted @${account.handle}`, 'success');
+      await call();
+      onDone();
+      addToast($t(okKey, params), 'success');
     } catch {
-      addToast('Failed to unmute account', 'error');
+      addToast($t(failKey, params), 'error');
     } finally {
-      unmutingId = null;
+      busy = null;
     }
   }
 
-  function formatMuteExpiry(iso: string | null): string {
-    if (!iso) return 'Indefinite';
-    const date = new Date(iso);
-    if (date.getTime() <= Date.now()) return 'Expired';
-    return `Until ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  const name = (a: ListedAccount) => a.display_name || a.handle;
+  const acct = (a: ListedAccount) => a.acct || a.handle;
+
+  function unblock(a: ListedAccount) {
+    act(`b:${a.id}`, () => api.post(`/api/v1/accounts/${a.id}/unblock`), () => (blocked = blocked.filter((x) => x.id !== a.id)), 'settings.blocks_unblocked', 'settings.blocks_unblock_failed', { handle: acct(a) });
   }
 
-  async function loadBlockedAccounts() {
-    try {
-      const res = await api.get<BlockedAccount[]>('/api/v1/accounts/blocks');
-      blockedAccounts = Array.isArray(res) ? res : [];
-    } catch {
-      addToast('Failed to load blocked accounts', 'error');
-    } finally {
-      accountsLoading = false;
-    }
+  function unmute(a: ListedAccount) {
+    act(`m:${a.id}`, () => api.post(`/api/v1/accounts/${a.id}/unmute`), () => (muted = muted.filter((x) => x.id !== a.id)), 'settings.mutes_unmuted', 'settings.mutes_unmute_failed', { handle: acct(a) });
   }
 
-  async function loadDomainBlocks() {
-    try {
-      const res = await api.get<{ id: string; domain: string }[]>('/api/v1/accounts/domain_blocks');
-      domainBlocks = Array.isArray(res) ? res.map(b => b.domain) : [];
-    } catch {
-      addToast('Failed to load domain blocks', 'error');
-    } finally {
-      domainsLoading = false;
-    }
+  function removeDomain(domain: string) {
+    act(`d:${domain}`, () => api.delete('/api/v1/accounts/domain_blocks', { domain }), () => (domains = domains.filter((d) => d !== domain)), 'settings.domains_unblocked', 'settings.domains_unblock_failed', { domain });
   }
 
-  async function handleUnblock(account: BlockedAccount) {
-    unblockingId = account.id;
-    try {
-      await api.post(`/api/v1/accounts/${account.id}/unblock`);
-      blockedAccounts = blockedAccounts.filter(a => a.id !== account.id);
-      addToast(`Unblocked @${account.handle}`, 'success');
-    } catch {
-      addToast('Failed to unblock account', 'error');
-    } finally {
-      unblockingId = null;
-    }
-  }
-
-  async function handleAddDomain(e: Event) {
+  function addDomain(e: SubmitEvent) {
     e.preventDefault();
-    const domain = newDomain.trim().toLowerCase();
-    if (!domain) return;
-
-    addingDomain = true;
-    try {
-      await api.post('/api/v1/accounts/domain_blocks', { domain });
-      domainBlocks = [...domainBlocks, domain];
-      newDomain = '';
-      addToast(`Blocked domain ${domain}`, 'success');
-    } catch {
-      addToast('Failed to block domain', 'error');
-    } finally {
-      addingDomain = false;
-    }
+    // Accept a pasted URL or @user@host too; keep just the host.
+    const domain = newDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^.*@/, '').replace(/\/.*$/, '');
+    if (!domain || domains.includes(domain)) return void (newDomain = '');
+    act('add', () => api.post('/api/v1/accounts/domain_blocks', { domain }), () => { domains = [...domains, domain]; newDomain = ''; }, 'settings.domains_blocked', 'settings.domains_block_failed', { domain });
   }
 
-  async function handleRemoveDomain(domain: string) {
-    removingDomain = domain;
-    try {
-      await api.delete('/api/v1/accounts/domain_blocks', { domain });
-      domainBlocks = domainBlocks.filter(d => d !== domain);
-      addToast(`Unblocked domain ${domain}`, 'success');
-    } catch {
-      addToast('Failed to unblock domain', 'error');
-    } finally {
-      removingDomain = null;
-    }
+  function muteExpiry(iso: string | null | undefined): string {
+    if (!iso) return $t('settings.mutes_indefinite');
+    const date = new Date(iso);
+    if (date.getTime() <= Date.now()) return $t('settings.mutes_expired');
+    return $t('settings.mutes_until', { date: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) });
   }
 </script>
 
-<div class="stitch-settings">
-  <!-- Blocked Accounts -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
+{#snippet accountRow(a: ListedAccount, meta: string, actionLabel: string, onAction: () => void, busyKey: string)}
+  <div class="list-row">
+    <a href="/@{acct(a)}" class="who">
+      <Avatar src={a.avatar_url} name={name(a)} size="sm" />
+      <span class="who-text">
+        <span class="who-name">{name(a)}</span>
+        <span class="who-handle" dir="ltr">@{acct(a)}{meta ? ` · ${meta}` : ''}</span>
       </span>
-      <h2 class="stitch-section-title">Blocked Accounts</h2>
-    </div>
+    </a>
+    <button type="button" class="btn btn-secondary btn-sm" onclick={onAction} disabled={busy === busyKey}>
+      {#if busy === busyKey}<Spinner size={14} />{/if}
+      {actionLabel}
+    </button>
+  </div>
+{/snippet}
 
-    <div class="stitch-section-content">
-      <div class="stitch-form">
-        <p class="stitch-description">
-          Blocked accounts cannot see your posts, follow you, or send you messages.
-        </p>
+<div class="blocks-page">
+  <SettingsSection title={$t('settings.blocks_title')} description={$t('settings.blocks_desc')}>
+    {#if loading.blocked}
+      <div class="placeholder"><Spinner size={18} /></div>
+    {:else if blocked.length === 0}
+      <p class="placeholder">{$t('settings.blocks_empty')}</p>
+    {:else}
+      {#each blocked as a (a.id)}
+        {@render accountRow(a, '', $t('settings.blocks_unblock'), () => unblock(a), `b:${a.id}`)}
+      {/each}
+    {/if}
+  </SettingsSection>
 
-        {#if accountsLoading}
-          <div class="stitch-loading"><Spinner size={20} /> Loading blocked accounts...</div>
-        {:else if blockedAccounts.length === 0}
-          <p class="stitch-description">You haven't blocked any accounts.</p>
-        {:else}
-          <div class="stitch-list">
-            {#each blockedAccounts as account (account.id)}
-              <div class="stitch-list-item">
-                <div class="stitch-list-avatar">
-                  {#if account.avatar_url}
-                    <img src={account.avatar_url} alt="" class="stitch-avatar-img" />
-                  {:else}
-                    <div class="stitch-avatar-placeholder">
-                      {(account.display_name || account.handle).charAt(0).toUpperCase()}
-                    </div>
-                  {/if}
-                </div>
-                <div class="stitch-list-info">
-                  <div class="stitch-list-name">{account.display_name || account.handle}</div>
-                  <div class="stitch-list-handle">@{account.handle}</div>
-                </div>
-                <button
-                  class="stitch-btn-outline stitch-btn-sm"
-                  onclick={() => handleUnblock(account)}
-                  disabled={unblockingId === account.id}
-                >
-                  {#if unblockingId === account.id}
-                    <Spinner size={14} />
-                  {/if}
-                  Unblock
-                </button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </div>
-  </section>
+  <SettingsSection title={$t('settings.mutes_title')} description={$t('settings.mutes_desc')}>
+    {#if loading.muted}
+      <div class="placeholder"><Spinner size={18} /></div>
+    {:else if muted.length === 0}
+      <p class="placeholder">{$t('settings.mutes_empty')}</p>
+    {:else}
+      {#each muted as a (a.id)}
+        {@render accountRow(a, muteExpiry(a.muted_until), $t('settings.mutes_unmute'), () => unmute(a), `m:${a.id}`)}
+      {/each}
+    {/if}
+  </SettingsSection>
 
-  <!-- Domain Blocks -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-        </svg>
-      </span>
-      <h2 class="stitch-section-title">Blocked Domains</h2>
-    </div>
-
-    <div class="stitch-section-content">
-      <div class="stitch-form">
-        <p class="stitch-description">
-          Block an entire domain to hide all content from users on that instance.
-        </p>
-
-        <form class="stitch-inline-form" onsubmit={handleAddDomain}>
-          <input
-            type="text"
-            class="stitch-input"
-            bind:value={newDomain}
-            placeholder="example.com"
-            required
-          />
-          <button class="stitch-btn-primary stitch-btn-sm" type="submit" disabled={addingDomain}>
-            {#if addingDomain}
-              <Spinner size={14} color="#fff" />
-            {/if}
-            Block Domain
+  <SettingsSection title={$t('settings.domains_title')} description={$t('settings.domains_desc')}>
+    <form class="add-row" onsubmit={addDomain}>
+      <label class="visually-hidden" for="block-domain">{$t('settings.domains_add_label')}</label>
+      <input id="block-domain" class="input" type="text" dir="ltr" autocomplete="off" placeholder="example.social" bind:value={newDomain} />
+      <button type="submit" class="btn btn-primary btn-sm" disabled={!newDomain.trim() || busy === 'add'}>
+        {#if busy === 'add'}<Spinner size={14} />{/if}
+        {$t('settings.domains_add')}
+      </button>
+    </form>
+    {#if loading.domains}
+      <div class="placeholder"><Spinner size={18} /></div>
+    {:else if domains.length === 0}
+      <p class="placeholder">{$t('settings.domains_empty')}</p>
+    {:else}
+      {#each domains as d (d)}
+        <div class="list-row">
+          <span class="domain" dir="ltr">{d}</span>
+          <button type="button" class="btn btn-secondary btn-sm" onclick={() => removeDomain(d)} disabled={busy === `d:${d}`}>
+            {#if busy === `d:${d}`}<Spinner size={14} />{/if}
+            {$t('settings.domains_unblock')}
           </button>
-        </form>
-
-        {#if domainsLoading}
-          <div class="stitch-loading"><Spinner size={20} /> Loading domain blocks...</div>
-        {:else if domainBlocks.length === 0}
-          <p class="stitch-description">No domain blocks.</p>
-        {:else}
-          <div class="stitch-list">
-            {#each domainBlocks as domain (domain)}
-              <div class="stitch-list-item">
-                <div class="stitch-list-info">
-                  <div class="stitch-list-name">{domain}</div>
-                </div>
-                <button
-                  class="stitch-btn-danger stitch-btn-sm"
-                  onclick={() => handleRemoveDomain(domain)}
-                  disabled={removingDomain === domain}
-                >
-                  {#if removingDomain === domain}
-                    <Spinner size={14} color="#fff" />
-                  {/if}
-                  Remove
-                </button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </div>
-  </section>
-
-  <!-- Muted Accounts -->
-  <section class="stitch-section">
-    <div class="stitch-section-heading">
-      <span class="stitch-section-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.12 1.5-.35 2.18"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-        </svg>
-      </span>
-      <h2 class="stitch-section-title">Muted Accounts</h2>
-    </div>
-
-    <div class="stitch-section-content">
-      <div class="stitch-form">
-        <p class="stitch-description">
-          Muted accounts won't appear in your home feed or notifications. They can still follow you and see your posts.
-        </p>
-
-        {#if mutesLoading}
-          <div class="stitch-loading"><Spinner size={20} /> Loading muted accounts...</div>
-        {:else if mutedAccounts.length === 0}
-          <p class="stitch-description">You haven't muted any accounts.</p>
-        {:else}
-          <div class="stitch-list">
-            {#each mutedAccounts as account (account.id)}
-              <div class="stitch-list-item">
-                <div class="stitch-list-avatar">
-                  {#if account.avatar_url}
-                    <img src={account.avatar_url} alt="" class="stitch-avatar-img" />
-                  {:else}
-                    <div class="stitch-avatar-placeholder">
-                      {(account.display_name || account.handle).charAt(0).toUpperCase()}
-                    </div>
-                  {/if}
-                </div>
-                <div class="stitch-list-info">
-                  <div class="stitch-list-name">{account.display_name || account.handle}</div>
-                  <div class="stitch-list-meta">
-                    <span class="stitch-list-handle">@{account.handle}</span>
-                    <span class="stitch-list-dot">&middot;</span>
-                    <span class="stitch-list-expiry">{formatMuteExpiry(account.muted_until)}</span>
-                  </div>
-                </div>
-                <button
-                  class="stitch-btn-outline stitch-btn-sm"
-                  onclick={() => handleUnmute(account)}
-                  disabled={unmutingId === account.id}
-                >
-                  {#if unmutingId === account.id}
-                    <Spinner size={14} />
-                  {/if}
-                  Unmute
-                </button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    </div>
-  </section>
+        </div>
+      {/each}
+    {/if}
+  </SettingsSection>
 </div>
 
 <style>
-  .stitch-settings {
-    max-width: 720px;
-  }
-
-  .stitch-section {
-    margin-block-end: 24px;
-  }
-
-  .stitch-section-heading {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-block-end: 16px;
-  }
-
-  .stitch-section-icon {
-    color: var(--color-primary);
-    display: flex;
-    align-items: center;
-  }
-
-  .stitch-section-title {
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--color-text);
-    margin: 0;
-  }
-
-  .stitch-section-content {
-    background: var(--color-surface-container-low);
-    border-radius: 16px;
-    overflow: hidden;
-  }
-
-  .stitch-form {
-    padding: 24px 32px 32px;
+  .blocks-page {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--space-5);
   }
 
-  .stitch-description {
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-    line-height: 1.5;
-  }
-
-  .stitch-loading {
+  .list-row,
+  .add-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-5);
   }
 
-  .stitch-inline-form {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-
-  .stitch-input {
-    display: block;
-    flex: 1;
-    padding: 12px 16px;
-    background: var(--color-surface-container-high);
-    border: none;
-    border-radius: 10px;
-    font-size: 0.875rem;
-    color: var(--color-text);
-    transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .stitch-input::placeholder {
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-input:focus {
-    outline: none;
-    background: var(--color-surface-container-lowest);
-    box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), 0.2);
-  }
-
-  .stitch-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--scrim-soft);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .stitch-list-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    background: var(--color-surface-container-high);
-  }
-
-  .stitch-list-avatar {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    overflow: hidden;
-  }
-
-  .stitch-avatar-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .stitch-avatar-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-primary);
-    color: white;
-    font-weight: 700;
-    font-size: 1rem;
-  }
-
-  .stitch-list-info {
+  .add-row .input {
     flex: 1;
     min-width: 0;
   }
 
-  .stitch-list-name {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .stitch-list-handle {
-    font-size: 0.75rem;
-    color: var(--color-text-tertiary);
-  }
-
-  .stitch-list-meta {
+  .who {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-size: 0.75rem;
+    gap: var(--space-3);
+    min-width: 0;
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .who:hover .who-name {
+    text-decoration: underline;
+  }
+
+  .who-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .who-name {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .who-handle {
+    font-size: var(--text-xs);
     color: var(--color-text-tertiary);
+    text-align: start;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .stitch-list-dot {
-    font-size: 0.75rem;
+  .domain {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    word-break: break-all;
   }
 
-  .stitch-list-expiry {
-    font-size: 0.75rem;
+  .placeholder {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-5);
+    font-size: var(--text-sm);
     color: var(--color-text-tertiary);
-  }
-
-  .stitch-btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 28px;
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), 0.2);
-    transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-    white-space: nowrap;
-  }
-
-  .stitch-btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-    box-shadow: 0 6px 20px rgba(var(--color-primary-rgb), 0.3);
-  }
-
-  .stitch-btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-outline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: transparent;
-    border: 1.5px solid var(--color-primary);
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-primary);
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-    white-space: nowrap;
-  }
-
-  .stitch-btn-outline:hover:not(:disabled) {
-    background: rgba(var(--color-primary-rgb), 0.06);
-  }
-
-  .stitch-btn-outline:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-danger {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 24px;
-    background: var(--color-danger);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.15s ease, transform 0.1s ease;
-    white-space: nowrap;
-  }
-
-  .stitch-btn-danger:hover:not(:disabled) {
-    background: #b91c1c;
-  }
-
-  .stitch-btn-danger:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .stitch-btn-sm {
-    padding: 6px 16px;
-    font-size: 0.75rem;
-  }
-
-  @media (max-width: 640px) {
-    .stitch-form {
-      padding: 20px;
-    }
-
-    .stitch-inline-form {
-      flex-direction: column;
-      align-items: stretch;
-    }
   }
 </style>
