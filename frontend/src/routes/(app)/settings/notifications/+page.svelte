@@ -1,9 +1,13 @@
 <script lang="ts">
+  // Each switch saves its notification type straight away (one PATCH per
+  // type, all three channels), and reverts if the save fails.
   import { onMount } from 'svelte';
   import { api } from '$lib/api/client.js';
   import { addToast } from '$lib/stores/toast.js';
   import AsyncState from '$lib/components/ui/AsyncState.svelte';
-  import Spinner from '$lib/components/ui/Spinner.svelte';
+  import Toggle from '$lib/components/ui/Toggle.svelte';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import { t } from '$lib/stores/i18n.js';
   import PushOptIn from '$lib/components/notification/PushOptIn.svelte';
   import {
@@ -14,39 +18,28 @@
   } from '$lib/stores/sound.js';
 
   interface ChannelPrefs { email: boolean; push: boolean; in_app: boolean }
+  type Channel = keyof ChannelPrefs;
 
-  const notifTypes = ['follow', 'mention', 'reaction', 'boost', 'poll_ended', 'group_invite'] as const;
-
-  let channels = $derived([
-    { key: 'in_app', label: $t('settings.notif_channel_in_app') },
-    { key: 'email', label: $t('settings.notif_channel_email') },
-    { key: 'push', label: $t('settings.notif_channel_push') },
-  ] as const);
-
-  let rows = $derived(
-    notifTypes.map((type) => ({
-      type,
-      name: $t(`settings.notif_${type}`),
-      desc: $t(`settings.notif_${type}_desc`),
-    })),
-  );
+  // Types a member can receive (Preference @valid_types minus staff-only
+  // report/admin, which are #319).
+  const groups = [
+    { titleKey: 'settings.notif_group_people', types: ['follow', 'follow_request', 'mention', 'reply', 'quote'] },
+    { titleKey: 'settings.notif_group_engagement', types: ['reaction', 'boost', 'poll_ended'] },
+    { titleKey: 'settings.notif_group_communities', types: ['group_invite', 'group_application', 'page_invite'] },
+  ];
+  const channels: Channel[] = ['in_app', 'email', 'push'];
 
   let prefs = $state<Record<string, ChannelPrefs>>({});
   let loading = $state(true);
   let loadError = $state(false);
-  let saving = $state(false);
 
-  // Kept on this device, so these apply at once rather than on Save.
+  // Device-only, applied at once.
   let notificationSound = $state(getNotificationSoundEnabled());
   let messageSound = $state(getMessageSoundEnabled());
 
+  // Server default for a type with no stored row (notifications.ex).
   function pref(type: string): ChannelPrefs {
-    // Server defaults for a type with no stored row (notifications.ex).
     return prefs[type] ?? { email: false, push: true, in_app: true };
-  }
-
-  function setChannel(type: string, channel: keyof ChannelPrefs, value: boolean) {
-    prefs = { ...prefs, [type]: { ...pref(type), [channel]: value } };
   }
 
   async function load() {
@@ -63,124 +56,71 @@
 
   onMount(load);
 
-  async function handleSave() {
-    if (saving) return;
-    saving = true;
+  async function setChannel(type: string, channel: Channel, value: boolean) {
+    const before = pref(type);
+    const next = { ...before, [channel]: value };
+    prefs = { ...prefs, [type]: next };
     try {
-      // Persist exactly what the user chose per channel — no hidden
-      // re-enabling of email/push.
-      for (const type of notifTypes) {
-        const p = pref(type);
-        await api.patch('/api/v1/notification_preferences', {
-          type,
-          email: p.email,
-          push: p.push,
-          in_app: p.in_app,
-        });
-      }
-      addToast($t('settings.notif_saved'), 'success');
+      await api.patch('/api/v1/notification_preferences', { type, ...next });
     } catch {
+      prefs = { ...prefs, [type]: before };
       addToast($t('settings.notif_save_failed'), 'error');
-    } finally {
-      saving = false;
     }
   }
 </script>
 
-<div class="stitch-settings">
-  <!-- Outside the form: it acts immediately (and its buttons must not submit). -->
-  <div class="notif-device">
-    <PushOptIn />
-  </div>
+<div class="notif-page">
+  <SettingsSection title={$t('settings.notif_device_title')} description={$t('settings.notif_device_desc')}>
+    <div class="notif-device"><PushOptIn /></div>
+  </SettingsSection>
 
-  <AsyncState
-    {loading}
-    error={loadError ? $t('settings.notif_load_failed') : ''}
-    onretry={load}
-  >
-    <form class="notif-form" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
+  <AsyncState {loading} error={loadError ? $t('settings.notif_load_failed') : ''} onretry={load}>
+    <div class="notif-groups">
       <p class="notif-intro">{$t('settings.notif_intro')}</p>
-
-      <div class="notif-table" role="group" aria-label={$t('settings.notif_prefs_label')}>
-        <div class="notif-head" aria-hidden="true">
-          <span class="notif-head-event">{$t('settings.notif_event')}</span>
-          <span class="notif-head-channels">
-            {#each channels as ch (ch.key)}<span>{ch.label}</span>{/each}
-          </span>
-        </div>
-
-        {#each rows as item (item.type)}
-          <div class="notif-row">
-            <div class="notif-event">
-              <span class="notif-name">{item.name}</span>
-              <span class="notif-desc">{item.desc}</span>
-            </div>
-            <div class="notif-channels">
-              {#each channels as ch (ch.key)}
-                <label class="notif-toggle">
-                  <span class="notif-toggle-label">{ch.label}</span>
-                  <input
-                    type="checkbox"
-                    class="notif-check"
-                    checked={pref(item.type)[ch.key]}
-                    onchange={(e) => setChannel(item.type, ch.key, (e.target as HTMLInputElement).checked)}
-                    aria-label={$t('settings.notif_toggle_label', { channel: ch.label, event: item.name })}
-                  />
-                </label>
-              {/each}
-            </div>
-          </div>
-        {/each}
-      </div>
-
-      <div class="notif-sounds" role="group" aria-labelledby="notif-sounds-title">
-        <h2 id="notif-sounds-title" class="notif-sounds-title">{$t('settings.sounds_title')}</h2>
-        <p class="notif-desc">{$t('settings.sounds_hint')}</p>
-        <label class="notif-sound-row">
-          <span>{$t('settings.sound_notifications')}</span>
-          <input
-            type="checkbox"
-            class="notif-check"
-            bind:checked={notificationSound}
-            onchange={() => setNotificationSoundEnabled(notificationSound)}
-          />
-        </label>
-        <label class="notif-sound-row">
-          <span>{$t('settings.sound_messages')}</span>
-          <input
-            type="checkbox"
-            class="notif-check"
-            bind:checked={messageSound}
-            onchange={() => setMessageSoundEnabled(messageSound)}
-          />
-        </label>
-      </div>
-
-      <div class="notif-actions">
-        <button class="stitch-btn-primary" type="submit" disabled={saving}>
-          {#if saving}<Spinner size={16} color="#fff" />{/if}
-          {$t('settings.save_changes')}
-        </button>
-      </div>
-    </form>
+      {#each groups as group (group.titleKey)}
+        <SettingsSection title={$t(group.titleKey)}>
+          {#each group.types as type (type)}
+            {@const name = $t(`settings.notif_${type}`)}
+            <SettingRow label={name} help={$t(`settings.notif_${type}_desc`)}>
+              <div class="channel-switches" role="group" aria-label={name}>
+                {#each channels as ch (ch)}
+                  <div class="channel">
+                    <label class="channel-name" for={`n-${type}-${ch}`}>{$t(`settings.notif_channel_${ch}`)}</label>
+                    <Toggle
+                      checked={pref(type)[ch]}
+                      onchange={(v) => setChannel(type, ch, v)}
+                      id={`n-${type}-${ch}`}
+                    />
+                  </div>
+                {/each}
+              </div>
+            </SettingRow>
+          {/each}
+        </SettingsSection>
+      {/each}
+    </div>
   </AsyncState>
+
+  <SettingsSection title={$t('settings.sounds_title')} description={$t('settings.sounds_hint')}>
+    <SettingRow label={$t('settings.sound_notifications')} labelFor="n-sound">
+      <Toggle id="n-sound" bind:checked={notificationSound} onchange={setNotificationSoundEnabled} />
+    </SettingRow>
+    <SettingRow label={$t('settings.sound_messages')} labelFor="n-sound-dm">
+      <Toggle id="n-sound-dm" bind:checked={messageSound} onchange={setMessageSoundEnabled} />
+    </SettingRow>
+  </SettingsSection>
 </div>
 
 <style>
-  .stitch-settings {
-    max-width: 720px;
+  .notif-page,
+  .notif-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
   }
 
   .notif-device {
-    margin-block-end: var(--space-5);
-    padding-block-end: var(--space-5);
-    border-block-end: 1px solid var(--color-border);
-  }
-
-  .notif-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+    padding: var(--space-4) var(--space-5);
   }
 
   .notif-intro {
@@ -188,190 +128,30 @@
     color: var(--color-text-secondary);
   }
 
-  .notif-table {
-    background: var(--color-surface-container-low);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
+  .channel-switches {
+    display: flex;
+    gap: var(--space-4);
   }
 
-  .notif-head {
+  .channel {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-between;
-    padding: var(--space-3) var(--space-4);
-    border-block-end: 1px solid var(--color-border);
+    gap: 4px;
+    min-width: 52px;
+  }
+
+  .channel-name {
     font-size: var(--text-xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    font-weight: 600;
     color: var(--color-text-tertiary);
   }
 
-  .notif-head-channels {
-    display: flex;
-    gap: var(--space-4);
-  }
-
-  .notif-head-channels span {
-    width: 44px;
-    text-align: center;
-  }
-
-  .notif-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border-block-end: 1px solid var(--color-border);
-  }
-
-  .notif-row:last-child {
-    border-block-end: none;
-  }
-
-  .notif-event {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-  }
-
-  .notif-name {
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .notif-desc {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
-  }
-
-  .notif-sounds {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin-block-start: var(--space-5);
-  }
-
-  .notif-sounds-title {
-    margin: 0;
-    font-size: var(--text-base);
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .notif-sound-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    min-height: 44px;
-    color: var(--color-text);
-    cursor: pointer;
-  }
-
-  .notif-channels {
-    display: flex;
-    gap: var(--space-4);
-    flex-shrink: 0;
-  }
-
-  .notif-toggle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    cursor: pointer;
-  }
-
-  /* The header row provides the channel labels on desktop; the per-cell
-     label is a screen-reader / small-screen affordance. */
-  .notif-toggle-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .notif-check {
-    width: 20px;
-    height: 20px;
-    accent-color: var(--color-primary);
-    cursor: pointer;
-  }
-
-  .notif-actions {
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .stitch-btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 28px;
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.15s ease, transform 0.1s ease;
-  }
-
-  .stitch-btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-hover);
-  }
-
-  .stitch-btn-primary:active:not(:disabled) {
-    transform: scale(0.98);
-  }
-
-  .stitch-btn-primary:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
+  /* Narrow: the switches sit under the label (SettingRow stacks); keep them
+     on the start side in a compact row. */
   @media (max-width: 560px) {
-    /* Stack channels under each event with visible labels. */
-    .notif-head {
-      display: none;
-    }
-
-    .notif-row {
-      flex-direction: column;
-      align-items: stretch;
-      gap: var(--space-2);
-    }
-
-    .notif-channels {
+    .channel-switches {
       justify-content: flex-start;
-      gap: var(--space-4);
-    }
-
-    .notif-toggle {
-      flex-direction: row-reverse;
-      gap: 6px;
-      width: auto;
-    }
-
-    .notif-toggle-label {
-      position: static;
-      width: auto;
-      height: auto;
-      clip: auto;
-      margin: 0;
-      font-size: var(--text-xs);
-      color: var(--color-text-secondary);
     }
   }
 </style>
