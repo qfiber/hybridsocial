@@ -1675,7 +1675,7 @@
             onkeydown={handleComposerKeydown}
             onpaste={handlePaste}
             class="composer-textarea"
-            placeholder={replyTo ? $t('composer.reply_placeholder', { handle: replyTo.account?.handle ?? replyTo.account?.acct ?? '' }) : quotePost ? $t('composer.quote_placeholder') : $t('composer.placeholder')}
+            placeholder={replyTo ? $t('composer.reply_placeholder', { handle: replyTo.account?.acct ?? replyTo.account?.handle ?? '' }) : quotePost ? $t('composer.quote_placeholder') : $t('composer.placeholder')}
             aria-label={$t('composer.content_aria')}
             rows={3}
             dir="auto"
