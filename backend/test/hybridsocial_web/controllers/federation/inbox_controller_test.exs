@@ -359,6 +359,54 @@ defmodule HybridsocialWeb.Federation.InboxControllerTest do
 
       assert json_response(conn, 401)["error"] == "Invalid HTTP signature"
     end
+
+    test "an unverifiable Delete is acknowledged with 202 and not applied", %{conn: conn} do
+      local = create_local_identity("del_drop_target")
+      {:ok, post} = Posts.create_post(local.id, %{"content" => "Stays", "post_type" => "text"})
+
+      # Claims to delete a LOCAL post, signed with a key nobody can fetch:
+      # the 202 must not mean the Delete ran.
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://gone.example/users/x#delete",
+        "type" => "Delete",
+        "actor" => "https://gone.example/users/x",
+        "object" => "#{base_url()}/objects/#{post.id}"
+      }
+
+      conn = post_with_bad_signature(conn, "/inbox", activity)
+
+      assert json_response(conn, 202)["status"] == "accepted"
+      assert is_nil(Repo.reload!(post).deleted_at)
+    end
+
+    test "other unverifiable activities still get 401", %{conn: conn} do
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://gone.example/activities/like-1",
+        "type" => "Like",
+        "actor" => "https://gone.example/users/x",
+        "object" => "https://gone.example/notes/1"
+      }
+
+      conn = post_with_bad_signature(conn, "/inbox", activity)
+      assert json_response(conn, 401)["error"] == "Invalid HTTP signature"
+    end
+  end
+
+  defp post_with_bad_signature(conn, path, activity) do
+    body = Jason.encode!(activity)
+    digest = "SHA-256=" <> Base.encode64(:crypto.hash(:sha256, body))
+
+    conn
+    |> put_req_header("content-type", "application/activity+json")
+    |> put_req_header("digest", digest)
+    |> put_req_header("date", Calendar.strftime(DateTime.utc_now(), "%a, %d %b %Y %H:%M:%S GMT"))
+    |> put_req_header(
+      "signature",
+      ~s|keyId="https://gone.example/users/x#main-key",algorithm="rsa-sha256",headers="(request-target) host date digest",signature="ZmFrZQ=="|
+    )
+    |> post(path, body)
   end
 
   describe "Like activity (legacy compatibility)" do

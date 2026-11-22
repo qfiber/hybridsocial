@@ -37,9 +37,20 @@ defmodule HybridsocialWeb.Federation.InboxController do
       |> json(%{status: "accepted"})
     else
       {:error, :signature_invalid} ->
-        conn
-        |> put_status(401)
-        |> json(%{error: "Invalid HTTP signature"})
+        if activity["type"] == "Delete" do
+          # Mastodon's rule: an unverifiable Delete is acknowledged and
+          # dropped, never applied. It is almost always an account's farewell
+          # signed with a key that already 410s, or a forwarded Delete whose
+          # object is gone at its origin; a 401 only makes the peer retry
+          # something that can never verify.
+          conn
+          |> put_status(202)
+          |> json(%{status: "accepted"})
+        else
+          conn
+          |> put_status(401)
+          |> json(%{error: "Invalid HTTP signature"})
+        end
 
       {:error, :domain_suspended} ->
         conn
