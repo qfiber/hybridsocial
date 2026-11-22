@@ -1572,7 +1572,7 @@
   "settings.nav_account": "Account",
   "settings.nav_account_desc": "Email, language, verification and deletion",
   "settings.nav_appearance": "Appearance",
-  "settings.nav_appearance_desc": "Light, dark, or match your system",
+  "settings.nav_appearance_desc": "Theme, Home feed and autoplay",
   "settings.nav_notifications": "Notifications",
   "settings.nav_notifications_desc": "What reaches you, and where",
   "settings.nav_privacy": "Privacy",
@@ -1598,5 +1598,14 @@
   "settings.search_placeholder": "Search settings",
   "settings.search_empty": "No settings match “{query}”",
   "settings.view_profile": "View profile",
-  "settings.nav_label": "Settings sections"
+  "settings.nav_label": "Settings sections",
+  "settings.feed_media_title": "Feed & media",
+  "settings.feed_media_desc": "How your Home feed opens and how videos behave.",
+  "settings.home_tab_label": "Home opens on",
+  "settings.home_tab_help": "The tab you see first when you open Home. You can still switch tabs any time.",
+  "settings.autoplay_label": "Autoplay videos and GIFs",
+  "settings.autoplay_help": "Streams and GIFs in messages start playing on their own, muted. Turn off to save data; the toggle on Streams changes this too.",
+  "settings.posting_language_title": "Posting language",
+  "settings.posting_language_desc": "The language your new posts are tagged with, so translation and other servers know what you wrote in.",
+  "settings.posting_language_none": "Not set"
 }

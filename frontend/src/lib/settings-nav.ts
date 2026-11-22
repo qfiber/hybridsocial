@@ -27,13 +27,13 @@ export const settingsGroups: SettingsGroup[] = [
     titleKey: 'settings.group_you',
     items: [
       { href: '/settings/profile', labelKey: 'settings.nav_profile', descKey: 'settings.nav_profile_desc', icon: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', keywords: 'name display bio about avatar picture photo header banner fields links birthday location badge' },
-      { href: '/settings/account', labelKey: 'settings.nav_account', descKey: 'settings.nav_account_desc', icon: 'M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4', keywords: 'email address language locale arabic english translation translate verification verified delete close account' },
+      { href: '/settings/account', labelKey: 'settings.nav_account', descKey: 'settings.nav_account_desc', icon: 'M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4', keywords: 'email address language locale arabic english translation translate posting language post language verification verified delete close account' },
     ],
   },
   {
     titleKey: 'settings.group_preferences',
     items: [
-      { href: '/settings/appearance', labelKey: 'settings.nav_appearance', descKey: 'settings.nav_appearance_desc', icon: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 0v18', keywords: 'theme dark light mode system colors' },
+      { href: '/settings/appearance', labelKey: 'settings.nav_appearance', descKey: 'settings.nav_appearance_desc', icon: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 0v18', keywords: 'theme dark light mode system colors feed home tab latest for you top autoplay video gif data' },
       { href: '/settings/notifications', labelKey: 'settings.nav_notifications', descKey: 'settings.nav_notifications_desc', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0', keywords: 'push email alerts sound follows mentions replies reactions boosts quotes polls invites' },
       { href: '/settings/privacy', labelKey: 'settings.nav_privacy', descKey: 'settings.nav_privacy_desc', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', keywords: 'lock private locked approve followers discoverable directory search engines indexing link previews unfurl follower counts messages dm direct group dm invites pages auto delete old posts default visibility remote media' },
     ],

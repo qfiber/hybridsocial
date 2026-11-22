@@ -4,6 +4,7 @@
   import { clearAuth } from '$lib/stores/auth.js';
   import { switchLocale, availableLocales, locale, t } from '$lib/stores/i18n.js';
   import { translationTarget, setTranslationTarget } from '$lib/stores/translation.js';
+  import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
   import { addToast } from '$lib/stores/toast.js';
   import Modal from '$lib/components/ui/Modal.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
@@ -141,6 +142,27 @@
       <div class="language-row">
         <select class="language-select" bind:value={selectedTranslateTarget} onchange={saveTranslateTarget}>
           <option value="">{$t('settings.translation_follow_ui')}</option>
+          {#each $availableLocales as loc (loc.code)}
+            <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Posting language: tagged on new posts, so translation and other servers know it -->
+  <div class="settings-section">
+    <h2 class="section-title">{$t('settings.posting_language_title')}</h2>
+    <div class="settings-form">
+      <p class="section-desc">{$t('settings.posting_language_desc')}</p>
+      <div class="language-row">
+        <select
+          class="language-select"
+          aria-label={$t('settings.posting_language_title')}
+          value={$preferencesStore.default_language ?? ''}
+          onchange={(e) => updatePreferences({ default_language: e.currentTarget.value || null })}
+        >
+          <option value="">{$t('settings.posting_language_none')}</option>
           {#each $availableLocales as loc (loc.code)}
             <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
           {/each}

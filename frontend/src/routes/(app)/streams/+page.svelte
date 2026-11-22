@@ -6,6 +6,7 @@
   import { instanceName } from '$lib/stores/instance.js';
   import { t } from '$lib/stores/i18n.js';
   import { addToast } from '$lib/stores/toast.js';
+  import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
 
   let posts = $state<Post[]>([]);
   let loading = $state(true);
@@ -20,18 +21,14 @@
   let loadingMore = $state(false);
   let feedEl = $state<HTMLDivElement | null>(null);
 
-  // Streams autoplay by default (the whole point of the format); still
-  // toggleable and remembered across visits.
-  const AUTOPLAY_KEY = 'hs-streams-autoplay';
-  let autoplay = $state(true);
+  // Autoplay is the account's "Autoplay videos and GIFs" preference (on by
+  // default, the point of the format); this toggle and Settings > Appearance
+  // flip the same setting, so it follows the account across devices.
+  const LEGACY_AUTOPLAY_KEY = 'hs-streams-autoplay';
+  let autoplay = $derived($preferencesStore.auto_play_media);
 
   function toggleAutoplay() {
-    autoplay = !autoplay;
-    try {
-      localStorage.setItem(AUTOPLAY_KEY, autoplay ? '1' : '0');
-    } catch {
-      /* storage unavailable — the toggle just won't persist */
-    }
+    updatePreferences({ auto_play_media: !autoplay });
   }
 
   // Mute is a single GLOBAL state shared by every clip, not per-video: unmute
@@ -218,8 +215,11 @@
 
   onMount(() => {
     try {
-      const v = localStorage.getItem(AUTOPLAY_KEY);
-      if (v !== null) autoplay = v === '1';
+      // One-time carry-over of the old per-device Streams toggle.
+      if (localStorage.getItem(LEGACY_AUTOPLAY_KEY) === '0' && autoplay) {
+        updatePreferences({ auto_play_media: false });
+      }
+      localStorage.removeItem(LEGACY_AUTOPLAY_KEY);
       muted = localStorage.getItem(MUTED_KEY) !== '0';
       showFederated = localStorage.getItem(FEDERATED_KEY) === '1';
       showAllAspect = localStorage.getItem(ASPECT_KEY) === '1';

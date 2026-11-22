@@ -9,6 +9,7 @@
   } from '$lib/components/feed/TimelineFeed.svelte';
   import { readHomeFeed, writeHomeFeed } from '$lib/stores/home-feed-cache.js';
   import { t } from '$lib/stores/i18n.js';
+  import { preferencesStore } from '$lib/stores/preferences.js';
 
   // Session cache → scroll restoration on back-nav from a post detail.
   const cache: TimelineCache = { read: readHomeFeed, write: writeHomeFeed };
@@ -24,6 +25,10 @@
   // Latest and For You share the personal 'home' stream: a new post from
   // someone you follow prepends to either.
   // Derived so the labels re-resolve when the locale changes (as Explore does).
+  // The account's "Home opens on" choice (Settings > Appearance).
+  const tabForAlgorithm = { chronological: 'latest', algorithmic: 'foryou', trending: 'top' } as const;
+  const initialTabId = tabForAlgorithm[$preferencesStore.feed_algorithm] ?? 'latest';
+
   let tabs = $derived<TimelineTab[]>([
     {
       id: 'latest',
@@ -58,7 +63,7 @@
 
 <div class="home-page">
   <StoriesCarousel />
-  <TimelineFeed {tabs} {cache} filterContext="home" />
+  <TimelineFeed {tabs} {cache} {initialTabId} filterContext="home" />
 </div>
 
 <style>

@@ -10,6 +10,7 @@
   import { onMount } from 'svelte';
   import { fly, scale } from 'svelte/transition';
   import { cubicOut } from 'svelte/easing';
+  import { preferencesStore } from '$lib/stores/preferences.js';
 
   let {
     message,
@@ -496,7 +497,8 @@
               <video
                 src={attachment.url}
                 class="media-video"
-                autoplay
+                autoplay={$preferencesStore.auto_play_media}
+                controls={!$preferencesStore.auto_play_media}
                 loop
                 muted
                 playsinline

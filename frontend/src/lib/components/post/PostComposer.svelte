@@ -1247,6 +1247,9 @@
         content,
         visibility,
       };
+      // The account's posting language (Settings > Account), if chosen.
+      const postingLanguage = get(preferencesStore).default_language;
+      if (postingLanguage) body.language = postingLanguage;
       if (canMarkdown && !markdownEnabled) {
         // Explicit opt-down to plaintext for this post, even though
         // the tier allows GFM. Backend honors this as "markdown: none".
