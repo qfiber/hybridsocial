@@ -6,6 +6,7 @@ defmodule Hybridsocial.Federation.Dedup do
 
   schema "federation_dedup" do
     field :activity_id, :string
+    # text column: activity ids are unbounded URLs (see the widening migration)
     field :processed_at, :utc_datetime_usec
     field :expires_at, :utc_datetime_usec
   end
