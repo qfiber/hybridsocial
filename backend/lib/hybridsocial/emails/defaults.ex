@@ -18,6 +18,11 @@ defmodule Hybridsocial.Emails.Defaults do
   @doc "Returns `{subject, html}` for a catalog key."
   def for("confirmation"), do: {confirmation_subject(), confirmation_html()}
   def for("password_reset"), do: {password_reset_subject(), password_reset_html()}
+
+  def for("email_change_confirmation"),
+    do: {email_change_confirmation_subject(), email_change_confirmation_html()}
+
+  def for("email_change_notice"), do: {email_change_notice_subject(), email_change_notice_html()}
   def for("moderation_queue"), do: {moderation_queue_subject(), moderation_queue_html()}
   def for("login_notification"), do: {login_notification_subject(), login_notification_html()}
   def for("notification_digest"), do: {notification_digest_subject(), notification_digest_html()}
@@ -46,6 +51,8 @@ defmodule Hybridsocial.Emails.Defaults do
 
   defp confirmation_subject, do: "{{instance_name}}: confirm your email address"
   defp password_reset_subject, do: "{{instance_name}}: reset your password"
+  defp email_change_confirmation_subject, do: "{{instance_name}}: confirm your new email address"
+  defp email_change_notice_subject, do: "{{instance_name}}: your email address is being changed"
 
   defp moderation_queue_subject,
     do:
@@ -145,6 +152,34 @@ defmodule Hybridsocial.Emails.Defaults do
 
     footer =
       "If you didn't create an account on {{instance_name}}, you can safely ignore this email."
+
+    layout(content, footer)
+  end
+
+  defp email_change_confirmation_html do
+    content = """
+    <h1 style="margin:0 0 16px 0;font-size:22px;font-weight:700;">Confirm your new email address</h1>
+    <p style="margin:0 0 8px 0;">Hi @{{user.handle}}, you asked to use {{new_email}} for your {{instance_name}} account. Your current address stays in place until you confirm.</p>
+    #{button("Confirm new address", "{{confirm_url}}")}
+    <p style="margin:0 0 12px 0;font-size:13px;color:#6b7280;">The link expires in {{expires_hours}} hours.</p>
+    <p style="margin:0;font-size:13px;color:#6b7280;">Or copy and paste this link into your browser:<br>
+    <a href="{{confirm_url}}" style="color:#6366f1;word-break:break-all;">{{confirm_url}}</a></p>
+    """
+
+    footer = "If you didn't ask for this, ignore this message and nothing will change."
+
+    layout(content, footer)
+  end
+
+  defp email_change_notice_html do
+    content = """
+    <h1 style="margin:0 0 16px 0;font-size:20px;font-weight:700;">Your email address is being changed</h1>
+    <p style="margin:0 0 16px 0;">Hi @{{user.handle}}, someone signed in to your {{instance_name}} account asked to change its email address to <strong>{{new_email}}</strong>. It changes only after that address confirms.</p>
+    <p style="margin:0;">If this was you, no action is needed. If it wasn't, change your password now and sign out other sessions.</p>
+    #{button("Review security", "{{security_url}}")}
+    """
+
+    footer = "You're receiving this because it's the email address currently on your account."
 
     layout(content, footer)
   end

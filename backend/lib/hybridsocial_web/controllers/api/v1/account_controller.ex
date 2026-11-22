@@ -1076,18 +1076,41 @@ defmodule HybridsocialWeb.Api.V1.AccountController do
 
   # --- Change Email ---
 
-  def change_email(conn, %{"email" => new_email, "password" => password}) do
+  # Starts an email change; the address switches only once the emailed link
+  # is followed (AuthController.confirm_email_change/2).
+  def change_email(conn, %{"email" => new_email, "password" => password})
+      when is_binary(new_email) and is_binary(password) do
     identity = conn.assigns.current_identity
 
-    case Accounts.change_email(identity.id, new_email, password) do
-      {:ok, _} ->
-        json(conn, %{status: "ok", message: "Confirmation email sent to #{new_email}"})
+    case Accounts.request_email_change(identity.id, new_email, password) do
+      {:ok, user} ->
+        json(conn, %{status: "pending", pending_email: user.pending_email})
 
       {:error, :invalid_password} ->
         conn |> put_status(:forbidden) |> json(%{error: "auth.invalid_password"})
 
-      {:error, reason} ->
-        conn |> put_status(:unprocessable_entity) |> json(%{error: inspect(reason)})
+      {:error, :email_taken} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.email_taken"})
+
+      {:error, :same_email} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.email_unchanged"})
+
+      {:error, %Ecto.Changeset{}} ->
+        conn |> put_status(:unprocessable_entity) |> json(%{error: "account.email_invalid"})
+
+      {:error, :not_found} ->
+        conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
+    end
+  end
+
+  def change_email(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "account.email_and_password_required"})
+  end
+
+  def cancel_email_change(conn, _params) do
+    case Accounts.cancel_email_change(conn.assigns.current_identity.id) do
+      {:ok, _} -> json(conn, %{status: "ok"})
+      {:error, _} -> conn |> put_status(:not_found) |> json(%{error: "account.not_found"})
     end
   end
 

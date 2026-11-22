@@ -1,7 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { api, ApiError } from '$lib/api/client.js';
-  import { clearAuth } from '$lib/stores/auth.js';
+  import { clearAuth, currentUser, setUser } from '$lib/stores/auth.js';
+  import SettingsSection from '$lib/components/settings/SettingsSection.svelte';
+  import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import { switchLocale, availableLocales, locale, t } from '$lib/stores/i18n.js';
   import { translationTarget, setTranslationTarget } from '$lib/stores/translation.js';
   import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
@@ -42,6 +44,48 @@
   let verificationSubmitting = $state(false);
   let verificationError = $state('');
   let verificationSuccess = $state('');
+
+  // Email change: the new address only takes effect from its emailed link.
+  let newEmail = $state('');
+  let emailPassword = $state('');
+  let emailSaving = $state(false);
+  const emailErrors: Record<string, string> = {
+    'auth.invalid_password': 'settings.email_error_password',
+    'account.email_taken': 'settings.email_error_taken',
+    'account.email_unchanged': 'settings.email_error_same',
+    'account.email_invalid': 'settings.email_error_invalid',
+  };
+
+  async function requestEmailChange(e: SubmitEvent) {
+    e.preventDefault();
+    if (emailSaving || !$currentUser) return;
+    emailSaving = true;
+    try {
+      const res = await api.post<{ pending_email: string }>('/api/v1/accounts/change_email', {
+        email: newEmail.trim(),
+        password: emailPassword,
+      });
+      setUser({ ...$currentUser, pending_email: res.pending_email });
+      addToast($t('settings.email_sent', { email: res.pending_email }), 'success');
+      newEmail = '';
+      emailPassword = '';
+    } catch (err) {
+      const code = err instanceof ApiError ? err.body?.error : '';
+      addToast($t(emailErrors[code ?? ''] ?? 'settings.email_error_generic'), 'error');
+    } finally {
+      emailSaving = false;
+    }
+  }
+
+  async function cancelEmailChange() {
+    if (!$currentUser) return;
+    try {
+      await api.delete('/api/v1/accounts/change_email');
+      setUser({ ...$currentUser, pending_email: null });
+    } catch {
+      addToast($t('settings.email_error_generic'), 'error');
+    }
+  }
 
   async function saveLocale() {
     localeSaving = true;
@@ -116,6 +160,30 @@
 </script>
 
 <div class="settings-sections">
+  <SettingsSection title={$t('settings.email_title')} description={$t('settings.email_desc')}>
+    <SettingRow label={$t('settings.email_current')}>
+      <span class="email-current" dir="ltr">{$currentUser?.email ?? ''}</span>
+    </SettingRow>
+    {#if $currentUser?.pending_email}
+      <SettingRow label={$t('settings.email_pending_label')} help={$t('settings.email_pending_help', { email: $currentUser.pending_email })}>
+        <button type="button" class="btn btn-secondary btn-sm" onclick={cancelEmailChange}>{$t('settings.email_cancel')}</button>
+      </SettingRow>
+    {/if}
+    <form class="email-form" onsubmit={requestEmailChange}>
+      <SettingRow label={$t('settings.email_new')} labelFor="new-email" layout="stacked">
+        <input id="new-email" class="input" type="email" autocomplete="email" dir="ltr" required bind:value={newEmail} />
+      </SettingRow>
+      <SettingRow label={$t('settings.email_password')} help={$t('settings.email_password_help')} labelFor="email-password" layout="stacked">
+        <input id="email-password" class="input" type="password" autocomplete="current-password" required bind:value={emailPassword} />
+      </SettingRow>
+      <div class="email-actions">
+        <button type="submit" class="btn btn-primary btn-sm" disabled={emailSaving || !newEmail.trim() || !emailPassword}>
+          {emailSaving ? $t('settings.email_sending') : $t('settings.email_submit')}
+        </button>
+      </div>
+    </form>
+  </SettingsSection>
+
   <!-- Language -->
   <div class="settings-section">
     <h2 class="section-title">Language</h2>
@@ -577,5 +645,26 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--space-2);
+  }
+
+  .email-current {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    word-break: break-all;
+  }
+
+  .email-form {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .email-form > :global(.setting-row + .setting-row) {
+    border-block-start: 1px solid var(--color-border);
+  }
+
+  .email-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 var(--space-5) var(--space-4);
   }
 </style>

@@ -29,6 +29,35 @@ defmodule Hybridsocial.Emails do
     render("confirmation", user, assigns)
   end
 
+  @doc "Sent to the requested NEW address: confirming applies the change."
+  def email_change_confirmation_email(user, token) do
+    assigns = %{
+      "instance_name" => instance_name(),
+      "user" => user_assigns(user),
+      "new_email" => user.pending_email,
+      "confirm_url" => "#{base_url()}/confirm-email-change?token=#{token}",
+      "expires_hours" => div(Hybridsocial.Accounts.email_change_ttl_seconds() + 3599, 3600)
+    }
+
+    admin_render(
+      "email_change_confirmation",
+      {user_display_name(user), user.pending_email},
+      assigns
+    )
+  end
+
+  @doc "Sent to the CURRENT address when a change to another one is requested."
+  def email_change_notice_email(user) do
+    assigns = %{
+      "instance_name" => instance_name(),
+      "user" => user_assigns(user),
+      "new_email" => user.pending_email,
+      "security_url" => "#{base_url()}/settings/security"
+    }
+
+    render("email_change_notice", user, assigns)
+  end
+
   @doc "Password reset with a token link."
   def password_reset_email(user) do
     assigns = %{

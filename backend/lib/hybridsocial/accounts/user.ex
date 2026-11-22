@@ -11,6 +11,10 @@ defmodule Hybridsocial.Accounts.User do
     # randomized ciphertext can't be searched or unique-constrained.
     field :email, Hybridsocial.Crypto.EncryptedBinary, context: "user.email"
     field :email_hash, :string
+    # Requested change, applied only once the new address confirms it.
+    field :pending_email, Hybridsocial.Crypto.EncryptedBinary, context: "user.pending_email"
+    field :pending_email_token, :string
+    field :pending_email_sent_at, :utc_datetime_usec
     field :password_hash, :string
     field :locale, :string, default: "en"
     field :timezone, :string
@@ -71,6 +75,18 @@ defmodule Hybridsocial.Accounts.User do
     |> cast(%{email: new_email}, [:email])
     |> validate_required([:email])
     |> validate_email()
+  end
+
+  @doc "Validates and normalizes a requested new address (not yet applied)."
+  def pending_email_changeset(user, new_email) do
+    user
+    |> cast(%{pending_email: new_email}, [:pending_email])
+    |> validate_required([:pending_email])
+    |> validate_format(:pending_email, ~r/^[^\s]+@[^\s]+\.[^\s]+$/,
+      message: "must be a valid email"
+    )
+    |> validate_length(:pending_email, max: 254)
+    |> update_change(:pending_email, &String.downcase/1)
   end
 
   def confirm_changeset(user) do

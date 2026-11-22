@@ -40,6 +40,10 @@ export interface Identity {
   type: 'user' | 'bot' | 'group' | 'page';
   handle: string;
   acct?: string;
+  /** Own account only (/auth/me). */
+  email?: string | null;
+  /** Own account only: a requested address waiting for its confirmation link. */
+  pending_email?: string | null;
   url?: string;
   domain?: string | null;
   display_name: string | null;

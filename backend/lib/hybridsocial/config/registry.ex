@@ -102,6 +102,8 @@ defmodule Hybridsocial.Config.Registry do
     {:access, :visibility, "public_timeline_access", {:enum, ~w(all local none)}, "all", []},
     {:access, :sessions, "password_reset_ttl_seconds", :integer, 3600,
      min: 300, max: 604_800, unit: :seconds, advanced: true},
+    {:access, :sessions, "email_change_ttl_seconds", :integer, 86_400,
+     min: 900, max: 604_800, unit: :seconds, advanced: true},
     {:access, :sessions, "oauth_app_token_ttl_days", :integer, 60,
      min: 1, max: 3650, unit: :days, advanced: true},
 

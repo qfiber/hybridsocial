@@ -50,6 +50,45 @@ defmodule Hybridsocial.Emails.Templates do
       }
     },
     %{
+      key: "email_change_confirmation",
+      name: "Email change confirmation",
+      description:
+        "Sent to a new address the user wants to switch to; following the link applies the change.",
+      variables: %{
+        "instance_name" => "Instance display name",
+        "user.display_name" => "Recipient's display name",
+        "user.handle" => "Recipient's handle",
+        "new_email" => "The requested new address",
+        "confirm_url" => "Absolute URL that applies the change",
+        "expires_hours" => "Hours until the link expires"
+      },
+      sample: %{
+        "instance_name" => "HybridSocial",
+        "user" => %{"display_name" => "Sample User", "handle" => "sample"},
+        "new_email" => "new@example.com",
+        "confirm_url" => "https://example.com/confirm-email-change?token=abc123",
+        "expires_hours" => 24
+      }
+    },
+    %{
+      key: "email_change_notice",
+      name: "Email change notice",
+      description: "Sent to the current address when a change to another one is requested.",
+      variables: %{
+        "instance_name" => "Instance display name",
+        "user.display_name" => "Recipient's display name",
+        "user.handle" => "Recipient's handle",
+        "new_email" => "The requested new address",
+        "security_url" => "Absolute URL to the security settings"
+      },
+      sample: %{
+        "instance_name" => "HybridSocial",
+        "user" => %{"display_name" => "Sample User", "handle" => "sample"},
+        "new_email" => "new@example.com",
+        "security_url" => "https://example.com/settings/security"
+      }
+    },
+    %{
       key: "moderation_queue",
       name: "Moderation queue alert",
       description: "Alerts staff when a new item lands in the moderation queue.",
