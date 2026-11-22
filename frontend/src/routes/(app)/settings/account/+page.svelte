@@ -21,7 +21,6 @@
 
   function saveTranslateTarget() {
     setTranslationTarget(selectedTranslateTarget);
-    addToast($t('settings.translation_saved'), 'success');
   }
 
   let showDeleteModal = $state(false);
@@ -87,14 +86,17 @@
     }
   }
 
-  async function saveLocale() {
+  // Saves on change; the interface switches straight away.
+  async function saveLocale(e: Event) {
+    const prev = selectedLocale;
+    selectedLocale = (e.currentTarget as HTMLSelectElement).value;
     localeSaving = true;
     try {
       await api.patch('/api/v1/accounts/update_credentials', { locale: selectedLocale });
       await switchLocale(selectedLocale);
-      addToast('Language updated', 'success');
     } catch {
-      addToast('Failed to save language', 'error');
+      selectedLocale = prev;
+      addToast($t('settings.save_failed'), 'error');
     } finally { localeSaving = false; }
   }
 
@@ -127,7 +129,7 @@
       });
       verification = { status: 'pending', type: verificationType, verified_at: null };
       showVerificationForm = false;
-      verificationSuccess = 'Your verification application has been submitted.';
+      verificationSuccess = $t('settings.verify_submitted');
       setTimeout(() => { verificationSuccess = ''; }, 5000);
     } catch (e) {
       const code = e instanceof ApiError ? (e.body as { error?: string } | undefined)?.error : undefined;
@@ -153,7 +155,7 @@
       clearAuth();
       window.location.href = '/';
     } catch (e) {
-      error = e instanceof Error ? e.message : 'Failed to delete account';
+      error = e instanceof Error ? e.message : $t('settings.delete_failed');
       deleting = false;
     }
   }
@@ -184,212 +186,119 @@
     </form>
   </SettingsSection>
 
-  <!-- Language -->
-  <div class="settings-section">
-    <h2 class="section-title">Language</h2>
-    <div class="settings-form">
-      <p class="section-desc">Choose your preferred language. The interface will switch immediately and this preference will be remembered.</p>
-      <div class="language-row">
-        <select class="language-select" bind:value={selectedLocale}>
-          {#each $availableLocales as loc (loc.code)}
-            <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
-          {/each}
+  <SettingsSection title={$t('settings.language_title')} description={$t('settings.language_desc')}>
+    <SettingRow label={$t('settings.language_interface')} labelFor="a-locale">
+      <select id="a-locale" class="input" value={selectedLocale} onchange={saveLocale} disabled={localeSaving}>
+        {#each $availableLocales as loc (loc.code)}
+          <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
+        {/each}
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.translation_title')} help={$t('settings.translation_desc')} labelFor="a-translate">
+      <select id="a-translate" class="input" bind:value={selectedTranslateTarget} onchange={saveTranslateTarget}>
+        <option value="">{$t('settings.translation_follow_ui')}</option>
+        {#each $availableLocales as loc (loc.code)}
+          <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
+        {/each}
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.posting_language_title')} help={$t('settings.posting_language_desc')} labelFor="a-posting">
+      <select
+        id="a-posting"
+        class="input"
+        value={$preferencesStore.default_language ?? ''}
+        onchange={(e) => updatePreferences({ default_language: e.currentTarget.value || null })}
+      >
+        <option value="">{$t('settings.posting_language_none')}</option>
+        {#each $availableLocales as loc (loc.code)}
+          <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
+        {/each}
+      </select>
+    </SettingRow>
+  </SettingsSection>
+
+  <SettingsSection title={$t('settings.verify_title')} description={$t('settings.verify_desc')}>
+    {#if verificationLoading}
+      <div class="section-pad verification-loading"><Spinner size={16} /> {$t('settings.verify_checking')}</div>
+    {:else if verification.status === 'approved'}
+      <SettingRow
+        label={$t('settings.verify_verified')}
+        help={verification.verified_at ? $t('settings.verify_since', { date: new Date(verification.verified_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) }) : ''}
+      >
+        <VerifiedBadge size="md" />
+      </SettingRow>
+    {:else if verification.status === 'pending'}
+      <SettingRow
+        label={verification.type === 'peer_vouch' ? $t('verification.vouch_pending_label') : $t('settings.verify_pending')}
+        help={verification.type === 'peer_vouch' ? $t('verification.vouch_pending_detail', { count: verification.vouch_count || 0 }) : $t('settings.verify_pending_help')}
+      >
+        <span class="pending-dot" aria-hidden="true"></span>
+      </SettingRow>
+    {:else if !showVerificationForm}
+      {#if verificationSuccess}<div class="section-pad form-success">{verificationSuccess}</div>{/if}
+      <SettingRow label={$t('settings.verify_apply_label')} help={$t('settings.verify_apply_help')}>
+        <button class="btn btn-secondary btn-sm" type="button" onclick={() => (showVerificationForm = true)}>{$t('settings.verify_apply')}</button>
+      </SettingRow>
+    {:else}
+      <SettingRow label={$t('settings.verify_type')} labelFor="verification-type">
+        <select id="verification-type" class="input" bind:value={verificationType}>
+          <option value="manual">{$t('settings.verify_type_manual')}</option>
+          <option value="peer_vouch">{$t('settings.verify_type_vouch')}</option>
         </select>
-        <button type="button" class="save-locale-btn" onclick={saveLocale} disabled={localeSaving}>
-          {localeSaving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Post translation -->
-  <div class="settings-section">
-    <h2 class="section-title">{$t('settings.translation_title')}</h2>
-    <div class="settings-form">
-      <p class="section-desc">{$t('settings.translation_desc')}</p>
-      <div class="language-row">
-        <select class="language-select" bind:value={selectedTranslateTarget} onchange={saveTranslateTarget}>
-          <option value="">{$t('settings.translation_follow_ui')}</option>
-          {#each $availableLocales as loc (loc.code)}
-            <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
-          {/each}
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <!-- Posting language: tagged on new posts, so translation and other servers know it -->
-  <div class="settings-section">
-    <h2 class="section-title">{$t('settings.posting_language_title')}</h2>
-    <div class="settings-form">
-      <p class="section-desc">{$t('settings.posting_language_desc')}</p>
-      <div class="language-row">
-        <select
-          class="language-select"
-          aria-label={$t('settings.posting_language_title')}
-          value={$preferencesStore.default_language ?? ''}
-          onchange={(e) => updatePreferences({ default_language: e.currentTarget.value || null })}
-        >
-          <option value="">{$t('settings.posting_language_none')}</option>
-          {#each $availableLocales as loc (loc.code)}
-            <option value={loc.code}>{loc.nativeName} ({loc.name})</option>
-          {/each}
-        </select>
-      </div>
-    </div>
-  </div>
-
-  <!-- Verification -->
-  <div class="settings-section">
-    <h2 class="section-title">Verification</h2>
-    <div class="settings-form">
-      {#if verificationLoading}
-        <div class="verification-loading">
-          <Spinner size={16} />
-          <span>Checking verification status...</span>
-        </div>
-      {:else if verification.status === 'approved'}
-        <div class="verification-status verification-verified">
-          <VerifiedBadge size="md" />
-          <div class="verification-info">
-            <span class="verification-label">Verified</span>
-            {#if verification.verified_at}
-              <span class="verification-date">
-                Since {new Date(verification.verified_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-              </span>
-            {/if}
-          </div>
-        </div>
-      {:else if verification.status === 'pending'}
-        <div class="verification-status verification-pending">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning)" stroke-width="2" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-          </svg>
-          <div class="verification-info">
-            {#if verification.type === 'peer_vouch'}
-              <span class="verification-label">{$t('verification.vouch_pending_label')}</span>
-              <span class="verification-date">{$t('verification.vouch_pending_detail', { count: verification.vouch_count || 0 })}</span>
-            {:else}
-              <span class="verification-label">Your verification is under review</span>
-              <span class="verification-date">We'll notify you when a decision has been made.</span>
-            {/if}
-          </div>
-        </div>
-      {:else}
-        <p class="form-description">
-          Get a verified badge on your profile to let others know your identity is confirmed.
-        </p>
-
-        {#if verificationSuccess}
-          <div class="form-success">{verificationSuccess}</div>
-        {/if}
-
-        {#if !showVerificationForm}
-          <div class="form-actions">
-            <button class="btn btn-outline" type="button" onclick={() => { showVerificationForm = true; }}>
-              Apply for Verification
-            </button>
-          </div>
+      </SettingRow>
+      <div class="section-pad verification-instructions">
+        {#if verificationType === 'peer_vouch'}
+          <p>{$t('verification.vouch_intro')}</p>
+          <ol>
+            <li>{$t('settings.verify_vouch_step_submit')}</li>
+            <li>{$t('settings.verify_vouch_step_share')}</li>
+            <li>{$t('verification.vouch_step_review')}</li>
+          </ol>
         {:else}
-          <div class="verification-form">
-            <div class="form-group">
-              <label class="form-label" for="verification-type">Verification type</label>
-              <select id="verification-type" class="input" bind:value={verificationType}>
-                <option value="manual">Manual review</option>
-                <option value="peer_vouch">Peer vouching</option>
-              </select>
-            </div>
-
-            {#if verificationType === 'peer_vouch'}
-              <div class="verification-instructions">
-                <p class="instruction-text">{$t('verification.vouch_intro')}</p>
-                <ol class="instruction-steps">
-                  <li>Submit your application to create a vouch request</li>
-                  <li>Share your profile with people who can confirm your identity</li>
-                  <li>{$t('verification.vouch_step_review')}</li>
-                </ol>
-              </div>
-            {:else}
-              <div class="verification-instructions">
-                <p class="instruction-text">Manual verification is reviewed by our team. Approval is based on account activity and identity confirmation.</p>
-              </div>
-            {/if}
-
-            {#if verificationError}
-              <div class="form-error">{verificationError}</div>
-            {/if}
-
-            <div class="verification-form-actions">
-              <button class="btn btn-ghost" type="button" onclick={() => { showVerificationForm = false; verificationError = ''; }}>
-                Cancel
-              </button>
-              <button class="btn btn-primary" type="button" onclick={submitVerification} disabled={verificationSubmitting}>
-                {#if verificationSubmitting}
-                  <Spinner size={16} />
-                {/if}
-                Submit Application
-              </button>
-            </div>
-          </div>
+          <p>{$t('settings.verify_manual_help')}</p>
         {/if}
-      {/if}
-    </div>
-  </div>
-
-  <!-- Delete Account -->
-  <div class="settings-section danger-section">
-    <h2 class="section-title section-title-danger">Delete Account</h2>
-    <div class="settings-form">
-      <p class="form-description">
-        Permanently delete your account and all associated data. This action cannot be undone.
-      </p>
-      <div class="form-actions">
-        <button class="btn btn-danger" type="button" onclick={() => { showDeleteModal = true; }}>
-          Delete account
-        </button>
+        {#if verificationError}<div class="form-error">{verificationError}</div>{/if}
+        <div class="section-actions">
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => { showVerificationForm = false; verificationError = ''; }}>{$t('common.cancel')}</button>
+          <button class="btn btn-primary btn-sm" type="button" onclick={submitVerification} disabled={verificationSubmitting}>
+            {#if verificationSubmitting}<Spinner size={14} />{/if}
+            {$t('settings.verify_submit')}
+          </button>
+        </div>
       </div>
+    {/if}
+  </SettingsSection>
 
-      {#if error}
-        <div class="form-error">{error}</div>
-      {/if}
-    </div>
+  <div class="danger-zone">
+    <SettingsSection title={$t('settings.delete_title')}>
+      <SettingRow label={$t('settings.delete_label')} help={$t('settings.delete_help')}>
+        <button class="btn btn-danger btn-sm" type="button" onclick={() => (showDeleteModal = true)}>{$t('settings.delete_button')}</button>
+      </SettingRow>
+      {#if error}<div class="section-pad form-error">{error}</div>{/if}
+    </SettingsSection>
   </div>
 </div>
 
-<Modal bind:open={showDeleteModal} title="Delete Account">
+<Modal bind:open={showDeleteModal} title={$t('settings.delete_title')}>
   <div class="delete-modal-content">
     <div class="delete-warning">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-danger)" stroke-width="2" aria-hidden="true">
         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
         <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
       </svg>
-      <p>
-        Your account will be scheduled for deletion in <strong>30 days</strong>.
-        During this period, you can log back in to cancel the deletion.
-        After 30 days, all your data will be permanently removed.
-      </p>
+      <p>{$t('settings.delete_warning')}</p>
     </div>
 
     <div class="form-group">
-      <label class="form-label" for="delete-confirm">Type <strong>DELETE</strong> to confirm</label>
-      <input
-        id="delete-confirm"
-        type="text"
-        class="input"
-        bind:value={deleteConfirmText}
-        placeholder="DELETE"
-      />
+      <label class="form-label" for="delete-confirm">{$t('settings.delete_confirm_label')}</label>
+      <input id="delete-confirm" type="text" class="input" dir="ltr" bind:value={deleteConfirmText} placeholder="DELETE" autocomplete="off" />
     </div>
 
     <div class="delete-modal-actions">
-      <button class="btn btn-ghost" type="button" onclick={() => { showDeleteModal = false; deleteConfirmText = ''; }}>
-        Cancel
-      </button>
+      <button class="btn btn-ghost" type="button" onclick={() => { showDeleteModal = false; deleteConfirmText = ''; }}>{$t('common.cancel')}</button>
       <button class="btn btn-danger" type="button" onclick={handleDeleteAccount} disabled={!canDelete || deleting}>
-        {#if deleting}
-          <Spinner size={16} color="#fff" />
-        {/if}
-        Delete my account
+        {#if deleting}<Spinner size={16} color="#fff" />{/if}
+        {$t('settings.delete_confirm_button')}
       </button>
     </div>
   </div>
@@ -399,115 +308,54 @@
   .settings-sections {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .settings-section {
-    background: var(--color-surface-raised);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    overflow: hidden;
-  }
-
-  .danger-section {
-    border-color: var(--color-danger-soft);
-  }
-
-  .section-title {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--color-text);
-    padding: var(--space-4) var(--space-6);
-    border-block-end: 1px solid var(--color-border);
-  }
-
-  .section-desc {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    margin-block-end: var(--space-3);
-    line-height: 1.4;
-  }
-
-  .language-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .language-select {
-    flex: 1;
-    padding: 10px 14px;
-    border: 1px solid var(--color-border);
-    border-radius: 10px;
-    font-size: 0.875rem;
-    color: var(--color-text);
-    background: var(--color-surface);
-  }
-
-  .language-select:focus {
-    outline: none;
-    border-color: var(--color-primary);
-  }
-
-  .save-locale-btn {
-    padding: 10px 20px;
-    background: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 9999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .save-locale-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .save-locale-btn:hover:not(:disabled) { opacity: 0.9; }
-
-  .section-title-danger {
-    color: var(--color-danger);
-  }
-
-  .settings-form {
-    padding: var(--space-6);
-    display: flex;
-    flex-direction: column;
     gap: var(--space-5);
   }
 
-  .form-description {
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    line-height: var(--line-height);
+  .section-pad {
+    padding: var(--space-4) var(--space-5);
   }
 
-  .data-row {
+  .section-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-block-start: var(--space-3);
+  }
+
+  .verification-loading {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-  }
-
-  .data-info {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .data-label {
+    gap: var(--space-2);
     font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--color-text);
+    color: var(--color-text-secondary);
   }
 
-  .data-description {
-    font-size: var(--text-xs);
-    color: var(--color-text-tertiary);
+  .verification-instructions {
+    font-size: var(--text-sm);
+    color: var(--color-text-secondary);
+    line-height: 1.5;
   }
 
-  .data-divider {
-    height: 1px;
-    background: var(--color-border);
+  .verification-instructions ol {
+    list-style: decimal;
+    margin: var(--space-2) 0 0;
+    padding-inline-start: var(--space-5);
+  }
+
+  .pending-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-warning);
+  }
+
+  /* The irreversible action stands apart from the rest. */
+  .danger-zone :global(.settings-section) {
+    border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
+  }
+
+  .danger-zone :global(.settings-section-title) {
+    color: var(--color-danger);
   }
 
   .form-group {
@@ -538,87 +386,6 @@
     font-size: var(--text-sm);
   }
 
-  .form-actions {
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  /* Verification */
-  .verification-loading {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-  }
-
-  .verification-status {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3);
-    border-radius: var(--radius-md);
-  }
-
-  .verification-verified {
-    background: var(--color-success-soft);
-  }
-
-  .verification-pending {
-    background: var(--color-warning-light, rgba(234, 179, 8, 0.1));
-  }
-
-  .verification-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .verification-label {
-    font-size: var(--text-sm);
-    font-weight: 600;
-    color: var(--color-text);
-  }
-
-  .verification-date {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
-  }
-
-  .verification-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-  }
-
-  .verification-instructions {
-    padding: var(--space-3);
-    background: var(--color-bg-tertiary);
-    border-radius: var(--radius-md);
-  }
-
-  .instruction-text {
-    font-size: var(--text-sm);
-    color: var(--color-text);
-    margin-block-end: var(--space-2);
-  }
-
-  .instruction-steps {
-    padding-inline-start: var(--space-5);
-    font-size: var(--text-sm);
-    color: var(--color-text-secondary);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .verification-form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-
-  /* Delete modal */
   .delete-modal-content {
     display: flex;
     flex-direction: column;
