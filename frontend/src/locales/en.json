@@ -1411,6 +1411,8 @@
   "admin_settings.rate_limit_anonymous": "Logged-out requests",
   "admin_settings.rate_limit_federation": "Federation requests",
   "admin_settings.rate_limit_federation_help": "Per server IP. Must be high enough for busy peers fetching actors and posts.",
+  "admin_settings.rate_limit_media_proxy": "Remote media requests",
+  "admin_settings.rate_limit_media_proxy_help": "Per visitor IP. Each remote avatar, emoji and image in a feed is one request, so keep it well above the other limits.",
   "admin_settings.rate_limit_login": "Sign-in attempts",
   "admin_settings.rate_limit_2fa": "Two-factor attempts",
   "admin_settings.rate_limit_oauth_token": "App token requests",

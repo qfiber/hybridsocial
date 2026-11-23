@@ -105,5 +105,34 @@ defmodule HybridsocialWeb.Plugs.RateLimiterTest do
 
       refute result_conn.halted
     end
+
+    test "media proxy requests use their own bucket", %{conn: conn} do
+      # Exhaust the anonymous API bucket (pinned to 5).
+      for _ <- 1..6 do
+        conn |> Map.put(:remote_ip, {10, 0, 0, 6}) |> RateLimiter.call([])
+      end
+
+      proxied =
+        build_conn(:get, "/proxy/media/sig/url")
+        |> Map.put(:remote_ip, {10, 0, 0, 6})
+        |> RateLimiter.call([])
+
+      refute proxied.halted
+
+      Hybridsocial.Config.set("rate_limit_media_proxy", 1)
+
+      for _ <- 1..2 do
+        build_conn(:get, "/proxy/media/sig/url")
+        |> Map.put(:remote_ip, {10, 0, 0, 7})
+        |> RateLimiter.call([])
+      end
+
+      limited =
+        build_conn(:get, "/proxy/media/sig/url")
+        |> Map.put(:remote_ip, {10, 0, 0, 7})
+        |> RateLimiter.call([])
+
+      assert limited.status == 429
+    end
   end
 end
