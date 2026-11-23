@@ -741,7 +741,7 @@ defmodule HybridsocialWeb.Serializers.PostSerializer do
     # the whole timeline over. Treat any failure as "no card" and
     # let the post serialize without one.
     try do
-      case LinkPreviews.preview_for_post(post) do
+      case LinkPreviews.cached_preview_for_post(post) do
         {:ok, preview} ->
           %{
             url: preview.url,

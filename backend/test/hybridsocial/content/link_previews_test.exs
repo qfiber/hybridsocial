@@ -144,4 +144,55 @@ defmodule Hybridsocial.Content.LinkPreviewsTest do
       assert meta.site_name
     end
   end
+
+  describe "cached_preview_for_post/1 - never fetches inline" do
+    alias Hybridsocial.Content.LinkPreview
+
+    defp hash(url), do: :crypto.hash(:sha256, url) |> Base.encode16(case: :lower)
+
+    defp insert_preview(url, attrs) do
+      Hybridsocial.Repo.insert!(
+        struct(
+          LinkPreview,
+          Map.merge(
+            %{url_hash: hash(url), url: url, fetched_at: DateTime.utc_now(), ttl: 86_400},
+            attrs
+          )
+        )
+      )
+    end
+
+    test "an uncached remote link returns no card without fetching" do
+      post = %{content: "read https://example.com/uncached-article"}
+      assert {:error, :pending} = LinkPreviews.cached_preview_for_post(post)
+
+      assert Hybridsocial.Repo.get(LinkPreview, hash("https://example.com/uncached-article")) ==
+               nil
+    end
+
+    test "a cached preview is returned, even when expired" do
+      url = "https://example.com/cached-article"
+      insert_preview(url, %{title: "Cached", fetched_at: ~U[2020-01-01 00:00:00.000000Z]})
+
+      assert {:ok, %LinkPreview{title: "Cached"}} =
+               LinkPreviews.cached_preview_for_post(%{content: url})
+    end
+
+    test "a cached failure gives no card" do
+      url = "https://example.com/failed-article"
+      insert_preview(url, %{ttl: 21_600})
+
+      assert {:error, :no_preview} = LinkPreviews.cached_preview_for_post(%{content: url})
+    end
+
+    test "a failed fetch is cached so it isn't retried on every view" do
+      url = "http://10.0.0.1/private"
+      assert {:error, _} = LinkPreviews.get_or_fetch(url)
+
+      assert %LinkPreview{title: nil, ttl: 21_600} =
+               Hybridsocial.Repo.get(LinkPreview, hash(url))
+
+      assert {:error, :no_preview} = LinkPreviews.get_or_fetch(url)
+    end
+  end
 end
