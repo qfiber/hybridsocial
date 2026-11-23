@@ -40,6 +40,7 @@
 
   // Feed & media: saved on change, like the theme.
   let autoplay = $state($preferencesStore.auto_play_media);
+  let compactMode = $state($preferencesStore.compact_mode);
 
   function setHomeTab(e: Event) {
     const value = (e.currentTarget as HTMLSelectElement).value as UserPreferences['feed_algorithm'];
@@ -103,6 +104,9 @@
         <option value="algorithmic">{$t('home.tab_foryou')}</option>
         <option value="trending">{$t('home.tab_top')}</option>
       </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.compact_mode_label')} help={$t('settings.compact_mode_help')} labelFor="compact-mode">
+      <Toggle id="compact-mode" bind:checked={compactMode} onchange={(v) => updatePreferences({ compact_mode: v })} />
     </SettingRow>
     <SettingRow label={$t('settings.reply_layout_label')} help={$t('settings.reply_layout_help')} labelFor="reply-layout">
       <select id="reply-layout" class="input" value={$preferencesStore.reply_layout} onchange={setReplyLayout}>

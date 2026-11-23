@@ -314,6 +314,10 @@
     gap: var(--space-4);
   }
 
+  :global(html[data-density='compact']) .timeline-feed {
+    gap: var(--space-2);
+  }
+
   .timeline-sticky-bar {
     position: sticky;
     inset-block-start: var(--header-height);
