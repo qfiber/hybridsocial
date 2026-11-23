@@ -10,6 +10,7 @@ const defaults: UserPreferences = {
   auto_play_media: true,
   default_visibility: 'public',
   default_language: null,
+  reply_layout: 'threaded',
   theme_mode: null,
 };
 
@@ -67,6 +68,7 @@ export function applyServerPreferences(serverPrefs: Record<string, any>, default
       if (serverPrefs.compact_mode !== undefined) merged.compact_mode = serverPrefs.compact_mode;
       if (serverPrefs.auto_play_media !== undefined) merged.auto_play_media = serverPrefs.auto_play_media;
       if (serverPrefs.default_language !== undefined) merged.default_language = serverPrefs.default_language;
+      if (serverPrefs.reply_layout === 'threaded' || serverPrefs.reply_layout === 'flat') merged.reply_layout = serverPrefs.reply_layout;
       if (serverPrefs.theme_mode !== undefined) merged.theme_mode = serverPrefs.theme_mode;
     }
 
@@ -92,6 +94,7 @@ function syncToServer(partial: Partial<UserPreferences>): void {
           compact_mode: prefs.compact_mode,
           auto_play_media: prefs.auto_play_media,
           default_language: prefs.default_language,
+          reply_layout: prefs.reply_layout,
           theme_mode: prefs.theme_mode,
         },
         ...(partial.default_visibility ? { default_visibility: partial.default_visibility } : {}),

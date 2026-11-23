@@ -420,7 +420,7 @@
           <p>{$t('comments.empty')}</p>
         </div>
       {:else}
-        <ThreadedReplies {descendants} rootPostId={post.id} />
+        <ThreadedReplies {descendants} rootPostId={post.id} rootAccountId={post.account.id} />
       {/if}
     </div>
 
