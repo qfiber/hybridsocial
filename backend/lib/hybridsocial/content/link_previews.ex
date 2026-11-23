@@ -9,8 +9,12 @@ defmodule Hybridsocial.Content.LinkPreviews do
   alias Hybridsocial.SitePages
   alias Hybridsocial.Config
   alias Hybridsocial.Media.MediaFile
+  alias Hybridsocial.Cache
 
   @fetch_timeout 5_000
+  # A link that failed to preview (bot wall, timeout, no tags) is retried
+  # after this long instead of on every view.
+  @failure_ttl 6 * 3600
   @max_response_size 1_048_576
 
   # Crawler UAs we identify as for hosts that gate OG metadata behind a JS
@@ -45,10 +49,65 @@ defmodule Hybridsocial.Content.LinkPreviews do
         if expired?(preview) do
           fetch_and_store(url, url_hash)
         else
-          {:ok, preview}
+          usable(preview)
         end
     end
   end
+
+  @doc """
+  The cached preview for a post's first link, without fetching it. A missing
+  or expired entry is refreshed in the background and shows from the next
+  load, so serializing a feed never waits on a third-party site (an inline
+  fetch cost up to 5s per post, and failures were refetched on every view).
+  Own-host links are built from the database, so they resolve inline.
+  """
+  def cached_preview_for_post(post) do
+    case extract_urls(post.content || "") do
+      [url | _] -> cached_or_schedule(url)
+      [] -> {:error, :no_urls}
+    end
+  end
+
+  defp cached_or_schedule(url) do
+    case classify_local_url(url) do
+      {:local, _kind, _key} ->
+        get_or_fetch(url)
+
+      :remote ->
+        url_hash = hash_url(url)
+
+        case Repo.get(LinkPreview, url_hash) do
+          nil ->
+            schedule_fetch(url, url_hash)
+            {:error, :pending}
+
+          preview ->
+            if expired?(preview), do: schedule_fetch(url, url_hash)
+            usable(preview)
+        end
+    end
+  end
+
+  # One background fetch per URL at a time, across requests and nodes.
+  defp schedule_fetch(url, url_hash) do
+    if Application.get_env(:hybridsocial, :link_preview_background_fetch, true) do
+      case Cache.increment("lpfetch:#{url_hash}", 60) do
+        {:ok, n} when n > 1 ->
+          :ok
+
+        _ ->
+          Task.Supervisor.start_child(Hybridsocial.TaskSupervisor, fn ->
+            fetch_and_store(url, url_hash)
+          end)
+      end
+    end
+
+    :ok
+  end
+
+  # A cached failure has neither title nor image: no card.
+  defp usable(%LinkPreview{title: nil, image_url: nil}), do: {:error, :no_preview}
+  defp usable(%LinkPreview{} = preview), do: {:ok, preview}
 
   @doc """
   Fetches a URL and parses OpenGraph/meta tags from the HTML.
@@ -511,7 +570,8 @@ defmodule Hybridsocial.Content.LinkPreviews do
           description: meta[:description],
           image_url: meta[:image],
           site_name: meta[:site_name],
-          fetched_at: now
+          fetched_at: now,
+          ttl: 86_400
         }
 
         changeset = LinkPreview.changeset(%LinkPreview{}, attrs)
@@ -519,7 +579,7 @@ defmodule Hybridsocial.Content.LinkPreviews do
         case Repo.insert(changeset,
                on_conflict:
                  {:replace,
-                  [:title, :description, :image_url, :site_name, :fetched_at, :updated_at]},
+                  [:title, :description, :image_url, :site_name, :fetched_at, :ttl, :updated_at]},
                conflict_target: [:url_hash]
              ) do
           {:ok, preview} -> {:ok, preview}
@@ -527,8 +587,25 @@ defmodule Hybridsocial.Content.LinkPreviews do
         end
 
       {:error, reason} ->
+        store_failure(url, url_hash)
         {:error, reason}
     end
+  end
+
+  # Remember the failure so the link isn't refetched until @failure_ttl
+  # passes. An existing preview keeps its content; only its clock moves.
+  defp store_failure(url, url_hash) do
+    %LinkPreview{}
+    |> LinkPreview.changeset(%{
+      url_hash: url_hash,
+      url: url,
+      fetched_at: DateTime.utc_now(),
+      ttl: @failure_ttl
+    })
+    |> Repo.insert(
+      on_conflict: {:replace, [:fetched_at, :ttl, :updated_at]},
+      conflict_target: [:url_hash]
+    )
   end
 
   defp parse_meta_tags(html) do

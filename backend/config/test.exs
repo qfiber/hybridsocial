@@ -26,6 +26,10 @@ config :hybridsocial, Hybridsocial.Mailer, adapter: Swoosh.Adapters.Test
 # Disable rate limiting in tests (individual rate limiter tests enable it manually)
 config :hybridsocial, rate_limiting_enabled: false
 
+# Serializing a post with an uncached link would otherwise spawn a preview
+# fetch outside the test's sandbox.
+config :hybridsocial, link_preview_background_fetch: false
+
 # Fixed clock for PostRateLimit's calendar windows: a real one let a test's
 # two posts straddle a minute boundary and both succeed (#321). Mid-minute,
 # mid-hour, mid-day so retry_after stays a normal value.
