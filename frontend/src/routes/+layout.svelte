@@ -11,6 +11,7 @@
 	import { initAuth } from '$lib/stores/auth.js';
 	import { initializeI18n, isRtl, locale } from '$lib/stores/i18n.js';
 	import { applyTheme, themeStore } from '$lib/stores/theme.js';
+	import { preferencesStore } from '$lib/stores/preferences.js';
 	import { getInstanceInfo } from '$lib/api/instance.js';
 	import { browser, dev } from '$app/environment';
 	import { page } from '$app/stores';
@@ -94,6 +95,15 @@
 		if (browser) {
 			document.documentElement.dir = $isRtl ? 'rtl' : 'ltr';
 			document.documentElement.lang = $locale;
+		}
+	});
+
+	// Compact feed density (Settings > Appearance); PostCard and the feed
+	// list key their tighter spacing off this attribute.
+	$effect(() => {
+		if (browser) {
+			if ($preferencesStore.compact_mode) document.documentElement.dataset.density = 'compact';
+			else delete document.documentElement.dataset.density;
 		}
 	});
 </script>

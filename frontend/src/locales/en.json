@@ -2017,6 +2017,8 @@
   "settings.notif_moderation_queue_desc": "Content is flagged into the moderation queue",
   "settings.notif_admin_backup_failed": "Failed backups",
   "settings.notif_admin_backup_failed_desc": "A scheduled backup did not complete",
+  "settings.compact_mode_label": "Compact feed",
+  "settings.compact_mode_help": "Smaller avatars, tighter spacing and shorter media previews, so more posts fit on screen.",
   "settings.reply_layout_label": "Replies",
   "settings.reply_layout_help": "How replies under a post are laid out. A flat list shows every reply oldest first, which is easier to follow on a phone or in a long conversation.",
   "settings.reply_layout_threaded": "Nested threads",

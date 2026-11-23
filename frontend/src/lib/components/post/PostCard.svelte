@@ -1629,6 +1629,48 @@
     }
   }
 
+  /* Compact feed density (Settings > Appearance, `compact_mode`): smaller
+     avatar, tighter padding and shorter media so more posts fit on screen.
+     Feed cards only: the post page keeps its full layout. */
+  :global(html[data-density='compact']) .post-card:not(.detail) {
+    padding: 14px 16px;
+  }
+
+  :global(html[data-density='compact']) .post-card:not(.detail) .post-layout {
+    gap: 10px;
+  }
+
+  :global(html[data-density='compact']) .post-card:not(.detail) .post-avatar .avatar-img {
+    width: 36px;
+    height: 36px;
+  }
+
+  :global(html[data-density='compact']) .post-card:not(.detail) .media-item,
+  :global(html[data-density='compact']) .post-card:not(.detail) .media-grid-1 .media-item {
+    max-height: 280px;
+  }
+
+  :global(html[data-density='compact']) .post-card:not(.detail) .link-card-image {
+    max-height: 140px;
+  }
+
+  :global(html[data-density='compact']) .post-card:not(.detail) .post-actions-divider {
+    margin-top: 10px;
+    margin-bottom: 4px;
+  }
+
+  @media (max-width: 768px) {
+    :global(html[data-density='compact']) .post-card:not(.detail) {
+      padding-inline: 10px;
+    }
+
+    :global(html[data-density='compact']) .post-card:not(.detail) .post-layout .post-pinned-indicator,
+    :global(html[data-density='compact']) .post-card:not(.detail) .post-layout .post-author-line {
+      padding-inline-start: 44px;
+      min-height: 36px;
+    }
+  }
+
   /* Main flex layout: avatar + content */
   .post-layout {
     display: flex;
