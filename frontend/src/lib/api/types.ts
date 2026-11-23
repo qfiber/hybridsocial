@@ -538,6 +538,8 @@ export interface UserPreferences {
   reply_layout: 'threaded' | 'flat';
   /** User's theme choice. `null` = follow the instance (admin) default. */
   theme_mode: 'auto' | 'light' | 'dark' | null;
+  /** Unread-notification digest email (#318). */
+  notification_digest: 'off' | 'daily' | 'weekly';
 }
 
 export interface NotificationPreferences {

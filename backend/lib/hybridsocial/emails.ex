@@ -467,13 +467,16 @@ defmodule Hybridsocial.Emails do
   defp user_email(user), do: user.email
 
   defp notifications_to_html(notifications) do
+    # One line per type ("3 reply notifications"), not one per notification,
+    # so a busy week stays readable.
     items =
       notifications
-      |> Enum.map(fn n ->
-        type = n[:type] || n["type"] || "unknown"
-        "<li>#{escape(to_string(type))} notification</li>"
+      |> Enum.frequencies_by(fn n -> Map.get(n, :type) || Map.get(n, "type") || "unknown" end)
+      |> Enum.sort_by(fn {_type, count} -> -count end)
+      |> Enum.map_join("", fn {type, count} ->
+        noun = if count == 1, do: "notification", else: "notifications"
+        "<li>#{count} #{escape(to_string(type))} #{noun}</li>"
       end)
-      |> Enum.join("")
 
     "<ul style=\"padding-left:20px;margin:0 0 16px 0;\">#{items}</ul>"
   end

@@ -74,6 +74,8 @@ defmodule Hybridsocial.Application do
             Hybridsocial.Moderation.AppealExpiryWorker,
             # Reminds owners before, and (opt-in) permanently purges, expired takedowns
             Hybridsocial.Moderation.TakedownPurgeWorker,
+            # Daily/weekly unread-notification digest emails (#318)
+            Hybridsocial.Notifications.DigestWorker,
             # Drains the moderation webhook delivery queue with exponential backoff
             Hybridsocial.Moderation.WebhookDeliveryWorker,
             # Drains the per-bot outbound webhook queue (same backoff curve)

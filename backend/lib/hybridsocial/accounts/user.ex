@@ -31,6 +31,7 @@ defmodule Hybridsocial.Accounts.User do
     field :recovery_codes_hash, :string
     field :approved_at, :utc_datetime_usec
     field :approval_required, :boolean, default: false
+    field :notification_digest_at, :utc_datetime_usec
 
     # Virtual fields
     field :password, :string, virtual: true

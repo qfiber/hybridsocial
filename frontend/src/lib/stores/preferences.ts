@@ -12,6 +12,7 @@ const defaults: UserPreferences = {
   default_language: null,
   reply_layout: 'threaded',
   theme_mode: null,
+  notification_digest: 'off',
 };
 
 function loadPreferences(): UserPreferences {
@@ -70,6 +71,7 @@ export function applyServerPreferences(serverPrefs: Record<string, any>, default
       if (serverPrefs.default_language !== undefined) merged.default_language = serverPrefs.default_language;
       if (serverPrefs.reply_layout === 'threaded' || serverPrefs.reply_layout === 'flat') merged.reply_layout = serverPrefs.reply_layout;
       if (serverPrefs.theme_mode !== undefined) merged.theme_mode = serverPrefs.theme_mode;
+      if (serverPrefs.notification_digest) merged.notification_digest = serverPrefs.notification_digest;
     }
 
     saveLocal(merged);
@@ -96,6 +98,7 @@ function syncToServer(partial: Partial<UserPreferences>): void {
           default_language: prefs.default_language,
           reply_layout: prefs.reply_layout,
           theme_mode: prefs.theme_mode,
+          notification_digest: prefs.notification_digest,
         },
         ...(partial.default_visibility ? { default_visibility: partial.default_visibility } : {}),
       });

@@ -340,6 +340,7 @@ defmodule Hybridsocial.Config.Registry do
     {:integrations, :notifications, "notification_channels", :string, "push", max_length: 100},
     {:integrations, :notifications, "notification_from_email", :string, "notifications@localhost",
      max_length: 254},
+    {:integrations, :notifications, "notification_digest_enabled", :boolean, true, []},
     {:integrations, :sms, "sms_provider_url", :string, "", @url},
     {:integrations, :sms, "sms_from_number", :string, "", max_length: 32},
     {:integrations, :sms, "sms_api_key", :string, "", @secret},
