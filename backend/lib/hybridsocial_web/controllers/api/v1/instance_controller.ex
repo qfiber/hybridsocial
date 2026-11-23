@@ -47,7 +47,10 @@ defmodule HybridsocialWeb.Api.V1.InstanceController do
       # Whether an admin has configured a translation backend. The client
       # uses this to decide whether to offer the per-post "Translate" action;
       # the endpoint still enforces it server-side.
-      translation_enabled: Hybridsocial.Content.Translation.enabled?()
+      translation_enabled: Hybridsocial.Content.Translation.enabled?(),
+      # Whether to offer the notification digest setting; the worker also
+      # checks it, so a stale client can't get digests sent.
+      notification_digest_enabled: Hybridsocial.Notifications.DigestWorker.enabled?()
     })
   end
 

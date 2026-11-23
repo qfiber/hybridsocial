@@ -535,6 +535,8 @@ export interface UserPreferences {
   default_language: string | null;
   /** User's theme choice. `null` = follow the instance (admin) default. */
   theme_mode: 'auto' | 'light' | 'dark' | null;
+  /** Unread-notification digest email (#318). */
+  notification_digest: 'off' | 'daily' | 'weekly';
 }
 
 export interface NotificationPreferences {

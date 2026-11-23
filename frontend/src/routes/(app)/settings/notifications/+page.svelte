@@ -10,6 +10,8 @@
   import SettingRow from '$lib/components/settings/SettingRow.svelte';
   import { t } from '$lib/stores/i18n.js';
   import PushOptIn from '$lib/components/notification/PushOptIn.svelte';
+  import { preferencesStore, updatePreferences } from '$lib/stores/preferences.js';
+  import type { UserPreferences } from '$lib/api/types.js';
   import {
     getMessageSoundEnabled,
     getNotificationSoundEnabled,
@@ -59,7 +61,27 @@
     }
   }
 
-  onMount(load);
+  // Digest email (#318): offered only while the instance switch is on.
+  let digestEnabled = $state(false);
+
+  async function loadDigestAvailability() {
+    try {
+      const info = await api.get<{ notification_digest_enabled?: boolean }>('/api/v1/instance/info');
+      digestEnabled = !!info.notification_digest_enabled;
+    } catch {
+      digestEnabled = false;
+    }
+  }
+
+  function setDigest(e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value as UserPreferences['notification_digest'];
+    updatePreferences({ notification_digest: value });
+  }
+
+  onMount(() => {
+    load();
+    loadDigestAvailability();
+  });
 
   async function setChannel(type: string, channel: Channel, value: boolean) {
     const before = pref(type);
@@ -105,6 +127,18 @@
       {/each}
     </div>
   </AsyncState>
+
+  {#if digestEnabled}
+    <SettingsSection title={$t('settings.notif_digest_title')} description={$t('settings.notif_digest_desc')}>
+      <SettingRow label={$t('settings.notif_digest_label')} help={$t('settings.notif_digest_help')} labelFor="n-digest">
+        <select id="n-digest" class="input" value={$preferencesStore.notification_digest ?? 'off'} onchange={setDigest}>
+          <option value="off">{$t('settings.notif_digest_off')}</option>
+          <option value="daily">{$t('settings.notif_digest_daily')}</option>
+          <option value="weekly">{$t('settings.notif_digest_weekly')}</option>
+        </select>
+      </SettingRow>
+    </SettingsSection>
+  {/if}
 
   {#if shownStaffTypes.length}
     <SettingsSection title={$t('settings.notif_staff_title')} description={$t('settings.notif_staff_desc')}>
