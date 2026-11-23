@@ -26,6 +26,11 @@ config :hybridsocial, Hybridsocial.Mailer, adapter: Swoosh.Adapters.Test
 # Disable rate limiting in tests (individual rate limiter tests enable it manually)
 config :hybridsocial, rate_limiting_enabled: false
 
+# Fixed clock for PostRateLimit's calendar windows: a real one let a test's
+# two posts straddle a minute boundary and both succeed (#321). Mid-minute,
+# mid-hour, mid-day so retry_after stays a normal value.
+config :hybridsocial, post_rate_limit_now: 1_800_001_830
+
 # Skip HTTP signature verification in tests
 config :hybridsocial, federation_signature_check: false
 

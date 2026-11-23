@@ -99,7 +99,7 @@ defmodule Hybridsocial.Social.PostRateLimitTest do
       for _ <- 1..5, do: assert({:error, %{window: :minute}} = PostRateLimit.check(identity))
 
       hour_key =
-        "postrl:#{identity.id}:hour:#{div(System.system_time(:second), 3600)}"
+        "postrl:#{identity.id}:hour:#{div(Application.fetch_env!(:hybridsocial, :post_rate_limit_now), 3600)}"
 
       assert Hybridsocial.Cache.get(hour_key) == 1
     end
