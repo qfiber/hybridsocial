@@ -46,6 +46,11 @@
     updatePreferences({ feed_algorithm: value });
   }
 
+  function setReplyLayout(e: Event) {
+    const value = (e.currentTarget as HTMLSelectElement).value as UserPreferences['reply_layout'];
+    updatePreferences({ reply_layout: value });
+  }
+
   function choose(mode: Mode) {
     // Persists to localStorage + (when signed in) the account preferences in
     // the database; theme.ts re-applies it immediately via its subscription.
@@ -97,6 +102,12 @@
         <option value="chronological">{$t('home.tab_latest')}</option>
         <option value="algorithmic">{$t('home.tab_foryou')}</option>
         <option value="trending">{$t('home.tab_top')}</option>
+      </select>
+    </SettingRow>
+    <SettingRow label={$t('settings.reply_layout_label')} help={$t('settings.reply_layout_help')} labelFor="reply-layout">
+      <select id="reply-layout" class="input" value={$preferencesStore.reply_layout} onchange={setReplyLayout}>
+        <option value="threaded">{$t('settings.reply_layout_threaded')}</option>
+        <option value="flat">{$t('settings.reply_layout_flat')}</option>
       </select>
     </SettingRow>
     <SettingRow label={$t('settings.autoplay_label')} help={$t('settings.autoplay_help')} labelFor="autoplay-media">

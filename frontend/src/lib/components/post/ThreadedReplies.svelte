@@ -1,17 +1,35 @@
 <script lang="ts">
-  import type { Post } from '$lib/api/types.js';
+  import { displayAcct, type Post } from '$lib/api/types.js';
   import PostCard from './PostCard.svelte';
   import { t } from '$lib/stores/i18n.js';
+  import { preferencesStore } from '$lib/stores/preferences.js';
 
   let {
     descendants,
     rootPostId,
+    rootAccountId,
     maxDepth = 4,
   }: {
     descendants: Post[];
     rootPostId: string;
+    /** Root post's author: flat replies to them need no "Replying to" name. */
+    rootAccountId: string;
     maxDepth?: number;
   } = $props();
+
+  // Flat layout: every reply, oldest first. A reply to someone other than
+  // the root author names who it answers, since the nesting no longer shows it.
+  let flat = $derived.by(() => {
+    const live = descendants.filter((p) => !p.tombstone);
+    const byId = new Map(live.map((p) => [p.id, p]));
+    return live
+      .map((post) => {
+        const parent = post.parent_id ? byId.get(post.parent_id) : undefined;
+        const replyToAcct = parent && parent.account.id !== rootAccountId ? displayAcct(parent.account) : null;
+        return { post, replyToAcct };
+      })
+      .sort((a, b) => Date.parse(a.post.created_at) - Date.parse(b.post.created_at));
+  });
 
   interface ReplyNode {
     post: Post;
@@ -69,9 +87,17 @@
 </script>
 
 <div class="threaded-replies">
-  {#each tree as node, i (node.post.id)}
-    {@render replyNode(node, i < tree.length - 1, maxDepth)}
-  {/each}
+  {#if $preferencesStore.reply_layout === 'flat'}
+    {#each flat as item (item.post.id)}
+      <div class="reply-content">
+        <PostCard post={item.post} replyToAcct={item.replyToAcct} />
+      </div>
+    {/each}
+  {:else}
+    {#each tree as node, i (node.post.id)}
+      {@render replyNode(node, i < tree.length - 1, maxDepth)}
+    {/each}
+  {/if}
 </div>
 
 {#snippet replyNode(node: ReplyNode, hasSiblingsBelow: boolean, budget: number)}

@@ -84,6 +84,7 @@
     detail = false,
     filterContext = 'home',
     viewerContext = null,
+    replyToAcct = null,
   }: {
     post: Post;
     compact?: boolean;
@@ -98,6 +99,8 @@
     // behaviour (badge shows wherever is_pinned is true) — only
     // pages that know their viewing context need to set this.
     viewerContext?: 'profile' | 'group' | 'page' | null;
+    /** Flat reply lists: names who this reply answers ("Replying to @handle"). */
+    replyToAcct?: string | null;
   } = $props();
 
   // `is_pinned` is true on the post row; `pin_scope` (added in the
@@ -936,6 +939,8 @@
                   : $t('post.replying_to_specific_image')}
               </span>
             </button>
+          {:else if replyToAcct}
+            <span>{$t('post.replying_to')} <a href="/post/{post.parent_id}" class="reply-to-link">@{replyToAcct}</a></span>
           {:else if post.in_reply_to_account_id}
             <span>{$t('post.replying_to')} <a href="/post/{post.parent_id}" class="reply-to-link">{$t('post.a_post')}</a></span>
           {:else}

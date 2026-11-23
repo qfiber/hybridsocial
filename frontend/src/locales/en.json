@@ -1606,7 +1606,7 @@
   "settings.view_profile": "View profile",
   "settings.nav_label": "Settings sections",
   "settings.feed_media_title": "Feed & media",
-  "settings.feed_media_desc": "How your Home feed opens and how videos behave.",
+  "settings.feed_media_desc": "How your Home feed opens, how replies are laid out and how videos behave.",
   "settings.home_tab_label": "Home opens on",
   "settings.home_tab_help": "The tab you see first when you open Home. You can still switch tabs any time.",
   "settings.autoplay_label": "Autoplay videos and GIFs",
@@ -2016,5 +2016,9 @@
   "settings.notif_moderation_queue": "Moderation queue",
   "settings.notif_moderation_queue_desc": "Content is flagged into the moderation queue",
   "settings.notif_admin_backup_failed": "Failed backups",
-  "settings.notif_admin_backup_failed_desc": "A scheduled backup did not complete"
+  "settings.notif_admin_backup_failed_desc": "A scheduled backup did not complete",
+  "settings.reply_layout_label": "Replies",
+  "settings.reply_layout_help": "How replies under a post are laid out. A flat list shows every reply oldest first, which is easier to follow on a phone or in a long conversation.",
+  "settings.reply_layout_threaded": "Nested threads",
+  "settings.reply_layout_flat": "Flat, oldest first"
 }

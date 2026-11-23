@@ -162,7 +162,7 @@
       </div>
 
       <div class="thread-replies">
-        <ThreadedReplies {descendants} rootPostId={post.id} />
+        <ThreadedReplies {descendants} rootPostId={post.id} rootAccountId={post.account.id} />
       </div>
     </div>
   {:else}

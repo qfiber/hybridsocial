@@ -534,6 +534,8 @@ export interface UserPreferences {
   auto_play_media: boolean;
   default_visibility: Post['visibility'];
   default_language: string | null;
+  /** How a post's replies are laid out: nested threads or one oldest-first list. */
+  reply_layout: 'threaded' | 'flat';
   /** User's theme choice. `null` = follow the instance (admin) default. */
   theme_mode: 'auto' | 'light' | 'dark' | null;
 }

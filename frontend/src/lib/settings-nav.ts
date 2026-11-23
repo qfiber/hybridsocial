@@ -33,7 +33,7 @@ export const settingsGroups: SettingsGroup[] = [
   {
     titleKey: 'settings.group_preferences',
     items: [
-      { href: '/settings/appearance', labelKey: 'settings.nav_appearance', descKey: 'settings.nav_appearance_desc', icon: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 0v18', keywords: 'theme dark light mode system colors feed home tab latest for you top autoplay video gif data' },
+      { href: '/settings/appearance', labelKey: 'settings.nav_appearance', descKey: 'settings.nav_appearance_desc', icon: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 0v18', keywords: 'theme dark light mode system colors feed home tab latest for you top replies threads threaded flat comments autoplay video gif data' },
       { href: '/settings/notifications', labelKey: 'settings.nav_notifications', descKey: 'settings.nav_notifications_desc', icon: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0', keywords: 'push email alerts sound follows mentions replies reactions boosts quotes polls invites' },
       { href: '/settings/privacy', labelKey: 'settings.nav_privacy', descKey: 'settings.nav_privacy_desc', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z', keywords: 'lock private locked approve followers discoverable directory search engines indexing link previews unfurl follower counts messages dm direct group dm invites pages auto delete old posts default visibility remote media' },
       { href: '/settings/tags', labelKey: 'settings.nav_tags', descKey: 'settings.nav_tags_desc', icon: 'M4 9h16M4 15h16M10 3 8 21M16 3l-2 18', keywords: 'hashtags tags follow mute topics unfollow unmute' },
