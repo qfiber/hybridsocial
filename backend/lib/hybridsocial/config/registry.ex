@@ -292,6 +292,7 @@ defmodule Hybridsocial.Config.Registry do
     {:rate_limits, :api, "rate_limit_authenticated", :integer, 1200, min: 1, unit: :per_minute},
     {:rate_limits, :api, "rate_limit_anonymous", :integer, 240, min: 1, unit: :per_minute},
     {:rate_limits, :api, "rate_limit_federation", :integer, 1800, min: 1, unit: :per_minute},
+    {:rate_limits, :api, "rate_limit_media_proxy", :integer, 3000, min: 1, unit: :per_minute},
     {:rate_limits, :auth, "rate_limit_login", :integer, 10, min: 1, unit: :per_15_minutes},
     {:rate_limits, :auth, "rate_limit_2fa", :integer, 5, min: 1, unit: :per_15_minutes},
     {:rate_limits, :auth, "rate_limit_oauth_token", :integer, 30, min: 1, unit: :per_15_minutes},

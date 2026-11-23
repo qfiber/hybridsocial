@@ -64,16 +64,10 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
     alias Hybridsocial.Config
 
     case conn.request_path do
-      "/api/v1/auth/password/reset" ->
+      path when path in ["/api/v1/auth/password/reset", "/api/v1/auth/password/change"] ->
         {Config.get("rate_limit_password_reset", 5), 3600}
 
-      "/api/v1/auth/password/change" ->
-        {Config.get("rate_limit_password_reset", 5), 3600}
-
-      "/api/v1/auth/2fa/verify" ->
-        {Config.get("rate_limit_2fa", 5), 900}
-
-      "/api/v1/auth/2fa/login" ->
+      path when path in ["/api/v1/auth/2fa/verify", "/api/v1/auth/2fa/login"] ->
         {Config.get("rate_limit_2fa", 5), 900}
 
       "/api/v1/auth/login" ->
@@ -85,10 +79,7 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
       "/api/v1/auth/resend_confirmation" ->
         {Config.get("rate_limit_resend_confirmation", 2), 3600}
 
-      "/api/v1/auth/recover/validate" ->
-        {Config.get("rate_limit_recover", 5), 3600}
-
-      "/api/v1/auth/recover/complete" ->
+      path when path in ["/api/v1/auth/recover/validate", "/api/v1/auth/recover/complete"] ->
         {Config.get("rate_limit_recover", 5), 3600}
 
       # OAuth app registration is unauthenticated by necessity (a client has
@@ -100,6 +91,13 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
 
       "/oauth/token" ->
         {Config.get("rate_limit_oauth_token", 30), 900}
+
+      # Every remote avatar, emoji and image in a feed is one proxy request
+      # with no auth header, so in the shared per-IP bucket a few screens of
+      # scrolling hit 429 and images went missing. URLs are signed, so only
+      # media we emitted can be requested.
+      "/proxy/" <> _ ->
+        {Config.get("rate_limit_media_proxy", 3000), 60}
 
       _ ->
         if authenticated?(conn) do
@@ -139,6 +137,7 @@ defmodule HybridsocialWeb.Plugs.RateLimiter do
       "/api/v1/auth/" <> _ -> "ratelimit:auth:#{identifier}:#{path}:#{window}"
       "/api/v1/apps" <> _ -> "ratelimit:oauth:#{identifier}:#{path}:#{window}"
       "/oauth/" <> _ -> "ratelimit:oauth:#{identifier}:#{path}:#{window}"
+      "/proxy/" <> _ -> "ratelimit:proxy:#{identifier}:#{window}"
       _ -> "ratelimit:#{identifier}:#{window}"
     end
   end

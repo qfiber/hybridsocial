@@ -148,6 +148,9 @@ defmodule Hybridsocial.Media.PlaceholderSvg do
       <!-- center radial glow -->
       <rect width="800" height="450" fill="url(#danger-glow)" />
 
+      <!-- Centre content at 1.5x about the middle: the image is shown
+           scaled down to a feed thumbnail, where 1x text was unreadable. -->
+      <g transform="translate(400 240) scale(1.5) translate(-400 -240)">
       <!-- frost-glass panel behind the text so it stays legible on
            any crop -->
       <rect x="140" y="150" width="520" height="180" rx="20"
@@ -184,6 +187,7 @@ defmodule Hybridsocial.Media.PlaceholderSvg do
             font-size="13" fill="#{c.subtitle}" fill-opacity="0.85">
         <tspan x="400" dy="0">#{escape(truncate(subtitle, 80))}</tspan>
       </text>
+      </g>
     </svg>
     """
   end
