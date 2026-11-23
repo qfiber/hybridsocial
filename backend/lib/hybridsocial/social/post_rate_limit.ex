@@ -88,10 +88,16 @@ defmodule Hybridsocial.Social.PostRateLimit do
     Application.get_env(:hybridsocial, :rate_limiting_enabled, true)
   end
 
+  # Test seam: tests pin the clock so two posts can't straddle a window
+  # boundary and both pass (#321). Unset outside tests.
+  defp now do
+    Application.get_env(:hybridsocial, :post_rate_limit_now) || System.system_time(:second)
+  end
+
   defp check_window(_identity, _window, _seconds, 0, _counter), do: :ok
 
   defp check_window(identity, window, seconds, limit, counter) do
-    now = System.system_time(:second)
+    now = now()
     key = "postrl:#{identity.id}:#{window}:#{div(now, seconds)}"
 
     over? =
