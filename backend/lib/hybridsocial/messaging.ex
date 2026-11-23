@@ -324,7 +324,9 @@ defmodule Hybridsocial.Messaging do
       |> Repo.one()
       |> case do
         nil -> nil
-        msg -> decrypt_message(msg)
+        # The attachment tells the inbox what to show for a message with no
+        # text (a voice note, a photo) instead of "No messages yet".
+        msg -> msg |> Repo.preload(:media) |> decrypt_message()
       end
 
     unread_count = unread_count_for(conversation.id, identity_id)

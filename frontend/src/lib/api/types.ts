@@ -335,7 +335,8 @@ export interface Conversation {
   is_encrypted: boolean;
   created_by_id: string | null;
   unread_count: number;
-  last_message: Message | null;
+  /** The inbox preview; `media_type` labels a message with no text. */
+  last_message: (Message & { media_type?: 'audio' | 'image' | 'video' | 'file' | null }) | null;
   participants: ConversationParticipant[];
   created_at: string;
   updated_at: string;
