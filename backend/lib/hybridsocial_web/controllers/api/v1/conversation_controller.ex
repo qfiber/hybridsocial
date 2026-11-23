@@ -395,10 +395,25 @@ defmodule HybridsocialWeb.Api.V1.ConversationController do
       id: message.id,
       content: message.content,
       content_type: message.content_type,
+      media_type: last_message_media_type(message),
       sender_id: message.sender_id,
       created_at: message.created_at
     }
   end
+
+  # "audio" | "image" | "video" | "file" for a message carrying an attachment,
+  # nil otherwise — the inbox labels text-less messages with it.
+  defp last_message_media_type(%{media: %MediaFile{content_type: type}}) when is_binary(type) do
+    cond do
+      String.starts_with?(type, "audio/") -> "audio"
+      String.starts_with?(type, "image/") -> "image"
+      String.starts_with?(type, "video/") -> "video"
+      true -> "file"
+    end
+  end
+
+  defp last_message_media_type(%{media: %MediaFile{}}), do: "file"
+  defp last_message_media_type(_), do: nil
 
   defp serialize_participant(participant) do
     identity =

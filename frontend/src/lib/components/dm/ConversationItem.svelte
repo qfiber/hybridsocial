@@ -31,13 +31,22 @@
 
   let avatarUser = $derived(otherParticipants[0] ?? null);
 
-  let lastMessagePreview = $derived(
-    conversation.last_message?.content
-      ? conversation.last_message.content.length > 60
-        ? conversation.last_message.content.slice(0, 60) + '...'
-        : conversation.last_message.content
-      : $t('dm.no_messages')
-  );
+  // A message with no text (a voice note, a photo…) is still a message:
+  // label it by its attachment instead of claiming "No messages yet".
+  const MEDIA_PREVIEW: Record<string, string> = {
+    audio: 'dm.preview_voice',
+    image: 'dm.preview_image',
+    video: 'dm.preview_video',
+    file: 'dm.preview_file',
+  };
+
+  let lastMessagePreview = $derived.by(() => {
+    const last = conversation.last_message;
+    const text = last?.content?.trim();
+    if (text) return text.length > 60 ? text.slice(0, 60) + '...' : text;
+    if (last) return $t(MEDIA_PREVIEW[last.media_type ?? 'file'] ?? 'dm.preview_file');
+    return $t('dm.no_messages');
+  });
 
   let timeAgo = $derived(formatRelativeTime(conversation.updated_at));
 

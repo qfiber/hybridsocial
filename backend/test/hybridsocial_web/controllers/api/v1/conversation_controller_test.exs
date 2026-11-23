@@ -48,6 +48,35 @@ defmodule HybridsocialWeb.Api.V1.ConversationControllerTest do
       assert length(response) == 1
       assert hd(response)["type"] == "direct"
     end
+
+    test "labels a text-less last message by its attachment", %{conn: conn} do
+      alice = create_trusted_user("cc_alice_vm", "cc_alice_vm@example.com")
+      bob = create_trusted_user("cc_bob_vm", "cc_bob_vm@example.com")
+
+      {:ok, conversation} = Messaging.find_or_create_direct(alice.id, bob.id)
+
+      voice =
+        Hybridsocial.Repo.insert!(%Hybridsocial.Media.MediaFile{
+          identity_id: alice.id,
+          content_type: "audio/webm",
+          file_size: 1_000,
+          storage_path: "test/voice-message.webm"
+        })
+
+      {:ok, _} =
+        Messaging.send_message(conversation.id, alice.id, %{
+          "content" => "",
+          "media_id" => voice.id
+        })
+
+      conn =
+        conn
+        |> authenticate(bob)
+        |> get("/api/v1/conversations")
+
+      [listed] = json_response(conn, 200)
+      assert listed["last_message"]["media_type"] == "audio"
+    end
   end
 
   describe "POST /api/v1/conversations" do
